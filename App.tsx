@@ -244,6 +244,14 @@ const App: React.FC = () => {
 
   const handleAddGroupManual = async () => {
     if (!token || !newChatId) return;
+
+    const normalizedId = newChatId.startsWith('-100') ? newChatId : `-100${newChatId.replace(/^-/, '')}`;
+    if (groups.some(g => g.id === newChatId || g.id === normalizedId)) {
+      alert("This batch is already injected and saved in the database!");
+      setNewChatId('');
+      return;
+    }
+
     setIsAddingGroup(true);
     try {
       const chat = await getChatDetails(token, newChatId);
