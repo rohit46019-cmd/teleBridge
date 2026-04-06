@@ -585,18 +585,18 @@ const App: React.FC = () => {
       <Sidebar activeTab={activeTab} onTabChange={handleTabChange} theme={theme} toggleTheme={toggleTheme} />
 
       <main className="flex-1 md:ml-64 p-4 pb-28 md:p-6 lg:p-8 pt-4 w-full max-w-[1400px] mx-auto overflow-hidden">
-        <header className="flex flex-col gap-2 mb-4 animate-in slide-in-from-top">
+        <header className="flex flex-col gap-2 mb-8 animate-in slide-in-from-top">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="w-2.5 h-8 bg-blue-600 rounded-full shadow-[0_0_25px_rgba(37,99,235,0.7)]" />
-              <h1 key={activeTab} className="text-2xl md:text-3xl font-black tracking-tighter capitalize animate-in fade-in">{activeTab}</h1>
+              <div className="w-1.5 h-6 bg-blue-500 rounded-full shadow-[0_0_15px_rgba(59,130,246,0.5)]" />
+              <h1 key={activeTab} className="text-2xl md:text-3xl font-display font-bold tracking-tight capitalize animate-in fade-in">{activeTab}</h1>
             </div>
             
-            <div className="flex items-center gap-2">
-              <button onClick={toggleTheme} className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm active:scale-90 transition-all">
-                {theme === 'dark' ? <Icons.Sun size={18} className="text-amber-500" /> : <Icons.Moon size={18} className="text-blue-600" />}
+            <div className="flex items-center gap-3">
+              <button onClick={toggleTheme} className="p-2.5 rounded-xl glass hover:bg-white/10 active:scale-95 transition-all">
+                {theme === 'dark' ? <Icons.Sun size={18} className="text-amber-400" /> : <Icons.Moon size={18} className="text-blue-600" />}
               </button>
-              <button onClick={() => syncAllGroupsMemberCount(token)} disabled={isScanning} className="p-2.5 bg-blue-600 text-white rounded-xl shadow-lg active:scale-90 transition-all">
+              <button onClick={() => syncAllGroupsMemberCount(token)} disabled={isScanning} className="p-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl shadow-lg shadow-blue-500/25 active:scale-95 transition-all">
                 <Icons.Refresh size={18} className={isScanning ? 'animate-spin' : ''} />
               </button>
             </div>
@@ -612,34 +612,43 @@ const App: React.FC = () => {
           {activeTab === 'dashboard' && (
             <div className={`space-y-6 ${animationClass}`}>
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                 <div className="bg-blue-600 p-5 rounded-[2rem] border-b-4 border-blue-800 shadow-[0_15px_30px_rgba(37,99,235,0.4)] transition-all hover:-translate-y-1">
-                    <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-4"><Icons.Home size={20} className="text-white" strokeWidth={3} /></div>
-                    <p className="text-[10px] font-black text-blue-100 uppercase tracking-widest mb-1">Batches</p>
-                    <p className="text-3xl font-black text-white">{groups.length}</p>
+                 <div className="glass p-6 rounded-3xl transition-all hover:-translate-y-1 group">
+                    <div className="w-12 h-12 bg-blue-500/10 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                      <Icons.Home size={24} className="text-blue-500" strokeWidth={2} />
+                    </div>
+                    <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Total Batches</p>
+                    <p className="text-3xl font-display font-bold text-slate-900 dark:text-white">{groups.length}</p>
                  </div>
-                 <div className="bg-emerald-600 p-5 rounded-[2rem] border-b-4 border-emerald-800 shadow-[0_15px_30px_rgba(16,185,129,0.4)] transition-all hover:-translate-y-1">
-                    <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-4"><Icons.Users size={20} className="text-white" strokeWidth={3} /></div>
-                    <p className="text-[10px] font-black text-emerald-100 uppercase tracking-widest mb-1">Total Verified</p>
-                    <p className="text-3xl font-black text-white">{totalMembers.toLocaleString()}</p>
+                 <div className="glass p-6 rounded-3xl transition-all hover:-translate-y-1 group">
+                    <div className="w-12 h-12 bg-emerald-500/10 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                      <Icons.Users size={24} className="text-emerald-500" strokeWidth={2} />
+                    </div>
+                    <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Total Verified</p>
+                    <p className="text-3xl font-display font-bold text-slate-900 dark:text-white">{totalMembers.toLocaleString()}</p>
                  </div>
-                 <div className="bg-amber-500 p-5 rounded-[2rem] border-b-4 border-amber-700 shadow-[0_15px_30px_rgba(245,158,11,0.4)] transition-all hover:-translate-y-1">
-                    <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-4"><Icons.Activity size={20} className="text-white" strokeWidth={3} /></div>
-                    <p className="text-[10px] font-black text-amber-50 uppercase tracking-widest mb-1">Joins Today</p>
-                    <p className="text-3xl font-black text-white">{joinsTodayCount}</p>
+                 <div className="glass p-6 rounded-3xl transition-all hover:-translate-y-1 group">
+                    <div className="w-12 h-12 bg-amber-500/10 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                      <Icons.Activity size={24} className="text-amber-500" strokeWidth={2} />
+                    </div>
+                    <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Joins Today</p>
+                    <p className="text-3xl font-display font-bold text-slate-900 dark:text-white">{joinsTodayCount}</p>
                  </div>
-                 <div className="bg-purple-600 p-5 rounded-[2rem] border-b-4 border-purple-800 shadow-[0_15px_30px_rgba(147,51,234,0.4)] transition-all hover:-translate-y-1">
-                    <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-4"><Icons.Zap size={20} className="text-white" strokeWidth={3} /></div>
-                    <p className="text-[10px] font-black text-purple-100 uppercase tracking-widest mb-1">Status</p>
-                    <p className="text-xl font-black text-white uppercase">{botInfo ? 'ACTIVE' : 'OFFLINE'}</p>
+                 <div className="glass p-6 rounded-3xl transition-all hover:-translate-y-1 group">
+                    <div className="w-12 h-12 bg-purple-500/10 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                      <Icons.Zap size={24} className="text-purple-500" strokeWidth={2} />
+                    </div>
+                    <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Bot Status</p>
+                    <p className="text-xl font-display font-bold text-slate-900 dark:text-white mt-2">{botInfo ? 'ACTIVE' : 'OFFLINE'}</p>
                  </div>
               </div>
-              <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 p-8 shadow-xl">
-                 <h2 className="text-lg font-black uppercase tracking-tight mb-4 flex items-center gap-3">
-                   <Icons.Zap size={20} className="text-blue-600" /> Fast Batch Injection
+              <div className="glass rounded-3xl p-8 shadow-xl">
+                 <h2 className="text-lg font-display font-bold tracking-tight mb-6 flex items-center gap-3">
+                   <div className="p-2 bg-blue-500/10 rounded-lg"><Icons.Zap size={18} className="text-blue-500" /></div>
+                   Fast Batch Injection
                  </h2>
-                 <div className="flex flex-col sm:flex-row gap-3">
-                   <input type="text" placeholder="Enter Telegram Chat ID (-100...)" className="flex-1 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 px-6 py-4 rounded-2xl text-xs font-mono outline-none focus:ring-4 focus:ring-blue-500/10 shadow-inner" value={newChatId} onChange={e => setNewChatId(e.target.value)} />
-                   <button onClick={handleAddGroupManual} disabled={isAddingGroup || !newChatId} className="px-8 py-4 bg-blue-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-xl shadow-blue-600/20 active:scale-95 disabled:opacity-50 transition-all">
+                 <div className="flex flex-col sm:flex-row gap-4">
+                   <input type="text" placeholder="Enter Telegram Chat ID (-100...)" className="flex-1 bg-black/5 dark:bg-black/20 border border-black/5 dark:border-white/5 px-6 py-4 rounded-2xl text-sm font-mono outline-none focus:ring-2 focus:ring-blue-500/50 transition-all" value={newChatId} onChange={e => setNewChatId(e.target.value)} />
+                   <button onClick={handleAddGroupManual} disabled={isAddingGroup || !newChatId} className="px-8 py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl text-sm font-bold shadow-lg shadow-blue-500/25 active:scale-95 disabled:opacity-50 transition-all">
                      {isAddingGroup ? 'Connecting...' : 'Inject Batch'}
                    </button>
                  </div>
@@ -649,13 +658,13 @@ const App: React.FC = () => {
 
           {activeTab === 'groups' && (
             <div className={`space-y-6 ${animationClass}`}>
-               <div className="relative group flex gap-2">
+               <div className="relative group flex gap-3">
                 <div className="relative flex-1">
-                  <Icons.Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+                  <Icons.Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
                   <input 
                     type="text" 
                     placeholder="Search active batches..." 
-                    className="w-full bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 pl-10 pr-10 py-3 rounded-2xl text-xs outline-none focus:ring-4 focus:ring-blue-500/10 shadow-sm transition-all" 
+                    className="w-full glass pl-12 pr-10 py-4 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-blue-500/50 shadow-sm transition-all" 
                     value={searchQuery} 
                     onChange={e => setSearchQuery(e.target.value)} 
                     onFocus={() => setShowRecentSearches(true)}
@@ -668,29 +677,29 @@ const App: React.FC = () => {
                     }}
                   />
                   {showRecentSearches && recentSearches.length > 0 && (
-                    <div className="absolute top-full mt-2 w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl z-30 py-2">
-                      <p className="px-4 py-1 text-[9px] font-black text-slate-400 uppercase">Recent Searches</p>
+                    <div className="absolute top-full mt-2 w-full glass rounded-2xl shadow-xl z-30 py-2">
+                      <p className="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Recent Searches</p>
                       {recentSearches.map((s, i) => (
-                        <button key={i} onClick={() => { setSearchQuery(s); setShowRecentSearches(false); }} className="w-full text-left px-4 py-2 text-xs text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">
+                        <button key={i} onClick={() => { setSearchQuery(s); setShowRecentSearches(false); }} className="w-full text-left px-4 py-2.5 text-sm text-slate-600 dark:text-slate-300 hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
                           {s}
                         </button>
                       ))}
                     </div>
                   )}
                   {searchQuery && (
-                    <button onClick={() => setSearchQuery('')} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
-                      <Icons.X size={14} />
+                    <button onClick={() => setSearchQuery('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                      <Icons.X size={16} />
                     </button>
                   )}
                 </div>
                 <div className="relative">
-                  <button onClick={() => setShowFilterMenu(!showFilterMenu)} className="p-3 bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm hover:bg-slate-100 dark:hover:bg-slate-800 transition-all">
-                    <Icons.Filter size={18} className="text-slate-600 dark:text-slate-400" />
+                  <button onClick={() => setShowFilterMenu(!showFilterMenu)} className="p-4 glass rounded-2xl shadow-sm hover:bg-white/10 transition-all">
+                    <Icons.Filter size={20} className="text-slate-600 dark:text-slate-300" />
                   </button>
                   {showFilterMenu && (
-                    <div className="absolute right-0 top-full mt-2 w-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl z-20 py-2">
+                    <div className="absolute right-0 top-full mt-2 w-48 glass rounded-2xl shadow-xl z-20 py-2">
                       {['recent', 'frequent', 'mostMembers', 'leastMembers'].map(option => (
-                        <button key={option} onClick={() => { setFilterOption(option as any); setShowFilterMenu(false); }} className={`w-full text-left px-4 py-2 text-xs font-bold capitalize ${filterOption === option ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'text-slate-600 dark:text-slate-400'}`}>
+                        <button key={option} onClick={() => { setFilterOption(option as any); setShowFilterMenu(false); }} className={`w-full text-left px-4 py-2.5 text-sm font-medium capitalize transition-colors ${filterOption === option ? 'text-blue-500 bg-blue-500/10' : 'text-slate-600 dark:text-slate-300 hover:bg-black/5 dark:hover:bg-white/5'}`}>
                           {option.replace(/([A-Z])/g, ' $1')}
                         </button>
                       ))}
@@ -698,7 +707,7 @@ const App: React.FC = () => {
                   )}
                 </div>
               </div>
-              <div className="grid grid-cols-1 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
                 {filteredGroups.map(g => (
                   <GroupCard key={g.id} group={g} onClick={() => setSelectedGroup(g)} onTogglePin={handleTogglePin} />
                 ))}

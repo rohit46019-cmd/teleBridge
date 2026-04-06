@@ -98,19 +98,19 @@ const InviteModal: React.FC<InviteModalProps> = ({ group, onClose, botToken, onI
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-6 animate-in fade-in duration-300">
-      <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-md" onClick={onClose} />
+      <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-xl" onClick={onClose} />
       
-      <div className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 w-full max-w-lg rounded-[2.5rem] overflow-hidden shadow-[0_32px_64px_-16px_rgba(0,0,0,0.5)] flex flex-col p-8 md:p-10 animate-in zoom-in-95 duration-300">
+      <div className="relative glass w-full max-w-lg rounded-3xl overflow-hidden shadow-2xl flex flex-col p-8 md:p-10 animate-in zoom-in-95 duration-300">
         <div className="flex justify-between items-start mb-8">
            <div>
              <div className="flex items-center gap-3 mb-2">
-               <div className="w-2.5 h-2.5 rounded-full bg-blue-600 animate-pulse" />
-               <p className="text-[10px] font-extrabold text-blue-600 uppercase tracking-widest">Secure Invite System</p>
+               <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse shadow-[0_0_8px_rgba(59,130,246,0.8)]" />
+               <p className="text-[10px] font-bold text-blue-500 uppercase tracking-widest">Secure Invite System</p>
              </div>
-             <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight break-words max-w-[300px]">{group.name}</h2>
+             <h2 className="text-2xl font-display font-bold text-slate-900 dark:text-white tracking-tight break-words max-w-[300px]">{group.name}</h2>
            </div>
-           <button onClick={onClose} className="bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-rose-500 transition-all p-3 rounded-2xl active:scale-90">
-             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12" /></svg>
+           <button onClick={onClose} className="bg-white/5 hover:bg-white/10 text-slate-500 hover:text-rose-500 transition-all p-2.5 rounded-xl active:scale-90 border border-white/10">
+             <Icons.X size={20} />
            </button>
         </div>
 
@@ -121,20 +121,20 @@ const InviteModal: React.FC<InviteModalProps> = ({ group, onClose, botToken, onI
         )}
 
         <div className="space-y-8">
-          <div className="bg-slate-50 dark:bg-slate-950 p-6 rounded-[2rem] border border-slate-200 dark:border-slate-800 relative group min-h-[80px] flex items-center shadow-inner">
+          <div className="bg-black/5 dark:bg-black/20 p-6 rounded-2xl border border-black/5 dark:border-white/5 relative group min-h-[80px] flex items-center">
             {isGenerating ? (
-              <div className="flex items-center gap-4 text-slate-400 text-sm font-bold animate-pulse">
-                <div className="w-5 h-5 border-3 border-blue-600 border-t-transparent rounded-full animate-spin" />
+              <div className="flex items-center gap-4 text-slate-400 text-sm font-medium animate-pulse">
+                <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
                 Encrypting link...
               </div>
             ) : link ? (
               <>
-                <div className="text-blue-600 dark:text-blue-400 font-mono text-sm truncate mr-12 select-all font-bold">{link}</div>
+                <div className="text-blue-600 dark:text-blue-400 font-mono text-sm truncate mr-12 select-all font-medium">{link}</div>
                 <button 
                   onClick={copyToClipboard}
-                  className="absolute right-4 p-3 bg-white dark:bg-slate-800 hover:bg-blue-600 hover:text-white rounded-xl text-slate-600 dark:text-slate-200 transition-all shadow-sm active:scale-90"
+                  className="absolute right-4 p-2.5 bg-white dark:bg-slate-800 hover:bg-blue-500 hover:text-white rounded-xl text-slate-600 dark:text-slate-200 transition-all shadow-sm active:scale-90 border border-black/5 dark:border-white/5"
                 >
-                  {copied ? <Icons.Check size={20} /> : <Icons.Copy size={20} />}
+                  {copied ? <Icons.Check size={18} /> : <Icons.Copy size={18} />}
                 </button>
               </>
             ) : (
@@ -145,43 +145,43 @@ const InviteModal: React.FC<InviteModalProps> = ({ group, onClose, botToken, onI
           <div className="flex gap-3">
             <button 
               onClick={handleGenerateLink}
-              className="flex-1 py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl text-sm font-black transition-all shadow-xl shadow-blue-600/20 active:scale-95"
+              className="flex-1 py-3.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-bold transition-all shadow-lg shadow-blue-500/25 active:scale-95"
             >
               Rotate Key
             </button>
             <button 
               onClick={copyToClipboard}
-              className={`flex-1 py-4 rounded-2xl text-sm font-black transition-all active:scale-95 ${copied ? 'bg-emerald-500 text-white shadow-xl shadow-emerald-500/20' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200'}`}
+              className={`flex-1 py-3.5 rounded-xl text-sm font-bold transition-all active:scale-95 border ${copied ? 'bg-emerald-500 text-white border-emerald-500 shadow-lg shadow-emerald-500/25' : 'bg-white/5 border-white/10 text-slate-700 dark:text-slate-200 hover:bg-white/10'}`}
             >
               {copied ? 'Copied' : 'Duplicate'}
             </button>
           </div>
 
-          <div className="pt-8 border-t border-slate-100 dark:border-slate-800 space-y-6">
+          <div className="pt-8 border-t border-black/5 dark:border-white/10 space-y-6">
             <div className="flex justify-between items-center">
               <div className="flex items-center gap-2">
                 <Icons.Users size={14} className="text-slate-400" />
-                <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">Limit: 1 User</span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Limit: 1 User</span>
               </div>
               <div className="flex items-center gap-2">
                 <Icons.Clock size={14} className="text-slate-400" />
-                <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">Expiry: 24 Hours</span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Expiry: 24 Hours</span>
               </div>
             </div>
             
-            <div className="p-5 bg-slate-50 dark:bg-blue-500/5 rounded-2xl border border-slate-100 dark:border-blue-500/10">
-               <p className="text-[11px] text-slate-500 dark:text-blue-300/70 leading-relaxed font-medium italic">
+            <div className="p-5 bg-blue-500/5 rounded-2xl border border-blue-500/10">
+               <p className="text-xs text-slate-600 dark:text-blue-200/70 leading-relaxed font-medium italic">
                  "{aiDescription || "Your exclusive bridge to the community is ready. Handle with care."}"
                </p>
             </div>
             
             <div className="mt-6">
-              <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Recent Links</h4>
-              <div className="space-y-2 max-h-[200px] overflow-y-auto custom-scrollbar">
+              <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Recent Links</h4>
+              <div className="space-y-2 max-h-[200px] overflow-y-auto custom-scrollbar pr-2">
                 {links.map((l, i) => (
-                  <div key={i} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-black/20 rounded-xl border border-slate-100 dark:border-white/5">
-                    <span className="text-[10px] font-mono text-slate-600 dark:text-slate-400 truncate mr-2">{l.link}</span>
-                    <button onClick={() => handleRevokeLink(l.link)} className="text-rose-500 hover:text-rose-600">
+                  <div key={i} className="flex items-center justify-between p-3 bg-black/5 dark:bg-black/20 rounded-xl border border-black/5 dark:border-white/5 group">
+                    <span className="text-xs font-mono text-slate-600 dark:text-slate-400 truncate mr-2">{l.link}</span>
+                    <button onClick={() => handleRevokeLink(l.link)} className="text-slate-400 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity">
                       <Icons.Trash size={14} />
                     </button>
                   </div>

@@ -4,7 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>TeleBridge Admin</title>
-    <link rel="manifest" href="metadata.json">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" type="image/svg+xml" href="/logo.svg">
+    <link rel="apple-touch-icon" href="/logo.svg">
     <meta name="theme-color" content="#2563eb">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -99,7 +101,40 @@
 <link rel="stylesheet" href="/index.css">
 </head>
 <body class="bg-slate-950 text-slate-100 dark:bg-slate-950 dark:text-slate-100 light:bg-slate-50 light:text-slate-900">
+    <div id="splash-screen" style="position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #0f172a; z-index: 9999; transition: opacity 0.5s ease;">
+      <svg width="80" height="80" viewBox="0 0 512 512" style="animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;">
+        <defs>
+          <linearGradient id="bg-gradient-splash" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#2563eb" />
+            <stop offset="50%" stop-color="#7c3aed" />
+            <stop offset="100%" stop-color="#db2777" />
+          </linearGradient>
+        </defs>
+        <rect width="512" height="512" rx="128" fill="url(#bg-gradient-splash)" />
+        <path d="M120 240 L240 290 L400 140 L270 320 L270 420 L320 340 Z" fill="#ffffff" />
+        <circle cx="380" cy="140" r="16" fill="#ffffff" />
+      </svg>
+      <div style="margin-top: 24px; font-family: 'Inter', sans-serif; font-weight: 900; font-size: 24px; letter-spacing: -0.5px; color: white;">TeleBridge</div>
+      <div style="margin-top: 8px; font-family: 'Inter', sans-serif; font-weight: 600; font-size: 12px; letter-spacing: 2px; color: #94a3b8; text-transform: uppercase;">Loading Workspace...</div>
+      <style>
+        @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.8; transform: scale(0.95); } }
+      </style>
+    </div>
     <div id="root"></div>
 <script type="module" src="/index.tsx"></script>
+<script>
+  // Hide splash screen when React mounts
+  const observer = new MutationObserver((mutations) => {
+    if (document.getElementById('root').childElementCount > 0) {
+      const splash = document.getElementById('splash-screen');
+      if (splash) {
+        splash.style.opacity = '0';
+        setTimeout(() => splash.remove(), 500);
+      }
+      observer.disconnect();
+    }
+  });
+  observer.observe(document.getElementById('root'), { childList: true });
+</script>
 </body>
 </html>

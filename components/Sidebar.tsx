@@ -10,61 +10,68 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, theme, toggleTheme }) => {
   const menuItems = [
-    { id: 'dashboard', label: 'Overview', icon: Icons.Home, color: 'shadow-blue-600/40' },
-    { id: 'groups', label: 'Hubs', icon: Icons.Users, color: 'shadow-indigo-600/40' },
-    { id: 'analysis', label: 'Audit', icon: Icons.Activity, color: 'shadow-emerald-600/40' },
-    { id: 'settings', label: 'Nodes', icon: Icons.Settings, color: 'shadow-purple-600/40' },
-    { id: 'debug', label: 'Debug', icon: Icons.RefreshCw, color: 'shadow-amber-600/40' },
+    { id: 'dashboard', label: 'Overview', icon: Icons.Home, color: 'text-blue-500' },
+    { id: 'groups', label: 'Hubs', icon: Icons.Users, color: 'text-indigo-500' },
+    { id: 'analysis', label: 'Audit', icon: Icons.Activity, color: 'text-emerald-500' },
+    { id: 'settings', label: 'Nodes', icon: Icons.Settings, color: 'text-purple-500' },
+    { id: 'debug', label: 'Debug', icon: Icons.RefreshCw, color: 'text-amber-500' },
   ];
 
   return (
     <>
-      <aside className="hidden md:flex w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex-col h-screen fixed top-0 left-0 z-20 transition-all duration-500">
+      <aside className="hidden md:flex w-64 glass border-r border-white/10 flex-col h-screen fixed top-0 left-0 z-20 transition-all duration-500">
         <div className="p-8 pb-4 flex items-center gap-3">
-          <div className="w-11 h-11 bg-blue-600 rounded-2xl flex items-center justify-center shadow-[0_10px_30px_rgba(37,99,235,0.4)]">
-            <Icons.Zap className="text-white" size={24} strokeWidth={2.5} />
+          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
+            <Icons.Zap className="text-white" size={20} strokeWidth={2.5} />
           </div>
-          <span className="font-black text-2xl tracking-tighter text-slate-900 dark:text-white">TeleBridge</span>
+          <span className="font-display font-bold text-xl tracking-tight text-slate-900 dark:text-white">TeleBridge</span>
         </div>
 
-        <nav className="flex-1 mt-6 px-4 space-y-2">
+        <nav className="flex-1 mt-8 px-4 space-y-1.5">
           {menuItems.map((item) => (
             <button
               key={item.id}
               onClick={() => onTabChange(item.id)}
-              className={`w-full flex items-center gap-4 px-5 py-4 rounded-[1.25rem] transition-all duration-500 group relative ${
+              className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all duration-300 group relative ${
                 activeTab === item.id
-                  ? `bg-blue-600 text-white shadow-2xl ${item.color} scale-[1.02]`
-                  : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white hover:shadow-xl'
+                  ? `bg-white/10 dark:bg-white/5 shadow-sm border border-white/10`
+                  : 'text-slate-500 dark:text-slate-400 hover:bg-black/5 dark:hover:bg-white/5'
               }`}
             >
-              <item.icon size={20} strokeWidth={activeTab === item.id ? 2.5 : 2} />
-              <span className="font-black text-[11px] uppercase tracking-[0.2em]">{item.label}</span>
+              <div className={`${activeTab === item.id ? item.color : 'text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300'} transition-colors`}>
+                <item.icon size={18} strokeWidth={activeTab === item.id ? 2.5 : 2} />
+              </div>
+              <span className={`font-medium text-sm ${activeTab === item.id ? 'text-slate-900 dark:text-white font-semibold' : ''}`}>{item.label}</span>
+              {activeTab === item.id && (
+                <div className={`absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r-full bg-current ${item.color}`} />
+              )}
             </button>
           ))}
         </nav>
 
         <div className="p-6">
-           <div className="p-5 bg-gradient-to-br from-blue-600/10 to-transparent border border-blue-600/20 rounded-3xl shadow-2xl shadow-blue-500/5">
-             <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-1">Link Status</p>
-             <div className="w-full bg-slate-200 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden mb-2 shadow-inner">
-                <div className="bg-blue-600 h-full w-[45%] rounded-full shadow-[0_0_10px_rgba(37,99,235,0.6)]" />
+           <div className="p-4 bg-white/5 border border-white/10 rounded-2xl backdrop-blur-md">
+             <div className="flex items-center gap-2 mb-2">
+               <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+               <p className="text-xs font-medium text-slate-600 dark:text-slate-300">System Online</p>
              </div>
-             <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Global: Operational</p>
+             <div className="w-full bg-black/10 dark:bg-black/30 h-1 rounded-full overflow-hidden">
+                <div className="bg-gradient-to-r from-emerald-400 to-emerald-500 h-full w-[95%] rounded-full" />
+             </div>
            </div>
         </div>
       </aside>
 
-      <nav className="md:hidden fixed bottom-6 left-6 right-6 bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl border border-slate-200 dark:border-slate-800 flex items-center justify-around p-2 z-50 rounded-[2rem] shadow-[0_20px_50px_rgba(0,0,0,0.3)]">
+      <nav className="md:hidden fixed bottom-6 left-6 right-6 glass border border-white/10 flex items-center justify-around p-2 z-50 rounded-3xl shadow-2xl">
         {menuItems.map((item) => (
           <button
             key={item.id}
             onClick={() => onTabChange(item.id)}
-            className={`flex flex-col items-center gap-1 p-4 rounded-2xl transition-all active:scale-90 ${
-              activeTab === item.id ? `bg-blue-600 text-white shadow-2xl ${item.color}` : 'text-slate-400'
+            className={`flex flex-col items-center gap-1 p-3 rounded-2xl transition-all active:scale-90 ${
+              activeTab === item.id ? `bg-white/10 ${item.color}` : 'text-slate-400'
             }`}
           >
-            <item.icon size={22} strokeWidth={activeTab === item.id ? 2.5 : 2} />
+            <item.icon size={20} strokeWidth={activeTab === item.id ? 2.5 : 2} />
           </button>
         ))}
       </nav>

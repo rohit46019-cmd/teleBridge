@@ -51,10 +51,6 @@ const UNIQUE_THEMES = [
 const GroupCard: React.FC<GroupCardProps> = ({ group, onClick, onTogglePin }) => {
   const [copied, setCopied] = useState(false);
 
-  // Stable theme selection based on ID
-  const themeIndex = Math.abs(parseInt(group.id.slice(-4)) || 0) % UNIQUE_THEMES.length;
-  const theme = UNIQUE_THEMES[themeIndex];
-
   const copyId = (e: React.MouseEvent) => {
     e.stopPropagation();
     navigator.clipboard.writeText(group.id);
@@ -65,18 +61,16 @@ const GroupCard: React.FC<GroupCardProps> = ({ group, onClick, onTogglePin }) =>
   return (
     <div 
       onClick={() => onClick(group)}
-      className={`group relative bg-gradient-to-br ${theme.gradient} dark:bg-slate-900/60 backdrop-blur-md border ${theme.border} rounded-3xl p-5 flex items-center justify-between hover:-translate-y-1 transition-all duration-500 cursor-pointer shadow-xl hover:shadow-2xl active:scale-[0.99] active:translate-y-0 overflow-hidden border-b-4 border-r-4 w-full`}
-      style={{ backgroundImage: theme.pattern, backgroundSize: '12px 12px' }}
+      className="group relative glass rounded-3xl p-5 flex items-center justify-between hover:-translate-y-1 transition-all duration-300 cursor-pointer hover:shadow-xl active:scale-[0.99] active:translate-y-0 overflow-hidden w-full"
     >
-      {/* 3D Highlight Shine */}
-      <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" />
+      <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
 
-      <button onClick={(e) => onTogglePin(e, group.id)} className={`absolute top-3 right-3 p-1.5 rounded-lg transition-all shadow-sm border border-white/20 ${group.pinned ? 'bg-amber-400 text-white' : 'bg-white/30 dark:bg-slate-800/40 text-slate-600 dark:text-slate-400'}`}>
-         <Icons.Pin size={12} />
+      <button onClick={(e) => onTogglePin(e, group.id)} className={`absolute top-4 right-4 p-2 rounded-xl transition-all shadow-sm border ${group.pinned ? 'bg-amber-400 text-white border-amber-400' : 'bg-white/5 border-white/10 text-slate-400 hover:text-slate-200'}`}>
+         <Icons.Pin size={14} />
       </button>
 
       <div className="flex items-center gap-5 relative z-10 flex-1 min-w-0">
-        <div className="w-14 h-14 rounded-[1.25rem] overflow-hidden bg-white/50 dark:bg-slate-800/50 flex-shrink-0 group-hover:scale-110 transition-transform duration-500 border-2 border-white/20 shadow-2xl">
+        <div className="w-14 h-14 rounded-2xl overflow-hidden bg-black/10 flex-shrink-0 group-hover:scale-105 transition-transform duration-500 border border-white/10 shadow-lg">
           <img 
             src={group.image} 
             alt={group.name} 
@@ -88,21 +82,21 @@ const GroupCard: React.FC<GroupCardProps> = ({ group, onClick, onTogglePin }) =>
           />
         </div>
         <div className="flex-1 min-w-0">
-          <h3 className="text-sm font-medium text-slate-900 dark:text-white truncate leading-tight mb-1">{group.name}</h3>
+          <h3 className="text-base font-display font-bold text-slate-900 dark:text-white truncate leading-tight mb-1">{group.name}</h3>
           <div className="flex items-center gap-2">
-            <span className="text-[10px] font-black text-slate-900/60 dark:text-slate-400 uppercase tracking-[0.1em]">{group.memberCount} MEMBERS BATTERYED</span>
-            <div className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse" />
+            <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">{group.memberCount} MEMBERS</span>
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
           </div>
         </div>
       </div>
 
-      <div className="flex items-center gap-3 relative z-10 ml-4">
-        <button onClick={copyId} className="hidden sm:flex items-center gap-2 px-3 py-2 bg-white/30 dark:bg-slate-800/40 rounded-xl hover:bg-white/50 transition-all shadow-sm border border-white/20">
-          <span className="text-[9px] font-black text-slate-800 dark:text-slate-400 uppercase tracking-widest truncate max-w-[100px]">ID: {group.id}</span>
-          <Icons.Copy size={12} className={copied ? 'text-emerald-700' : 'text-slate-600 dark:text-slate-400'} />
+      <div className="flex items-center gap-3 relative z-10 ml-4 mr-10">
+        <button onClick={copyId} className="hidden sm:flex items-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/10">
+          <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 uppercase tracking-widest truncate max-w-[100px]">ID: {group.id}</span>
+          <Icons.Copy size={12} className={copied ? 'text-emerald-500' : 'text-slate-400'} />
         </button>
-        <div className={`w-10 h-10 ${theme.accent} text-white rounded-2xl flex items-center justify-center group-hover:scale-110 transition-all shadow-xl active:scale-90 border-b-4 border-black/20`}>
-          <Icons.Link size={18} strokeWidth={3} />
+        <div className="w-10 h-10 bg-blue-500 text-white rounded-xl flex items-center justify-center group-hover:scale-110 transition-all shadow-lg shadow-blue-500/25 active:scale-90">
+          <Icons.Link size={18} strokeWidth={2.5} />
         </div>
       </div>
     </div>
