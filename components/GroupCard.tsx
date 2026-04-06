@@ -6,6 +6,7 @@ import { Icons } from '../constants.tsx';
 interface GroupCardProps {
   group: TelegramGroup;
   onClick: (group: TelegramGroup) => void;
+  onTogglePin: (e: React.MouseEvent, id: string) => void;
 }
 
 const UNIQUE_THEMES = [
@@ -47,7 +48,7 @@ const UNIQUE_THEMES = [
   },
 ];
 
-const GroupCard: React.FC<GroupCardProps> = ({ group, onClick }) => {
+const GroupCard: React.FC<GroupCardProps> = ({ group, onClick, onTogglePin }) => {
   const [copied, setCopied] = useState(false);
 
   // Stable theme selection based on ID
@@ -70,12 +71,24 @@ const GroupCard: React.FC<GroupCardProps> = ({ group, onClick }) => {
       {/* 3D Highlight Shine */}
       <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" />
 
+      <button onClick={(e) => onTogglePin(e, group.id)} className={`absolute top-3 right-3 p-1.5 rounded-lg transition-all shadow-sm border border-white/20 ${group.pinned ? 'bg-amber-400 text-white' : 'bg-white/30 dark:bg-slate-800/40 text-slate-600 dark:text-slate-400'}`}>
+         <Icons.Pin size={12} />
+      </button>
+
       <div className="flex items-center gap-5 relative z-10 flex-1 min-w-0">
         <div className="w-14 h-14 rounded-[1.25rem] overflow-hidden bg-white/50 dark:bg-slate-800/50 flex-shrink-0 group-hover:scale-110 transition-transform duration-500 border-2 border-white/20 shadow-2xl">
-          <img src={group.image} alt={group.name} className="w-full h-full object-cover" loading="lazy" />
+          <img 
+            src={group.image} 
+            alt={group.name} 
+            className="w-full h-full object-cover" 
+            loading="lazy" 
+            onError={(e) => {
+              (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/fallback/200';
+            }}
+          />
         </div>
         <div className="flex-1 min-w-0">
-          <h3 className="text-sm font-black text-slate-900 dark:text-white truncate uppercase tracking-tight leading-tight mb-1">{group.name}</h3>
+          <h3 className="text-sm font-medium text-slate-900 dark:text-white truncate leading-tight mb-1">{group.name}</h3>
           <div className="flex items-center gap-2">
             <span className="text-[10px] font-black text-slate-900/60 dark:text-slate-400 uppercase tracking-[0.1em]">{group.memberCount} MEMBERS BATTERYED</span>
             <div className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse" />

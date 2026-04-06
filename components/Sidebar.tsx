@@ -14,6 +14,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, theme, toggle
     { id: 'groups', label: 'Hubs', icon: Icons.Users, color: 'shadow-indigo-600/40' },
     { id: 'analysis', label: 'Audit', icon: Icons.Activity, color: 'shadow-emerald-600/40' },
     { id: 'settings', label: 'Nodes', icon: Icons.Settings, color: 'shadow-purple-600/40' },
+    { id: 'debug', label: 'Debug', icon: Icons.RefreshCw, color: 'shadow-amber-600/40' },
   ];
 
   return (

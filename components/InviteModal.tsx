@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { TelegramGroup } from '../types.ts';
 import { Icons } from '../constants.tsx';
 import { generateLinkDescription } from '../services/geminiService.ts';
-import { createInviteLink } from '../services/telegramService.ts';
+import { createInviteLink, revokeInviteLink } from '../services/telegramService.ts';
 
 interface InviteModalProps {
   group: TelegramGroup;
@@ -14,6 +14,7 @@ interface InviteModalProps {
 
 const InviteModal: React.FC<InviteModalProps> = ({ group, onClose, botToken, onInteraction }) => {
   const [link, setLink] = useState<string>('');
+  const [links, setLinks] = useState<any[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [aiDescription, setAiDescription] = useState<string>('');
   const [copied, setCopied] = useState(false);
@@ -31,7 +32,17 @@ const InviteModal: React.FC<InviteModalProps> = ({ group, onClose, botToken, onI
       setAiDescription(desc);
     };
     fetchAI();
+    fetchLinks();
   }, [group, botToken]);
+
+  const fetchLinks = async () => {
+    try {
+      const res = await fetch(`/api/groups/${group.id}/links`);
+      if (res.ok) setLinks(await res.json());
+    } catch (err) {
+      console.error("Failed to fetch links", err);
+    }
+  };
 
   const handleGenerateLink = async () => {
     if (!botToken) {
@@ -49,12 +60,32 @@ const InviteModal: React.FC<InviteModalProps> = ({ group, onClose, botToken, onI
         parseInt(expiration)
       );
       setLink(realLink);
-      // Trigger interaction callback to update parent state for sorting
+      await fetch(`/api/groups/${group.id}/links`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ link: realLink }),
+      });
+      fetchLinks();
       onInteraction();
     } catch (err: any) {
       setError(err.message || 'Failed to generate link. Check bot permissions.');
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const handleRevokeLink = async (linkToRevoke: string) => {
+    try {
+      await revokeInviteLink(botToken, group.id, linkToRevoke);
+      await fetch(`/api/groups/${group.id}/links`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ link: linkToRevoke }),
+      });
+      fetchLinks();
+      if (link === linkToRevoke) setLink('');
+    } catch (err: any) {
+      setError(err.message || 'Failed to revoke link.');
     }
   };
 
@@ -142,6 +173,20 @@ const InviteModal: React.FC<InviteModalProps> = ({ group, onClose, botToken, onI
                <p className="text-[11px] text-slate-500 dark:text-blue-300/70 leading-relaxed font-medium italic">
                  "{aiDescription || "Your exclusive bridge to the community is ready. Handle with care."}"
                </p>
+            </div>
+            
+            <div className="mt-6">
+              <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Recent Links</h4>
+              <div className="space-y-2 max-h-[200px] overflow-y-auto custom-scrollbar">
+                {links.map((l, i) => (
+                  <div key={i} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-black/20 rounded-xl border border-slate-100 dark:border-white/5">
+                    <span className="text-[10px] font-mono text-slate-600 dark:text-slate-400 truncate mr-2">{l.link}</span>
+                    <button onClick={() => handleRevokeLink(l.link)} className="text-rose-500 hover:text-rose-600">
+                      <Icons.Trash size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>

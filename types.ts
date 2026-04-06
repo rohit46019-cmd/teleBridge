@@ -7,6 +7,7 @@ export interface TelegramGroup {
   category: string;
   image: string;
   lastInteraction?: number; // Timestamp of last usage
+  pinned?: boolean;
 }
 
 export interface JoinEvent {
@@ -25,6 +26,20 @@ export interface InviteLink {
   isUsed: boolean;
   memberLimit: number;
   expiresIn?: number; // Minutes
+}
+
+export interface ApiKey {
+  id: string;
+  key: string;
+  name: string;
+  createdAt: number;
+  expiresAt?: number;
+  lastUsed?: number;
+  status: 'active' | 'revoked' | 'expired';
+  permissions: ('read' | 'invite' | 'admin')[];
+  environment: 'production' | 'staging' | 'development';
+  webhookUrl?: string;
+  usageCount24h: number;
 }
 
 export interface BotState {

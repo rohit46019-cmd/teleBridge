@@ -39,13 +39,20 @@ const DEFAULT_GROUPS: TelegramGroup[] = [
   { "id": "-1002986001803", "name": "rakesh yadav", "memberCount": 0, "description": "Synced Group", "category": "Telegram", "image": "https://picsum.photos/seed/-1002986001803/200", "lastInteraction": 1769943748023 }
 ];
 
-const TABS = ['dashboard', 'groups', 'analysis', 'settings'];
+const TABS = ['dashboard', 'groups', 'analysis', 'settings', 'debug'];
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState(() => {
+    return localStorage.getItem('activeTab') || 'dashboard';
+  });
   const [selectedGroup, setSelectedGroup] = useState<TelegramGroup | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  const [showRecentSearches, setShowRecentSearches] = useState(false);
+  const [filterOption, setFilterOption] = useState<'mostMembers' | 'leastMembers' | 'frequent' | 'recent'>('recent');
+  const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [updates, setUpdates] = useState<any[]>([]);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const saved = localStorage.getItem('theme');
     if (saved) return saved as 'light' | 'dark';
@@ -56,18 +63,14 @@ const App: React.FC = () => {
   const [botInfo, setBotInfo] = useState<TelegramBotInfo | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
   const [isLocked, setIsLocked] = useState(() => localStorage.getItem('tg_token_locked') !== 'false');
-  const [groups, setGroups] = useState<TelegramGroup[]>(() => {
-    const saved = localStorage.getItem('tg_groups');
-    return saved ? JSON.parse(saved) : DEFAULT_GROUPS;
-  });
+  const [groups, setGroups] = useState<TelegramGroup[]>([]);
+  const [joinEvents, setJoinEvents] = useState<JoinEvent[]>([]);
   const [newChatId, setNewChatId] = useState('');
+  const [broadcastMessage, setBroadcastMessage] = useState('');
+  const [broadcasts, setBroadcasts] = useState<any[]>([]);
   const [isAddingGroup, setIsAddingGroup] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [totalMembers, setTotalMembers] = useState(0);
-  const [joinEvents, setJoinEvents] = useState<JoinEvent[]>(() => {
-    const saved = localStorage.getItem('tg_join_events');
-    return saved ? JSON.parse(saved) : [];
-  });
   const [lastUpdateId, setLastUpdateId] = useState(() => Number(localStorage.getItem('tg_last_update_id')) || 0);
 
   const [animationDirection, setAnimationDirection] = useState<'left' | 'right'>('right');
@@ -88,7 +91,25 @@ const App: React.FC = () => {
   const importFileRef = useRef<HTMLInputElement>(null);
   const pollingRef = useRef<any | null>(null);
 
-  useEffect(() => { 
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [groupsRes, eventsRes, broadcastsRes] = await Promise.all([
+          fetch('/api/groups'),
+          fetch('/api/events'),
+          fetch('/api/broadcast')
+        ]);
+        if (groupsRes.ok) setGroups(await groupsRes.json());
+        if (eventsRes.ok) setJoinEvents(await eventsRes.json());
+        if (broadcastsRes.ok) setBroadcasts(await broadcastsRes.json());
+      } catch (error) {
+        console.error("Failed to fetch initial data", error);
+      }
+    };
+    fetchData();
+  }, []);
+
+  useEffect(() => {
     if (token) {
       handleVerify(token).then(() => {
         syncAllGroupsMemberCount(token);
@@ -122,10 +143,12 @@ const App: React.FC = () => {
 
   useEffect(() => {
     localStorage.setItem('tg_token_locked', isLocked.toString());
-    localStorage.setItem('tg_join_events', JSON.stringify(joinEvents));
     localStorage.setItem('tg_last_update_id', lastUpdateId.toString());
-    localStorage.setItem('tg_groups', JSON.stringify(groups));
-  }, [isLocked, joinEvents, lastUpdateId, groups]);
+  }, [isLocked, lastUpdateId]);
+
+  useEffect(() => {
+    localStorage.setItem('activeTab', activeTab);
+  }, [activeTab]);
 
   const handleTabChange = (newTab: string) => {
     const currentIndex = TABS.indexOf(activeTab);
@@ -182,7 +205,17 @@ const App: React.FC = () => {
       const updatedGroups = await Promise.all(groups.map(async (g) => {
         try {
           const count = await getChatMemberCount(currentToken, g.id);
-          return { ...g, memberCount: count };
+          if (count !== g.memberCount) {
+            const updatedGroup = { ...g, memberCount: count };
+            // Persist to backend
+            await fetch('/api/groups', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(updatedGroup)
+            });
+            return updatedGroup;
+          }
+          return g;
         } catch (e) {
           return g;
         }
@@ -224,6 +257,11 @@ const App: React.FC = () => {
         image: `https://picsum.photos/seed/${chat.id}/200`,
         lastInteraction: Date.now()
       };
+      await fetch('/api/groups', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newGroup)
+      });
       setGroups(prev => [newGroup, ...prev.filter(g => g.id !== newGroup.id)]);
       setNewChatId('');
       alert("Batch successfully injected!");
@@ -235,14 +273,49 @@ const App: React.FC = () => {
     setIsScanning(true);
     try {
       const updates = await getRecentUpdates(currentToken, lastUpdateId + 1);
+      setUpdates(updates);
       const newJoins: JoinEvent[] = [];
       let maxId = lastUpdateId;
       
       const memberChanges: Record<string, number> = {};
       const titleChanges: Record<string, string> = {};
+      const newDiscoveredGroups: TelegramGroup[] = [];
 
       updates.forEach(u => {
         maxId = Math.max(maxId, u.update_id);
+
+        if (u.message) {
+          const chat = u.message.chat;
+          if (chat.type === 'group' || chat.type === 'supergroup') {
+            newDiscoveredGroups.push({
+              id: chat.id.toString(),
+              name: chat.title || 'Unknown Group',
+              memberCount: 0, // We don't know the count yet
+              description: chat.description || 'Auto Discovered Hub',
+              category: 'Telegram',
+              image: `https://picsum.photos/seed/${chat.id}/200`,
+              lastInteraction: Date.now()
+            });
+          }
+        }
+
+        if (u.my_chat_member) {
+          const myMu = u.my_chat_member;
+          const newStatus = myMu.new_chat_member?.status;
+          if (['member', 'administrator'].includes(newStatus)) {
+            const chat = myMu.chat;
+            newDiscoveredGroups.push({
+              id: chat.id.toString(),
+              name: chat.title || 'Unknown Group',
+              memberCount: 1,
+              description: chat.description || 'Auto Discovered Hub',
+              category: 'Telegram',
+              image: `https://picsum.photos/seed/${chat.id}/200`,
+              lastInteraction: Date.now()
+            });
+          }
+        }
+
         const mu = u.chat_member;
         
         if (mu) {
@@ -273,7 +346,41 @@ const App: React.FC = () => {
         }
       });
 
+      if (maxId > lastUpdateId) {
+        setLastUpdateId(maxId);
+        localStorage.setItem('tg_last_update_id', maxId.toString());
+      }
+
+      if (newDiscoveredGroups.length > 0) {
+        const uniqueNewGroups = newDiscoveredGroups.filter(
+          (newGroup, index, self) => index === self.findIndex((t) => t.id === newGroup.id)
+        );
+
+        if (uniqueNewGroups.length > 0) {
+          await fetch('/api/groups/bulk-update', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(uniqueNewGroups)
+          });
+          
+          setGroups(prev => {
+            const newGroups = [...prev];
+            uniqueNewGroups.forEach(newGroup => {
+              if (!newGroups.some(g => g.id === newGroup.id)) {
+                newGroups.unshift(newGroup);
+              }
+            });
+            return newGroups;
+          });
+        }
+      }
+
       if (newJoins.length > 0) {
+        await fetch('/api/events', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newJoins)
+        });
         setJoinEvents(prev => {
           const combined = [...newJoins, ...prev];
           return combined.filter((v, i, a) => a.findIndex(t => t.userId === v.userId && t.timestamp === v.timestamp) === i).slice(0, 10000);
@@ -281,22 +388,34 @@ const App: React.FC = () => {
       }
 
       if (Object.keys(memberChanges).length > 0 || Object.keys(titleChanges).length > 0) {
-        setGroups(prevGroups => prevGroups.map(g => {
-          const hasMemberChange = memberChanges[g.id] !== undefined;
-          const hasTitleChange = titleChanges[g.id] !== undefined;
+        let updatedGroupsToSave: TelegramGroup[] = [];
+        setGroups(prevGroups => {
+          const newGroups = prevGroups.map(g => {
+            const hasMemberChange = memberChanges[g.id] !== undefined;
+            const hasTitleChange = titleChanges[g.id] !== undefined;
 
-          if (hasMemberChange || hasTitleChange) {
-            const updatedGroup = { ...g };
-            if (hasMemberChange) {
-              updatedGroup.memberCount = Math.max(0, (g.memberCount || 0) + memberChanges[g.id]);
+            if (hasMemberChange || hasTitleChange) {
+              const updatedGroup = { ...g };
+              if (hasMemberChange) {
+                updatedGroup.memberCount = Math.max(0, (g.memberCount || 0) + memberChanges[g.id]);
+              }
+              if (hasTitleChange) {
+                updatedGroup.name = titleChanges[g.id];
+              }
+              updatedGroupsToSave.push(updatedGroup);
+              return updatedGroup;
             }
-            if (hasTitleChange) {
-              updatedGroup.name = titleChanges[g.id];
-            }
-            return updatedGroup;
-          }
-          return g;
-        }));
+            return g;
+          });
+          return newGroups;
+        });
+        if (updatedGroupsToSave.length > 0) {
+          await fetch('/api/groups/bulk-update', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updatedGroupsToSave)
+          });
+        }
       }
 
       setLastUpdateId(maxId);
@@ -319,6 +438,8 @@ const App: React.FC = () => {
     if (!token) return;
     try {
       await kickChatMember(token, chatId, userId);
+      const timestamp = eventId.split('-')[1];
+      await fetch(`/api/events/${userId}/${timestamp}`, { method: 'DELETE' });
       setJoinEvents(prev => prev.filter(e => `${e.userId}-${e.timestamp}` !== eventId));
       setGroups(prevGroups => prevGroups.map(g => {
         if (g.id === chatId.toString()) {
@@ -329,10 +450,32 @@ const App: React.FC = () => {
     } catch (err: any) { alert(`Operation failed: ${err.message}`); }
   };
 
-  const handleGroupInteraction = (groupId: string) => {
-    setGroups(prev => prev.map(g => 
-      g.id === groupId ? { ...g, lastInteraction: Date.now() } : g
-    ));
+  const handleGroupInteraction = async (groupId: string) => {
+    try {
+      await fetch(`/api/groups/${groupId}/interaction`, { method: 'PUT' });
+      setGroups(prev => prev.map(g => 
+        g.id === groupId ? { ...g, lastInteraction: Date.now() } : g
+      ));
+    } catch (err) {
+      console.error("Failed to update interaction", err);
+    }
+  };
+
+  const handleTogglePin = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    const updatedGroups = groups.map(g => g.id === id ? { ...g, pinned: !g.pinned } : g);
+    setGroups(updatedGroups);
+    const groupToUpdate = updatedGroups.find(g => g.id === id);
+    if (!groupToUpdate) return;
+    try {
+      await fetch('/api/groups/bulk-update', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify([groupToUpdate]),
+      });
+    } catch (err) {
+      console.error("Failed to update pin status", err);
+    }
   };
 
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -365,6 +508,39 @@ const App: React.FC = () => {
     a.click();
   };
 
+  const handleBroadcast = async () => {
+    if (!broadcastMessage || !token) return;
+    try {
+      await fetch('/api/broadcast', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, message: broadcastMessage }),
+      });
+      alert("Broadcast successful!");
+      setBroadcastMessage('');
+      const res = await fetch('/api/broadcast');
+      if (res.ok) setBroadcasts(await res.json());
+    } catch (err: any) {
+      alert(`Broadcast failed: ${err.message}`);
+    }
+  };
+
+  const handleDeleteBroadcast = async (id: string) => {
+    if (!token) return;
+    try {
+      await fetch(`/api/broadcast/${id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      });
+      alert("Broadcast deleted!");
+      const res = await fetch('/api/broadcast');
+      if (res.ok) setBroadcasts(await res.json());
+    } catch (err: any) {
+      alert(`Delete failed: ${err.message}`);
+    }
+  };
+
   const filteredJoins = useMemo(() => joinEvents.filter(e => new Date(e.timestamp).toISOString().split('T')[0] === selectedDate).sort((a, b) => b.timestamp - a.timestamp), [joinEvents, selectedDate]);
   const joinsTodayCount = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
@@ -372,10 +548,26 @@ const App: React.FC = () => {
   }, [joinEvents]);
 
   const filteredGroups = useMemo(() => {
-    return groups
-      .filter(g => g.name.toLowerCase().includes(searchQuery.toLowerCase()) || g.id.includes(searchQuery))
-      .sort((a, b) => (b.lastInteraction || 0) - (a.lastInteraction || 0));
-  }, [groups, searchQuery]);
+    let filtered = groups
+      .filter(g => g.name.toLowerCase().includes(searchQuery.toLowerCase()) || g.id.includes(searchQuery));
+    
+    switch (filterOption) {
+      case 'mostMembers':
+        filtered.sort((a, b) => (b.memberCount || 0) - (a.memberCount || 0));
+        break;
+      case 'leastMembers':
+        filtered.sort((a, b) => (a.memberCount || 0) - (b.memberCount || 0));
+        break;
+      case 'frequent':
+        filtered.sort((a, b) => (b.interactionCount || 0) - (a.interactionCount || 0));
+        break;
+      case 'recent':
+        filtered.sort((a, b) => (b.lastInteraction || 0) - (a.lastInteraction || 0));
+        break;
+    }
+    filtered.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
+    return filtered;
+  }, [groups, searchQuery, filterOption]);
 
   const formatTime12h = (timestamp: number) => {
     return new Date(timestamp).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
@@ -457,13 +649,58 @@ const App: React.FC = () => {
 
           {activeTab === 'groups' && (
             <div className={`space-y-6 ${animationClass}`}>
-               <div className="relative group">
-                <Icons.Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
-                <input type="text" placeholder="Search active batches..." className="w-full bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 pl-10 pr-4 py-3 rounded-2xl text-xs outline-none focus:ring-4 focus:ring-blue-500/10 shadow-sm transition-all" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+               <div className="relative group flex gap-2">
+                <div className="relative flex-1">
+                  <Icons.Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+                  <input 
+                    type="text" 
+                    placeholder="Search active batches..." 
+                    className="w-full bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 pl-10 pr-10 py-3 rounded-2xl text-xs outline-none focus:ring-4 focus:ring-blue-500/10 shadow-sm transition-all" 
+                    value={searchQuery} 
+                    onChange={e => setSearchQuery(e.target.value)} 
+                    onFocus={() => setShowRecentSearches(true)}
+                    onBlur={() => setTimeout(() => setShowRecentSearches(false), 200)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && searchQuery.trim()) {
+                        setRecentSearches(prev => [searchQuery.trim(), ...prev.filter(s => s !== searchQuery.trim())].slice(0, 10));
+                        setShowRecentSearches(false);
+                      }
+                    }}
+                  />
+                  {showRecentSearches && recentSearches.length > 0 && (
+                    <div className="absolute top-full mt-2 w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl z-30 py-2">
+                      <p className="px-4 py-1 text-[9px] font-black text-slate-400 uppercase">Recent Searches</p>
+                      {recentSearches.map((s, i) => (
+                        <button key={i} onClick={() => { setSearchQuery(s); setShowRecentSearches(false); }} className="w-full text-left px-4 py-2 text-xs text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {searchQuery && (
+                    <button onClick={() => setSearchQuery('')} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                      <Icons.X size={14} />
+                    </button>
+                  )}
+                </div>
+                <div className="relative">
+                  <button onClick={() => setShowFilterMenu(!showFilterMenu)} className="p-3 bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm hover:bg-slate-100 dark:hover:bg-slate-800 transition-all">
+                    <Icons.Filter size={18} className="text-slate-600 dark:text-slate-400" />
+                  </button>
+                  {showFilterMenu && (
+                    <div className="absolute right-0 top-full mt-2 w-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl z-20 py-2">
+                      {['recent', 'frequent', 'mostMembers', 'leastMembers'].map(option => (
+                        <button key={option} onClick={() => { setFilterOption(option as any); setShowFilterMenu(false); }} className={`w-full text-left px-4 py-2 text-xs font-bold capitalize ${filterOption === option ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'text-slate-600 dark:text-slate-400'}`}>
+                          {option.replace(/([A-Z])/g, ' $1')}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="grid grid-cols-1 gap-4">
                 {filteredGroups.map(g => (
-                  <GroupCard key={g.id} group={g} onClick={() => setSelectedGroup(g)} />
+                  <GroupCard key={g.id} group={g} onClick={() => setSelectedGroup(g)} onTogglePin={handleTogglePin} />
                 ))}
               </div>
             </div>
@@ -473,8 +710,8 @@ const App: React.FC = () => {
             <div className={`space-y-6 ${animationClass}`}>
               <div className="flex flex-col md:flex-row gap-4">
                  <div className="flex-1 bg-indigo-600 p-6 rounded-[2.5rem] border-b-4 border-indigo-900 shadow-xl text-white relative overflow-hidden active:scale-95 transition-transform">
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-1 opacity-80">Today Joined</p>
-                    <p className="text-4xl font-black">{joinsTodayCount}</p>
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-1 opacity-80">Total Joined ({selectedDate})</p>
+                    <p className="text-4xl font-black">{filteredJoins.length}</p>
                     <div className="absolute -right-4 -bottom-4 w-20 h-20 bg-white/5 rounded-full" />
                  </div>
                  <div className="flex-1 bg-rose-500 p-6 rounded-[2.5rem] border-b-4 border-rose-800 shadow-xl text-white relative overflow-hidden active:scale-95 transition-transform">
@@ -493,30 +730,43 @@ const App: React.FC = () => {
                    <table className="w-full text-left">
                       <thead className="sticky top-0 bg-slate-50 dark:bg-slate-950 backdrop-blur-md z-10">
                         <tr>
-                          <th className="px-6 py-4 text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Identity</th>
-                          <th className="px-6 py-4 text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Target</th>
-                          <th className="px-6 py-4 text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Time</th>
-                          <th className="px-6 py-4 text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] text-right">Action</th>
+                          <th className="px-1 py-2 text-[8px] font-black text-slate-400 uppercase tracking-widest text-center">SL</th>
+                          <th className="px-1 py-2 text-[8px] font-black text-slate-400 uppercase tracking-widest">Identity</th>
+                          <th className="px-1 py-2 text-[8px] font-black text-slate-400 uppercase tracking-widest">Target</th>
+                          <th className="px-1 py-2 text-[8px] font-black text-slate-400 uppercase tracking-widest">Time</th>
+                          <th className="px-1 py-2 text-[8px] font-black text-slate-400 uppercase tracking-widest text-right">Action</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                         {filteredJoins.map((e, idx) => (
                           <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
-                            <td className="px-6 py-4">
-                               <div className={`inline-flex items-center px-4 py-1.5 rounded-full border ${ROW_COLORS[idx % ROW_COLORS.length]} font-black text-[10px] uppercase`}>
-                                 {e.userName}
+                            <td className="px-1 py-2 text-[9px] font-mono text-slate-500 text-center">{idx + 1}</td>
+                            <td className="px-1 py-2">
+                               <div className={`inline-flex items-center px-1.5 py-0.5 rounded-full border ${ROW_COLORS[idx % ROW_COLORS.length]} font-black text-[8px] uppercase`}>
+                                 {e.userName.substring(0, 8)}
                                </div>
                             </td>
-                            <td className="px-6 py-4 text-[10px] font-bold text-slate-500">{e.chatTitle}</td>
-                            <td className="px-6 py-4 text-[9px] font-mono text-slate-400">{formatTime12h(e.timestamp)}</td>
-                            <td className="px-6 py-4 text-right">
-                              <button onClick={() => handleRequestKick(e)} className="p-2 text-rose-500 hover:bg-rose-500 hover:text-white rounded-xl transition-all"><Icons.Trash size={16}/></button>
+                            <td className="px-1 py-2 text-[8px] font-bold text-slate-500 truncate max-w-[80px]">{e.chatTitle.substring(0, 12)}</td>
+                            <td className="px-1 py-2 text-[8px] font-mono text-slate-400">{formatTime12h(e.timestamp).replace(' ', '')}</td>
+                            <td className="px-1 py-2 text-right">
+                              <button onClick={() => handleRequestKick(e)} className="p-0.5 text-rose-500 hover:bg-rose-500 hover:text-white rounded-md transition-all"><Icons.Trash size={12}/></button>
                             </td>
                           </tr>
                         ))}
                       </tbody>
                    </table>
                  </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'debug' && (
+            <div className={`space-y-6 ${animationClass}`}>
+              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2.5rem] p-8 shadow-xl">
+                <h2 className="text-lg font-black uppercase tracking-tight mb-4">Recent Telegram Updates</h2>
+                <pre className="text-xs font-mono bg-slate-100 dark:bg-slate-950 p-4 rounded-xl overflow-x-auto max-h-[60vh]">
+                  {JSON.stringify(updates, null, 2)}
+                </pre>
               </div>
             </div>
           )}
@@ -543,6 +793,41 @@ const App: React.FC = () => {
                       <span className="text-[10px] font-black uppercase tracking-widest">Import Data</span>
                     </button>
                     <input type="file" ref={importFileRef} onChange={handleImport} accept=".json" className="hidden" />
+                  </div>
+
+                  <div className="mt-6 border-t border-slate-200 dark:border-slate-800 pt-6">
+                    <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Broadcast to All Hubs</h4>
+                    <textarea 
+                      placeholder="Enter broadcast message..." 
+                      className="w-full bg-white dark:bg-black/30 border border-slate-200 dark:border-white/10 px-6 py-4 rounded-2xl text-slate-900 dark:text-white text-xs outline-none focus:ring-4 focus:ring-indigo-500/20 mb-4 transition-all"
+                      rows={3}
+                      value={broadcastMessage}
+                      onChange={e => setBroadcastMessage(e.target.value)}
+                    />
+                    <button 
+                      onClick={handleBroadcast}
+                      disabled={!broadcastMessage || !token}
+                      className="w-full py-4 bg-rose-600 text-white font-black uppercase text-xs rounded-2xl shadow-xl hover:bg-rose-500 active:scale-95 transition-all disabled:opacity-50"
+                    >
+                      Broadcast Message
+                    </button>
+                  </div>
+
+                  <div className="mt-8 border-t border-slate-200 dark:border-slate-800 pt-6">
+                    <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Broadcast History</h4>
+                    <div className="space-y-3">
+                      {broadcasts.map(b => (
+                        <div key={b._id} className="bg-white dark:bg-black/20 p-4 rounded-xl border border-slate-200 dark:border-white/5 flex items-center justify-between">
+                          <div className="flex-1 min-w-0 mr-4">
+                            <p className="text-xs text-slate-900 dark:text-white truncate">{b.message}</p>
+                            <p className="text-[9px] text-slate-500">{new Date(b.timestamp).toLocaleString()}</p>
+                          </div>
+                          <button onClick={() => handleDeleteBroadcast(b._id)} className="p-2 text-rose-500 hover:bg-rose-500 hover:text-white rounded-lg transition-all">
+                            <Icons.Trash size={14} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                </div>
             </div>
