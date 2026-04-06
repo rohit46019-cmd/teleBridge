@@ -4,7 +4,7 @@ import mongoose from "mongoose";
 import cors from "cors";
 import path from "path";
 
-const MONGODB_URI = "mongodb+srv://rohit46019_db_user:m5j51NXjSGxEzSrs@cluster0.b3gft5l.mongodb.net/?appName=Cluster0";
+const MONGODB_URI = (process.env.MONGODB_URI || "mongodb+srv://rohit46019_db_user:m5j51NXjSGxEzSrs@cluster0.b3gft5l.mongodb.net/?appName=Cluster0").replace(/^['"]|['"]$/g, '');
 
 // Define Schemas
 const joinEventSchema = new mongoose.Schema({
@@ -104,12 +104,15 @@ async function seedData() {
 
 async function connectDB() {
   try {
+    console.log("Connecting to MongoDB...");
     await mongoose.connect(MONGODB_URI);
-    console.log("Connected to MongoDB");
+    console.log("Connected to MongoDB successfully");
     
-    // Only seed if collections are empty
     const groupCount = await Group.countDocuments();
+    console.log(`Current group count in DB: ${groupCount}`);
+    
     if (groupCount === 0) {
+      console.log("No groups found, seeding initial data...");
       await seedData();
     } else {
       console.log("Data already exists, skipping seed.");
@@ -316,9 +319,17 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
+  if (process.env.NODE_ENV !== "production") {
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+    });
+  }
+  return app;
 }
 
-startServer();
+const appPromise = startServer();
+
+export default async (req: any, res: any) => {
+  const app = await appPromise;
+  app(req, res);
+};
