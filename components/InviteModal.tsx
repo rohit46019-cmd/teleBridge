@@ -30,8 +30,15 @@ const InviteModal: React.FC<InviteModalProps> = ({ group, onClose, botToken, onI
 
   const fetchLinks = async () => {
     try {
+      console.log(`Fetching links for group ${group.id}...`);
       const res = await fetch(`/api/groups/${group.id}/links`);
-      if (res.ok) setLinks(await res.json());
+      if (res.ok) {
+        const data = await res.json();
+        console.log(`Fetched ${data.length} links:`, data);
+        setLinks(data);
+      } else {
+        console.error("Failed to fetch links, status:", res.status);
+      }
     } catch (err) {
       console.error("Failed to fetch links", err);
     }
@@ -46,23 +53,32 @@ const InviteModal: React.FC<InviteModalProps> = ({ group, onClose, botToken, onI
     setIsGenerating(true);
     setError(null);
     try {
+      // 1. Call Telegram API (This is the only network wait we need)
       const realLink = await createInviteLink(
         botToken, 
         group.id, 
         useLimit, 
         parseInt(expiration)
       );
+      
+      // 2. Immediately show the link to the user (Milliseconds after Telegram responds)
       setLink(realLink);
-      await fetch(`/api/groups/${group.id}/links`, {
+      setIsGenerating(false);
+      onInteraction();
+
+      // 3. Save to our database in the background (Don't block the UI)
+      fetch(`/api/groups/${group.id}/links`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ link: realLink }),
+      }).then(() => {
+        fetchLinks(); // Refresh the list after saving
+      }).catch(err => {
+        console.error("Failed to save link to DB:", err);
       });
-      fetchLinks();
-      onInteraction();
+
     } catch (err: any) {
       setError(err.message || 'Failed to generate link. Check bot permissions.');
-    } finally {
       setIsGenerating(false);
     }
   };
@@ -165,14 +181,20 @@ const InviteModal: React.FC<InviteModalProps> = ({ group, onClose, botToken, onI
             <div className="mt-6">
               <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Recent Links</h4>
               <div className="space-y-2 max-h-[200px] overflow-y-auto custom-scrollbar pr-2">
-                {links.map((l, i) => (
-                  <div key={i} className="flex items-center justify-between p-3 bg-black/5 dark:bg-black/20 rounded-xl border border-black/5 dark:border-white/5 group">
-                    <span className="text-xs font-mono text-slate-600 dark:text-slate-400 truncate mr-2">{l.link}</span>
-                    <button onClick={() => handleRevokeLink(l.link)} className="text-slate-400 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Icons.Trash size={14} />
-                    </button>
+                {links.length > 0 ? (
+                  links.map((l, i) => (
+                    <div key={i} className="flex items-center justify-between p-3 bg-black/5 dark:bg-black/20 rounded-xl border border-black/5 dark:border-white/5 group">
+                      <span className="text-xs font-mono text-slate-600 dark:text-slate-400 truncate mr-2">{l.link}</span>
+                      <button onClick={() => handleRevokeLink(l.link)} className="text-slate-400 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Icons.Trash size={14} />
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-4 text-slate-400 text-[10px] uppercase tracking-widest font-medium opacity-50">
+                    No recent links found
                   </div>
-                ))}
+                )}
               </div>
             </div>
           </div>

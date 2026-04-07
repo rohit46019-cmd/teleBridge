@@ -42,10 +42,11 @@ const inviteLinkSchema = new mongoose.Schema({
   createdAt: Number
 });
 
-const JoinEvent = mongoose.model("JoinEvent", joinEventSchema);
-const Group = mongoose.model("Group", groupSchema);
-const Broadcast = mongoose.model("Broadcast", broadcastSchema);
-const InviteLink = mongoose.model("InviteLink", inviteLinkSchema);
+// Define Models
+const JoinEvent = mongoose.models.JoinEvent || mongoose.model("JoinEvent", joinEventSchema);
+const Group = mongoose.models.Group || mongoose.model("Group", groupSchema);
+const Broadcast = mongoose.models.Broadcast || mongoose.model("Broadcast", broadcastSchema);
+const InviteLink = mongoose.models.InviteLink || mongoose.model("InviteLink", inviteLinkSchema);
 
 async function seedData() {
   const groups = [
@@ -63,7 +64,7 @@ async function seedData() {
     { "id": "-1003732445402", "name": "RANI MAM 7.0", "memberCount": 79, "description": "Synced Group", "category": "Telegram", "image": "https://picsum.photos/seed/-1003732445402/200", "lastInteraction": 1774100397699 },
     { "id": "-1003360985096", "name": "Hindi Foundation Batch 2025 by khan sir", "memberCount": 6, "description": "Synced Group", "category": "Telegram", "image": "https://picsum.photos/seed/-1003360985096/200", "lastInteraction": 1770980272065 },
     { "id": "-1003067240220", "name": "𝗔𝗗𝗜𝗧𝗬𝗔 𝗦𝗜𝗥 3.0", "memberCount": 35, "description": "Synced Group", "category": "Telegram", "image": "https://picsum.photos/seed/-1003067240220/200", "lastInteraction": 1773975394503 },
-    { "id": "-1003037426232", "name": "𝐕𝐈𝐊𝐑𝐀𝐌𝐉𝐄𝐄𝐓 𝐑𝐄𝐀𝐒𝐎𝐍𝐈𝐍𝗚 𝟑.𝟎", "memberCount": 8, "description": "Synced Group", "category": "Telegram", "image": "https://picsum.photos/seed/-1003037426232/200", "lastInteraction": 1771649376701 },
+    { "id": "-1003037426232", "name": "𝐕𝐈𝐊𝐑𝐀𝐌𝐉𝐄𝐄𝐓 𝐑𝐄𝐀𝐒𝐎𝐍𝐈𝐍𝐆 𝟑.𝟎", "memberCount": 8, "description": "Synced Group", "category": "Telegram", "image": "https://picsum.photos/seed/-1003037426232/200", "lastInteraction": 1771649376701 },
     { "id": "-1003767448478", "name": "E1 Coching", "memberCount": 5, "description": "Synced Group", "category": "Telegram", "image": "https://picsum.photos/seed/-1003767448478/200", "lastInteraction": 1770961968213 },
     { "id": "-1003636154961", "name": "Parmar 2.0 ENG", "memberCount": 9, "description": "Synced Group", "category": "Telegram", "image": "https://picsum.photos/seed/-1003636154961/200", "lastInteraction": 1773971217355 },
     { "id": "-1003565371067", "name": "RWA sanjeev sir Eng Live", "memberCount": 4, "description": "Synced Group", "category": "Telegram", "image": "https://picsum.photos/seed/-1003565371067/200", "lastInteraction": 1769822904677 },
@@ -82,7 +83,7 @@ async function seedData() {
   try {
     console.log("Ensuring default groups exist...");
     for (const group of groups) {
-      await Group.findOneAndUpdate({ id: group.id }, group, { upsert: true });
+      await (Group as any).findOneAndUpdate({ id: group.id }, group, { upsert: true });
     }
     console.log("Default groups ensured successfully");
   } catch (error) {
@@ -119,6 +120,19 @@ async function startServer() {
   app.use(cors());
   app.use(express.json());
 
+  // DB connection middleware for serverless
+  app.use(async (req, res, next) => {
+    if (mongoose.connection.readyState !== 1) {
+      try {
+        console.log("DB not ready, connecting in middleware...");
+        await mongoose.connect(MONGODB_URI);
+      } catch (err) {
+        console.error("DB connection error in middleware:", err);
+      }
+    }
+    next();
+  });
+
   // API Routes
   app.get("/api/health", (req, res) => {
     console.log("Health check requested");
@@ -149,7 +163,7 @@ async function startServer() {
   app.post("/api/groups", async (req, res) => {
     try {
       const group = req.body;
-      await Group.findOneAndUpdate({ id: group.id }, group, { upsert: true });
+      await (Group as any).findOneAndUpdate({ id: group.id }, group, { upsert: true });
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to save group" });
@@ -160,7 +174,7 @@ async function startServer() {
     try {
       const updates = req.body;
       for (const g of updates) {
-        await Group.findOneAndUpdate({ id: g.id }, g, { upsert: true });
+        await (Group as any).findOneAndUpdate({ id: g.id }, g, { upsert: true });
       }
       res.json({ success: true });
     } catch (error) {
@@ -170,7 +184,7 @@ async function startServer() {
 
   app.put("/api/groups/:id/interaction", async (req, res) => {
     try {
-      await Group.findOneAndUpdate({ id: req.params.id }, { 
+      await (Group as any).findOneAndUpdate({ id: req.params.id }, { 
         lastInteraction: Date.now(),
         $inc: { interactionCount: 1 }
       });
@@ -184,7 +198,7 @@ async function startServer() {
     try {
       const events = req.body;
       for (const ev of events) {
-        await JoinEvent.findOneAndUpdate({ userId: ev.userId, timestamp: ev.timestamp }, ev, { upsert: true });
+        await (JoinEvent as any).findOneAndUpdate({ userId: ev.userId, timestamp: ev.timestamp }, ev, { upsert: true });
       }
       res.json({ success: true });
     } catch (error) {
@@ -194,7 +208,7 @@ async function startServer() {
 
   app.delete("/api/events/:userId/:timestamp", async (req, res) => {
     try {
-      await JoinEvent.deleteOne({ userId: Number(req.params.userId), timestamp: Number(req.params.timestamp) } as any);
+      await (JoinEvent as any).deleteOne({ userId: Number(req.params.userId), timestamp: Number(req.params.timestamp) });
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete event" });
@@ -203,7 +217,7 @@ async function startServer() {
 
   app.post("/api/groups/:id/interaction", async (req, res) => {
     try {
-      await Group.findOneAndUpdate(
+      await (Group as any).findOneAndUpdate(
         { id: req.params.id },
         { 
           $set: { lastInteraction: Date.now() },
@@ -219,25 +233,37 @@ async function startServer() {
 
   app.get("/api/groups/:id/links", async (req, res) => {
     try {
-      console.log(`Fetching links for group: ${req.params.id}`);
-      const links = await InviteLink.find({ groupId: req.params.id }).sort({ createdAt: -1 }).limit(10);
-      console.log(`Found ${links.length} links for group ${req.params.id}`);
+      const groupId = req.params.id;
+      console.log(`[GET] Fetching links for group: ${groupId}`);
+      const links = await (InviteLink as any).find({ groupId }).sort({ createdAt: -1 }).limit(10);
+      console.log(`[GET] Found ${links.length} links for group ${groupId}`);
       res.json(links);
     } catch (error) {
-      console.error("Failed to fetch links:", error);
+      console.error("[GET] Failed to fetch links:", error);
       res.status(500).json({ error: "Failed to fetch links" });
     }
   });
 
   app.post("/api/groups/:id/links", async (req, res) => {
     try {
+      const groupId = req.params.id;
       const { link } = req.body;
-      console.log(`Saving new link for group ${req.params.id}: ${link}`);
-      const newLink = await InviteLink.create({ groupId: req.params.id, link, createdAt: Date.now() });
-      console.log(`Successfully saved link: ${newLink._id}`);
-      res.json({ success: true });
+      console.log(`[POST] Saving new link for group ${groupId}: ${link}`);
+      
+      if (!link) {
+        return res.status(400).json({ error: "Link is required" });
+      }
+
+      const newLink = await (InviteLink as any).create({ 
+        groupId, 
+        link, 
+        createdAt: Date.now() 
+      });
+      
+      console.log(`[POST] Successfully saved link: ${newLink._id}`);
+      res.json({ success: true, id: newLink._id });
     } catch (error) {
-      console.error("Failed to save link:", error);
+      console.error("[POST] Failed to save link:", error);
       res.status(500).json({ error: "Failed to save link" });
     }
   });
@@ -245,7 +271,7 @@ async function startServer() {
   app.delete("/api/groups/:id/links", async (req, res) => {
     try {
       const { link } = req.body;
-      await InviteLink.deleteOne({ groupId: req.params.id, link });
+      await (InviteLink as any).deleteOne({ groupId: req.params.id, link });
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete link" });
@@ -280,7 +306,7 @@ async function startServer() {
         }
       }
       
-      await Broadcast.create({ message, timestamp, sentTo });
+      await (Broadcast as any).create({ message, timestamp, sentTo });
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to broadcast message" });
@@ -289,7 +315,7 @@ async function startServer() {
 
   app.get("/api/broadcast", async (req, res) => {
     try {
-      const broadcasts = await Broadcast.find().sort({ timestamp: -1 });
+      const broadcasts = await (Broadcast as any).find().sort({ timestamp: -1 });
       res.json(broadcasts);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch broadcasts" });
@@ -299,7 +325,7 @@ async function startServer() {
   app.delete("/api/broadcast/:id", async (req, res) => {
     try {
       const { token } = req.body;
-      const broadcast = await Broadcast.findById(req.params.id);
+      const broadcast = await (Broadcast as any).findById(req.params.id);
       if (!broadcast) {
         return res.status(404).json({ error: "Broadcast not found" });
       }
@@ -312,7 +338,7 @@ async function startServer() {
         }
       }
 
-      await Broadcast.findByIdAndDelete(req.params.id);
+      await (Broadcast as any).findByIdAndDelete(req.params.id);
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete broadcast" });
