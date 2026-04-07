@@ -100,7 +100,7 @@ const InviteModal: React.FC<InviteModalProps> = ({ group, onClose, botToken, onI
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-6 animate-in fade-in duration-300">
       <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-xl" onClick={onClose} />
       
-      <div className="relative glass w-full max-w-lg rounded-3xl overflow-hidden shadow-2xl flex flex-col p-8 md:p-10 animate-in zoom-in-95 duration-300">
+      <div className="relative bg-white dark:bg-slate-900 w-full max-w-lg rounded-3xl overflow-hidden shadow-2xl flex flex-col p-8 md:p-10 animate-in zoom-in-95 duration-300 border border-slate-200 dark:border-slate-800">
         <div className="flex justify-between items-start mb-8">
            <div>
              <div className="flex items-center gap-3 mb-2">
@@ -109,7 +109,7 @@ const InviteModal: React.FC<InviteModalProps> = ({ group, onClose, botToken, onI
              </div>
              <h2 className="text-2xl font-display font-bold text-slate-900 dark:text-white tracking-tight break-words max-w-[300px]">{group.name}</h2>
            </div>
-           <button onClick={onClose} className="bg-white/5 hover:bg-white/10 text-slate-500 hover:text-rose-500 transition-all p-2.5 rounded-xl active:scale-90 border border-white/10">
+           <button onClick={onClose} className="bg-slate-100 dark:bg-slate-800 hover:bg-rose-500 hover:text-white text-slate-500 transition-all p-2.5 rounded-xl active:scale-90 border border-slate-200 dark:border-slate-700">
              <Icons.X size={20} />
            </button>
         </div>
@@ -171,7 +171,7 @@ const InviteModal: React.FC<InviteModalProps> = ({ group, onClose, botToken, onI
             
             <div className="p-5 bg-blue-500/5 rounded-2xl border border-blue-500/10">
                <p className="text-xs text-slate-600 dark:text-blue-200/70 leading-relaxed font-medium italic">
-                 "{aiDescription || "Your exclusive bridge to the community is ready. Handle with care."}"
+                 {aiDescription || "Your exclusive bridge to the community is ready. Handle with care."}
                </p>
             </div>
             

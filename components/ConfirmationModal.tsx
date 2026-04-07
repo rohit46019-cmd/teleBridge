@@ -13,7 +13,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({ title, message, o
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-6 animate-in fade-in duration-300">
       <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-xl" onClick={onClose} />
       
-      <div className="relative glass w-full max-w-md rounded-3xl p-8 md:p-10 shadow-2xl animate-in zoom-in-95 duration-300">
+      <div className="relative bg-white dark:bg-slate-900 w-full max-w-md rounded-3xl p-8 md:p-10 shadow-2xl animate-in zoom-in-95 duration-300 border border-slate-200 dark:border-slate-800">
         <div className="flex items-start gap-6">
           <div className="w-14 h-14 bg-rose-500/10 border border-rose-500/20 rounded-2xl flex-shrink-0 flex items-center justify-center">
             <Icons.AlertTriangle size={28} className="text-rose-500" />
