@@ -79,6 +79,7 @@ const App: React.FC = () => {
   const [broadcasts, setBroadcasts] = useState<any[]>([]);
   const [isAddingGroup, setIsAddingGroup] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [totalMembers, setTotalMembers] = useState(0);
   const [lastUpdateId, setLastUpdateId] = useState(() => Number(localStorage.getItem('tg_last_update_id')) || 0);
 
@@ -102,17 +103,26 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const fetchData = async () => {
+      setIsLoading(true);
       try {
         const [groupsRes, eventsRes, broadcastsRes] = await Promise.all([
           fetch('/api/groups'),
           fetch('/api/events'),
           fetch('/api/broadcast')
         ]);
-        if (groupsRes.ok) setGroups(await groupsRes.json());
+        
+        if (groupsRes.ok) {
+          const data = await groupsRes.json();
+          setGroups(data);
+        }
+        
         if (eventsRes.ok) setJoinEvents(await eventsRes.json());
         if (broadcastsRes.ok) setBroadcasts(await broadcastsRes.json());
       } catch (error) {
         console.error("Failed to fetch initial data", error);
+        setGroups(DEFAULT_GROUPS);
+      } finally {
+        setIsLoading(false);
       }
     };
     fetchData();
@@ -724,9 +734,22 @@ const App: React.FC = () => {
                 </div>
               </div>
               <div className="grid grid-cols-1 gap-4">
-                {filteredGroups.map(g => (
-                  <GroupCard key={g.id} group={g} onClick={() => setSelectedGroup(g)} onTogglePin={handleTogglePin} />
-                ))}
+                {isLoading ? (
+                  <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+                    <Icons.Loader size={32} className="animate-spin mb-4" />
+                    <p className="text-sm font-bold uppercase tracking-widest">Loading Batches...</p>
+                  </div>
+                ) : filteredGroups.length > 0 ? (
+                  filteredGroups.map(g => (
+                    <GroupCard key={g.id} group={g} onClick={() => setSelectedGroup(g)} onTogglePin={handleTogglePin} />
+                  ))
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-20 text-slate-400 bg-slate-50 dark:bg-slate-900/20 rounded-[2.5rem] border-2 border-dashed border-slate-200 dark:border-slate-800">
+                    <Icons.Search size={32} className="mb-4 opacity-20" />
+                    <p className="text-sm font-bold uppercase tracking-widest">No batches found</p>
+                    <p className="text-[10px] mt-1 opacity-60">Try a different search or add a new batch</p>
+                  </div>
+                )}
               </div>
             </div>
           )}

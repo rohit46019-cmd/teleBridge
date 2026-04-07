@@ -48,18 +48,6 @@ const Broadcast = mongoose.model("Broadcast", broadcastSchema);
 const InviteLink = mongoose.model("InviteLink", inviteLinkSchema);
 
 async function seedData() {
-  const joinEvents = [
-    { "userId": 1876927205, "userName": "Rupam Saha", "chatId": -1003114073401, "chatTitle": "Himanshi mam CDP", "timestamp": 1774148125000 },
-    { "userId": 6929509598, "userName": "M Singh", "chatId": -1003012561565, "chatTitle": "Parmar 3.0", "timestamp": 1774146556000 },
-    { "userId": 7180424396, "userName": "Gurjar ~~~", "chatId": -1003153087650, "chatTitle": "Parmar SSC 4.0 🔴Live", "timestamp": 1774146472000 },
-    { "userId": 1786588270, "userName": "My study 📖📖", "chatId": -1002793359066, "chatTitle": "Piyush Sir Reasoning", "timestamp": 1774110427000 },
-    { "userId": 1867501065, "userName": "Basu Kumar", "chatId": -1003577096046, "chatTitle": "Math by Bhutesh sir", "timestamp": 1774104585000 },
-    { "userId": 1186847470, "userName": "Arun Devrath", "chatId": -1003153087650, "chatTitle": "Parmar SSC 4.0 🔴Live", "timestamp": 1774101800000 },
-    { "userId": 7180424396, "userName": "Gurjar ~~~", "chatId": -1003040206839, "chatTitle": "ɢᴀɢᴀɴ ᴘʀᴀᴛᴀᴘ", "timestamp": 1774101197000 },
-    { "userId": 1933309117, "userName": "Kashish Singh", "chatId": -1003732445402, "chatTitle": "RANI MAM 7.0", "timestamp": 1774100701000 },
-    { "userId": 6303030839, "userName": "Anurag Agrahari", "chatId": -1003732445402, "chatTitle": "RANI MAM 7.0", "timestamp": 1774095523000 },
-    { "userId": 6402815933, "userName": "Ritesh Singh", "chatId": -1003153087650, "chatTitle": "Parmar SSC 4.0 🔴Live", "timestamp": 1774089615000 }
-  ];
   const groups = [
     { "id": "-1003698762401", "name": "GK & GS Brahmastra 4.0 Batch", "memberCount": 5, "description": "Synced Hub", "category": "Telegram", "image": "https://picsum.photos/seed/-1003698762401/200", "lastInteraction": 1774102797184 },
     { "id": "-1003040206839", "name": "ɢᴀɢᴀɴ ᴘʀᴀᴛᴀᴘ", "memberCount": 19, "description": "Synced Hub", "category": "Telegram", "image": "https://picsum.photos/seed/-1003040206839/200", "lastInteraction": 1774101136444 },
@@ -75,7 +63,7 @@ async function seedData() {
     { "id": "-1003732445402", "name": "RANI MAM 7.0", "memberCount": 79, "description": "Synced Group", "category": "Telegram", "image": "https://picsum.photos/seed/-1003732445402/200", "lastInteraction": 1774100397699 },
     { "id": "-1003360985096", "name": "Hindi Foundation Batch 2025 by khan sir", "memberCount": 6, "description": "Synced Group", "category": "Telegram", "image": "https://picsum.photos/seed/-1003360985096/200", "lastInteraction": 1770980272065 },
     { "id": "-1003067240220", "name": "𝗔𝗗𝗜𝗧𝗬𝗔 𝗦𝗜𝗥 3.0", "memberCount": 35, "description": "Synced Group", "category": "Telegram", "image": "https://picsum.photos/seed/-1003067240220/200", "lastInteraction": 1773975394503 },
-    { "id": "-1003037426232", "name": "𝐕𝐈𝐊𝐑𝐀𝐌𝐉𝐄𝐄𝐓 𝐑𝐄𝐀𝐒𝐎𝐍𝐈𝐍𝐆 𝟑.𝟎", "memberCount": 8, "description": "Synced Group", "category": "Telegram", "image": "https://picsum.photos/seed/-1003037426232/200", "lastInteraction": 1771649376701 },
+    { "id": "-1003037426232", "name": "𝐕𝐈𝐊𝐑𝐀𝐌𝐉𝐄𝐄𝐓 𝐑𝐄𝐀𝐒𝐎𝐍𝐈𝐍𝗚 𝟑.𝟎", "memberCount": 8, "description": "Synced Group", "category": "Telegram", "image": "https://picsum.photos/seed/-1003037426232/200", "lastInteraction": 1771649376701 },
     { "id": "-1003767448478", "name": "E1 Coching", "memberCount": 5, "description": "Synced Group", "category": "Telegram", "image": "https://picsum.photos/seed/-1003767448478/200", "lastInteraction": 1770961968213 },
     { "id": "-1003636154961", "name": "Parmar 2.0 ENG", "memberCount": 9, "description": "Synced Group", "category": "Telegram", "image": "https://picsum.photos/seed/-1003636154961/200", "lastInteraction": 1773971217355 },
     { "id": "-1003565371067", "name": "RWA sanjeev sir Eng Live", "memberCount": 4, "description": "Synced Group", "category": "Telegram", "image": "https://picsum.photos/seed/-1003565371067/200", "lastInteraction": 1769822904677 },
@@ -92,11 +80,11 @@ async function seedData() {
   ];
 
   try {
-    await JoinEvent.deleteMany({});
-    await Group.deleteMany({});
-    await JoinEvent.insertMany(joinEvents);
-    await Group.insertMany(groups);
-    console.log("Data seeded successfully");
+    console.log("Ensuring default groups exist...");
+    for (const group of groups) {
+      await Group.findOneAndUpdate({ id: group.id }, group, { upsert: true });
+    }
+    console.log("Default groups ensured successfully");
   } catch (error) {
     console.error("Seeding error:", error);
   }
@@ -108,38 +96,40 @@ async function connectDB() {
     await mongoose.connect(MONGODB_URI);
     console.log("Connected to MongoDB successfully");
     
-    const groupCount = await Group.countDocuments();
-    console.log(`Current group count in DB: ${groupCount}`);
+    // Always ensure defaults exist on startup, but don't wipe user data
+    await seedData();
     
-    if (groupCount === 0) {
-      console.log("No groups found, seeding initial data...");
-      await seedData();
-    } else {
-      console.log("Data already exists, skipping seed.");
-    }
+    const groupCount = await Group.countDocuments();
+    console.log(`Current total group count in DB: ${groupCount}`);
   } catch (error) {
     console.error("MongoDB connection error:", error);
   }
 }
 
 async function startServer() {
-  await connectDB();
   const app = express();
   const PORT = 3000;
+
+  // Start DB connection in background
+  connectDB().catch(err => console.error("Background DB connection failed:", err));
 
   app.use(cors());
   app.use(express.json());
 
   // API Routes
   app.get("/api/health", (req, res) => {
-    res.json({ status: "ok" });
+    console.log("Health check requested");
+    res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
   app.get("/api/groups", async (req, res) => {
     try {
+      console.log("Fetching groups from DB...");
       const groups = await Group.find().sort({ lastInteraction: -1 });
+      console.log(`Successfully fetched ${groups.length} groups`);
       res.json(groups);
     } catch (error) {
+      console.error("Failed to fetch groups:", error);
       res.status(500).json({ error: "Failed to fetch groups" });
     }
   });
@@ -319,17 +309,10 @@ async function startServer() {
     });
   }
 
-  if (process.env.NODE_ENV !== "production") {
-    app.listen(PORT, "0.0.0.0", () => {
-      console.log(`Server running on http://localhost:${PORT}`);
-    });
-  }
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+  });
   return app;
 }
 
-const appPromise = startServer();
-
-export default async (req: any, res: any) => {
-  const app = await appPromise;
-  app(req, res);
-};
+startServer();
