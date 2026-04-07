@@ -1,9 +1,10 @@
 {
-  "name": "TeleBridge",
+  "name": "TeleBridge Pro Admin",
   "short_name": "TeleBridge",
   "description": "Telegram Group & Batch Manager",
   "start_url": "/",
   "display": "standalone",
+  "orientation": "portrait",
   "background_color": "#0f172a",
   "theme_color": "#2563eb",
   "icons": [
