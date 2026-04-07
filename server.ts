@@ -109,8 +109,11 @@ async function connectDB() {
     
     const groupCount = await Group.countDocuments();
     console.log(`Current total group count in DB: ${groupCount}`);
-  } catch (error) {
-    console.error("MongoDB connection error:", error);
+  } catch (error: any) {
+    console.error("MongoDB connection error:", error.message);
+    if (error.message.includes("IP not whitelisted") || error.message.includes("Could not connect to any servers")) {
+      console.error("CRITICAL: Your IP might not be whitelisted in MongoDB Atlas. Please allow 0.0.0.0/0 for Vercel deployments.");
+    }
   }
 }
 
@@ -372,4 +375,9 @@ async function startServer() {
   return app;
 }
 
-startServer();
+const appPromise = startServer();
+
+export default async function handler(req: any, res: any) {
+  const app = await appPromise;
+  return app(req, res);
+}

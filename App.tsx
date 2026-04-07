@@ -86,7 +86,9 @@ const App: React.FC = () => {
   const [broadcasts, setBroadcasts] = useState<any[]>([]);
   const [isAddingGroup, setIsAddingGroup] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [syncStatus, setSyncStatus] = useState<'connected' | 'error' | 'syncing'>('syncing');
   const [totalMembers, setTotalMembers] = useState(0);
   const [lastUpdateId, setLastUpdateId] = useState(() => Number(localStorage.getItem('tg_last_update_id')) || 0);
   const lastUpdateIdRef = useRef(lastUpdateId);
@@ -117,6 +119,9 @@ const App: React.FC = () => {
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
+      setSyncStatus('syncing');
+      let finalGroups = groups.length > 0 ? groups : DEFAULT_GROUPS;
+      
       try {
         const [groupsRes, eventsRes, broadcastsRes] = await Promise.all([
           fetch('/api/groups'),
@@ -126,34 +131,29 @@ const App: React.FC = () => {
         
         if (groupsRes.ok) {
           const data = await groupsRes.json();
-          // Fallback to DEFAULT_GROUPS only if DB is empty AND we don't have cached groups
           if (data && data.length > 0) {
+            finalGroups = data;
             setGroups(data);
-          } else if (groups.length === 0) {
-            setGroups(DEFAULT_GROUPS);
           }
-          
-          // Trigger initial sync after we have groups
-          const finalGroups = data && data.length > 0 ? data : (groups.length > 0 ? groups : DEFAULT_GROUPS);
-          if (token) {
-            handleVerify(token).then(() => {
-              syncAllGroupsMemberCount(token, finalGroups);
-            });
-          }
+          setSyncStatus('connected');
         } else {
-          // If fetch failed, keep using groups from localStorage (already in state)
-          if (groups.length === 0) {
-            setGroups(DEFAULT_GROUPS);
-          }
+          console.error("Backend fetch failed, using local cache");
+          setSyncStatus('error');
         }
         
         if (eventsRes.ok) setJoinEvents(await eventsRes.json());
         if (broadcastsRes.ok) setBroadcasts(await broadcastsRes.json());
-      } catch (error) {
-        console.error("App: Failed to fetch initial data", error);
-        setGroups(DEFAULT_GROUPS);
+      } catch (err) {
+        console.error("Initial fetch error:", err);
+        setSyncStatus('error');
       } finally {
         setIsLoading(false);
+        // Always attempt to verify bot if token exists, regardless of backend status
+        if (token) {
+          handleVerify(token).then(() => {
+            syncAllGroupsMemberCount(token, finalGroups);
+          });
+        }
       }
     };
     fetchData();
@@ -532,6 +532,7 @@ const App: React.FC = () => {
       }
 
       setLastUpdateId(maxId);
+      setLastSyncTime(new Date());
     } catch (e: any) {
       console.error("Discovery error:", e);
       if (e.message?.includes('Conflict')) throw e;
@@ -758,8 +759,24 @@ const App: React.FC = () => {
                  <div className="bg-gradient-to-br from-fuchsia-500 to-purple-600 p-5 rounded-[2rem] border-b-4 border-purple-800 shadow-[0_15px_30px_rgba(192,38,211,0.4)] transition-all hover:-translate-y-1 relative overflow-hidden">
                     <div className="absolute -right-4 -top-4 w-24 h-24 bg-white/10 rounded-full blur-xl"></div>
                     <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-4 backdrop-blur-sm"><Icons.Zap size={20} className="text-white" strokeWidth={3} /></div>
-                    <p className="text-[10px] font-black text-purple-100 uppercase tracking-widest mb-1 relative z-10">Status</p>
-                    <p className="text-xl font-black text-white uppercase relative z-10">{botInfo ? 'ACTIVE' : 'OFFLINE'}</p>
+                    <div className="flex justify-between items-start">
+                       <div>
+                         <p className="text-[10px] font-black text-purple-100 uppercase tracking-widest mb-1 relative z-10">Bot Status</p>
+                         <p className="text-xl font-black text-white uppercase relative z-10">{botInfo ? 'ACTIVE' : 'OFFLINE'}</p>
+                       </div>
+                       <div className="text-right">
+                         <p className="text-[10px] font-black text-purple-100 uppercase tracking-widest mb-1 relative z-10">DB Sync</p>
+                         <div className="flex items-center gap-1.5 justify-end relative z-10">
+                           <div className={`w-2 h-2 rounded-full ${syncStatus === 'connected' ? 'bg-emerald-400 animate-pulse' : syncStatus === 'syncing' ? 'bg-amber-400 animate-bounce' : 'bg-rose-400'}`}></div>
+                           <p className="text-[9px] font-black text-white uppercase">{syncStatus}</p>
+                         </div>
+                         {lastSyncTime && (
+                           <p className="text-[7px] font-black text-purple-200 uppercase mt-1 opacity-60">
+                             Last: {lastSyncTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                           </p>
+                         )}
+                       </div>
+                     </div>
                  </div>
               </div>
               <div className="relative bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 p-8 shadow-xl overflow-hidden">
