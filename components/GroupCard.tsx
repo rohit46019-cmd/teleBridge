@@ -51,6 +51,10 @@ const UNIQUE_THEMES = [
 const GroupCard: React.FC<GroupCardProps> = ({ group, onClick, onTogglePin }) => {
   const [copied, setCopied] = useState(false);
 
+  // Use a stable index for the theme based on the group ID
+  const themeIndex = Math.abs(group.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)) % UNIQUE_THEMES.length;
+  const theme = UNIQUE_THEMES[themeIndex];
+
   const copyId = (e: React.MouseEvent) => {
     e.stopPropagation();
     navigator.clipboard.writeText(group.id);
@@ -61,42 +65,77 @@ const GroupCard: React.FC<GroupCardProps> = ({ group, onClick, onTogglePin }) =>
   return (
     <div 
       onClick={() => onClick(group)}
-      className="group relative glass rounded-3xl p-5 flex items-center justify-between hover:-translate-y-1 transition-all duration-300 cursor-pointer hover:shadow-xl active:scale-[0.99] active:translate-y-0 overflow-hidden w-full"
+      className={`group relative rounded-3xl p-6 flex items-center justify-between transition-all duration-500 cursor-pointer 
+        bg-white dark:bg-slate-900 border-2 ${theme.border}
+        hover:-translate-y-2 hover:shadow-[0_20px_40px_-15px_rgba(0,0,0,0.3)] 
+        dark:hover:shadow-[0_20px_40px_-15px_rgba(0,0,0,0.7)]
+        active:scale-[0.98] active:translate-y-0 overflow-hidden w-full
+        before:absolute before:inset-0 before:opacity-0 hover:before:opacity-100 before:transition-opacity before:duration-500
+        before:bg-gradient-to-br ${theme.gradient}
+      `}
+      style={{
+        backgroundImage: theme.pattern,
+        backgroundSize: '20px 20px'
+      }}
     >
-      <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+      {/* 3D Glass Effect Overlay */}
+      <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+      
+      {/* Colorful Accent Glow */}
+      <div className={`absolute -right-10 -top-10 w-32 h-32 rounded-full blur-3xl opacity-20 group-hover:opacity-40 transition-opacity duration-500 ${theme.accent}`} />
 
-      <button onClick={(e) => onTogglePin(e, group.id)} className={`absolute top-4 right-4 p-2 rounded-xl transition-all shadow-sm border ${group.pinned ? 'bg-amber-400 text-white border-amber-400' : 'bg-white/5 border-white/10 text-slate-400 hover:text-slate-200'}`}>
-         <Icons.Pin size={14} />
+      <button 
+        onClick={(e) => onTogglePin(e, group.id)} 
+        className={`absolute top-4 right-4 p-2.5 rounded-xl transition-all shadow-md z-20 border-2 
+          ${group.pinned 
+            ? 'bg-amber-400 text-white border-amber-300 scale-110 rotate-12' 
+            : 'bg-white/80 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-400 hover:text-blue-500'}`}
+      >
+         <Icons.Pin size={16} className={group.pinned ? 'fill-current' : ''} />
       </button>
 
-      <div className="flex items-center gap-5 relative z-10 flex-1 min-w-0">
-        <div className="w-14 h-14 rounded-2xl overflow-hidden bg-black/10 flex-shrink-0 group-hover:scale-105 transition-transform duration-500 border border-white/10 shadow-lg">
-          <img 
-            src={group.image} 
-            alt={group.name} 
-            className="w-full h-full object-cover" 
-            loading="lazy" 
-            onError={(e) => {
-              (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/fallback/200';
-            }}
-          />
+      <div className="flex items-center gap-6 relative z-10 flex-1 min-w-0">
+        <div className="relative">
+          <div className={`absolute inset-0 blur-lg opacity-40 group-hover:opacity-60 transition-opacity duration-500 rounded-2xl ${theme.accent}`} />
+          <div className="w-16 h-16 rounded-2xl overflow-hidden bg-slate-200 dark:bg-slate-800 flex-shrink-0 group-hover:scale-110 transition-transform duration-500 border-2 border-white/20 shadow-2xl relative z-10">
+            <img 
+              src={group.image} 
+              alt={group.name} 
+              className="w-full h-full object-cover" 
+              referrerPolicy="no-referrer"
+              loading="lazy" 
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = `https://picsum.photos/seed/${group.id}/200`;
+              }}
+            />
+          </div>
         </div>
         <div className="flex-1 min-w-0">
-          <h3 className="text-base font-display font-bold text-slate-900 dark:text-white truncate leading-tight mb-1">{group.name}</h3>
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">{group.memberCount} MEMBERS</span>
-            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
+          <h3 className="text-lg font-display font-black text-slate-900 dark:text-white truncate leading-tight mb-1.5 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+            {group.name}
+          </h3>
+          <div className="flex items-center gap-2.5">
+            <div className={`px-2.5 py-0.5 rounded-full text-[10px] font-black text-white uppercase tracking-widest shadow-sm ${theme.accent}`}>
+              {group.memberCount} MEMBERS
+            </div>
+            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_12px_rgba(16,185,129,0.8)]" />
           </div>
         </div>
       </div>
 
-      <div className="flex items-center gap-3 relative z-10 ml-4 mr-10">
-        <button onClick={copyId} className="hidden sm:flex items-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/10">
-          <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 uppercase tracking-widest truncate max-w-[100px]">ID: {group.id}</span>
-          <Icons.Copy size={12} className={copied ? 'text-emerald-500' : 'text-slate-400'} />
+      <div className="flex items-center gap-4 relative z-10 ml-4 mr-12">
+        <button 
+          onClick={copyId} 
+          className="hidden md:flex items-center gap-2 px-4 py-2.5 bg-slate-100 dark:bg-slate-800/80 hover:bg-white dark:hover:bg-slate-700 rounded-2xl transition-all border-2 border-slate-200 dark:border-slate-700 group/copy"
+        >
+          <span className="text-[10px] font-mono font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest truncate max-w-[120px]">
+            {copied ? 'COPIED!' : `ID: ${group.id}`}
+          </span>
+          <Icons.Copy size={14} className={copied ? 'text-emerald-500 scale-125' : 'text-slate-400 group-hover/copy:text-blue-500 transition-all'} />
         </button>
-        <div className="w-10 h-10 bg-blue-500 text-white rounded-xl flex items-center justify-center group-hover:scale-110 transition-all shadow-lg shadow-blue-500/25 active:scale-90">
-          <Icons.Link size={18} strokeWidth={2.5} />
+        
+        <div className={`w-12 h-12 text-white rounded-2xl flex items-center justify-center group-hover:scale-110 group-hover:rotate-6 transition-all shadow-xl active:scale-90 ${theme.accent} border-2 border-white/20`}>
+          <Icons.Link size={22} strokeWidth={3} />
         </div>
       </div>
     </div>

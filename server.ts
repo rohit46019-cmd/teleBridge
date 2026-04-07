@@ -194,18 +194,37 @@ async function startServer() {
 
   app.delete("/api/events/:userId/:timestamp", async (req, res) => {
     try {
-      await JoinEvent.deleteOne({ userId: req.params.userId, timestamp: req.params.timestamp });
+      await JoinEvent.deleteOne({ userId: Number(req.params.userId), timestamp: Number(req.params.timestamp) } as any);
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete event" });
     }
   });
 
+  app.post("/api/groups/:id/interaction", async (req, res) => {
+    try {
+      await Group.findOneAndUpdate(
+        { id: req.params.id },
+        { 
+          $set: { lastInteraction: Date.now() },
+          $inc: { interactionCount: 1 }
+        },
+        { upsert: true }
+      );
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update interaction" });
+    }
+  });
+
   app.get("/api/groups/:id/links", async (req, res) => {
     try {
+      console.log(`Fetching links for group: ${req.params.id}`);
       const links = await InviteLink.find({ groupId: req.params.id }).sort({ createdAt: -1 }).limit(10);
+      console.log(`Found ${links.length} links for group ${req.params.id}`);
       res.json(links);
     } catch (error) {
+      console.error("Failed to fetch links:", error);
       res.status(500).json({ error: "Failed to fetch links" });
     }
   });
@@ -213,9 +232,12 @@ async function startServer() {
   app.post("/api/groups/:id/links", async (req, res) => {
     try {
       const { link } = req.body;
-      await InviteLink.create({ groupId: req.params.id, link, createdAt: Date.now() });
+      console.log(`Saving new link for group ${req.params.id}: ${link}`);
+      const newLink = await InviteLink.create({ groupId: req.params.id, link, createdAt: Date.now() });
+      console.log(`Successfully saved link: ${newLink._id}`);
       res.json({ success: true });
     } catch (error) {
+      console.error("Failed to save link:", error);
       res.status(500).json({ error: "Failed to save link" });
     }
   });

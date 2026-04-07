@@ -137,7 +137,7 @@ const App: React.FC = () => {
         if (eventsRes.ok) setJoinEvents(await eventsRes.json());
         if (broadcastsRes.ok) setBroadcasts(await broadcastsRes.json());
       } catch (error) {
-        console.error("Failed to fetch initial data", error);
+        console.error("App: Failed to fetch initial data", error);
         setGroups(DEFAULT_GROUPS);
       } finally {
         setIsLoading(false);
@@ -173,7 +173,8 @@ const App: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('tg_token_locked', isLocked.toString());
     localStorage.setItem('tg_last_update_id', lastUpdateId.toString());
-  }, [isLocked, lastUpdateId]);
+    localStorage.setItem('tg_groups', JSON.stringify(groups));
+  }, [isLocked, lastUpdateId, groups]);
 
   useEffect(() => {
     localStorage.setItem('activeTab', activeTab);
@@ -326,7 +327,7 @@ const App: React.FC = () => {
 
         if (u.message) {
           const chat = u.message.chat;
-          if (chat.type === 'group' || chat.type === 'supergroup') {
+          if (chat && (chat.type === 'group' || chat.type === 'supergroup')) {
             newDiscoveredGroups.push({
               id: chat.id.toString(),
               name: chat.title || 'Unknown Group',
@@ -344,21 +345,23 @@ const App: React.FC = () => {
           const newStatus = myMu.new_chat_member?.status;
           if (['member', 'administrator'].includes(newStatus)) {
             const chat = myMu.chat;
-            newDiscoveredGroups.push({
-              id: chat.id.toString(),
-              name: chat.title || 'Unknown Group',
-              memberCount: 1,
-              description: chat.description || 'Auto Discovered Hub',
-              category: 'Telegram',
-              image: `https://picsum.photos/seed/${chat.id}/200`,
-              lastInteraction: Date.now()
-            });
+            if (chat) {
+              newDiscoveredGroups.push({
+                id: chat.id.toString(),
+                name: chat.title || 'Unknown Group',
+                memberCount: 1,
+                description: chat.description || 'Auto Discovered Hub',
+                category: 'Telegram',
+                image: `https://picsum.photos/seed/${chat.id}/200`,
+                lastInteraction: Date.now()
+              });
+            }
           }
         }
 
         const mu = u.chat_member;
         
-        if (mu) {
+        if (mu && mu.chat) {
           const chatIdStr = mu.chat.id.toString();
           const oldStatus = mu.old_chat_member?.status;
           const newStatus = mu.new_chat_member?.status;

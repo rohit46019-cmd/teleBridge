@@ -7,6 +7,7 @@ export interface TelegramGroup {
   category: string;
   image: string;
   lastInteraction?: number; // Timestamp of last usage
+  interactionCount?: number;
   pinned?: boolean;
 }
 
