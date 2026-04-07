@@ -2,7 +2,6 @@
 import React, { useState, useEffect } from 'react';
 import { TelegramGroup } from '../types.ts';
 import { Icons } from '../constants.tsx';
-import { generateLinkDescription } from '../services/geminiService.ts';
 import { createInviteLink, revokeInviteLink } from '../services/telegramService.ts';
 
 interface InviteModalProps {
@@ -16,7 +15,6 @@ const InviteModal: React.FC<InviteModalProps> = ({ group, onClose, botToken, onI
   const [link, setLink] = useState<string>('');
   const [links, setLinks] = useState<any[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [aiDescription, setAiDescription] = useState<string>('');
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
@@ -27,11 +25,6 @@ const InviteModal: React.FC<InviteModalProps> = ({ group, onClose, botToken, onI
     if (botToken && group) {
       handleGenerateLink();
     }
-    const fetchAI = async () => {
-      const desc = await generateLinkDescription(group.name);
-      setAiDescription(desc);
-    };
-    fetchAI();
     fetchLinks();
   }, [group, botToken]);
 
@@ -167,12 +160,6 @@ const InviteModal: React.FC<InviteModalProps> = ({ group, onClose, botToken, onI
                 <Icons.Clock size={14} className="text-slate-400" />
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Expiry: 24 Hours</span>
               </div>
-            </div>
-            
-            <div className="p-5 bg-blue-500/5 rounded-2xl border border-blue-500/10">
-               <p className="text-xs text-slate-600 dark:text-blue-200/70 leading-relaxed font-medium italic">
-                 {aiDescription || "Your exclusive bridge to the community is ready. Handle with care."}
-               </p>
             </div>
             
             <div className="mt-6">
