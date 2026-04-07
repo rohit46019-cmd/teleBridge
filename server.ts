@@ -83,7 +83,11 @@ async function seedData() {
   try {
     console.log("Ensuring default groups exist...");
     for (const group of groups) {
-      await (Group as any).findOneAndUpdate({ id: group.id }, group, { upsert: true });
+      // Only insert if the group doesn't exist to avoid overwriting user changes (like 'pinned' status)
+      const existing = await (Group as any).findOne({ id: group.id });
+      if (!existing) {
+        await (Group as any).create(group);
+      }
     }
     console.log("Default groups ensured successfully");
   } catch (error) {
@@ -153,7 +157,7 @@ async function startServer() {
 
   app.get("/api/events", async (req, res) => {
     try {
-      const events = await JoinEvent.find().sort({ timestamp: -1 }).limit(100);
+      const events = await JoinEvent.find().sort({ timestamp: -1 }).limit(1000);
       res.json(events);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch events" });
@@ -173,7 +177,9 @@ async function startServer() {
   app.put("/api/groups/bulk-update", async (req, res) => {
     try {
       const updates = req.body;
+      console.log(`[BulkUpdate] Received ${updates.length} group updates`);
       for (const g of updates) {
+        console.log(`[BulkUpdate] Updating group ${g.id}, pinned: ${g.pinned}`);
         await (Group as any).findOneAndUpdate({ id: g.id }, g, { upsert: true });
       }
       res.json({ success: true });

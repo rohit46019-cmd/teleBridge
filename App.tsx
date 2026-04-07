@@ -60,7 +60,7 @@ const App: React.FC = () => {
   const [showRecentSearches, setShowRecentSearches] = useState(false);
   const [filterOption, setFilterOption] = useState<'mostMembers' | 'leastMembers' | 'frequent' | 'recent'>('recent');
   const [showFilterMenu, setShowFilterMenu] = useState(false);
-  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState<string>(new Date().toLocaleDateString('en-CA'));
   const [updates, setUpdates] = useState<any[]>([]);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const saved = localStorage.getItem('theme');
@@ -120,18 +120,25 @@ const App: React.FC = () => {
         
         if (groupsRes.ok) {
           const data = await groupsRes.json();
-          // Fallback to DEFAULT_GROUPS if DB is empty or still seeding
-          const finalGroups = data.length > 0 ? data : DEFAULT_GROUPS;
-          setGroups(finalGroups);
+          // Fallback to DEFAULT_GROUPS only if DB is empty AND we don't have cached groups
+          if (data && data.length > 0) {
+            setGroups(data);
+          } else if (groups.length === 0) {
+            setGroups(DEFAULT_GROUPS);
+          }
           
           // Trigger initial sync after we have groups
+          const finalGroups = data && data.length > 0 ? data : (groups.length > 0 ? groups : DEFAULT_GROUPS);
           if (token) {
             handleVerify(token).then(() => {
               syncAllGroupsMemberCount(token, finalGroups);
             });
           }
         } else {
-          setGroups(DEFAULT_GROUPS);
+          // If fetch failed, keep using groups from localStorage (already in state)
+          if (groups.length === 0) {
+            setGroups(DEFAULT_GROUPS);
+          }
         }
         
         if (eventsRes.ok) setJoinEvents(await eventsRes.json());
@@ -383,6 +390,28 @@ const App: React.FC = () => {
           }
         }
 
+        if (u.message && u.message.new_chat_members) {
+          const chatId = u.message.chat.id;
+          const chatTitle = u.message.chat.title;
+          const chatIdStr = chatId.toString();
+          
+          u.message.new_chat_members.forEach((newUser: any) => {
+            newJoins.push({
+              userId: newUser.id,
+              userName: newUser.first_name + (newUser.last_name ? ` ${newUser.last_name}` : ''),
+              chatId: chatId,
+              chatTitle: chatTitle,
+              timestamp: u.message.date ? u.message.date * 1000 : Date.now()
+            });
+          });
+          memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) + u.message.new_chat_members.length;
+        }
+
+        if (u.message && u.message.left_chat_member) {
+          const chatIdStr = u.message.chat.id.toString();
+          memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) - 1;
+        }
+
         if (u.message && u.message.new_chat_title) {
           const chatIdStr = u.message.chat.id.toString();
           titleChanges[chatIdStr] = u.message.new_chat_title;
@@ -506,18 +535,26 @@ const App: React.FC = () => {
 
   const handleTogglePin = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
+    console.log(`[Pin] Toggling pin for group ${id}`);
     const updatedGroups = groups.map(g => g.id === id ? { ...g, pinned: !g.pinned } : g);
     setGroups(updatedGroups);
     const groupToUpdate = updatedGroups.find(g => g.id === id);
     if (!groupToUpdate) return;
+    
+    console.log(`[Pin] Saving updated group to DB:`, groupToUpdate);
     try {
-      await fetch('/api/groups/bulk-update', {
+      const res = await fetch('/api/groups/bulk-update', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify([groupToUpdate]),
       });
+      if (res.ok) {
+        console.log(`[Pin] Successfully saved pin status to DB for ${id}`);
+      } else {
+        console.error(`[Pin] Failed to save pin status to DB for ${id}`);
+      }
     } catch (err) {
-      console.error("Failed to update pin status", err);
+      console.error("[Pin] Failed to update pin status", err);
     }
   };
 
@@ -584,10 +621,13 @@ const App: React.FC = () => {
     }
   };
 
-  const filteredJoins = useMemo(() => joinEvents.filter(e => new Date(e.timestamp).toISOString().split('T')[0] === selectedDate).sort((a, b) => b.timestamp - a.timestamp), [joinEvents, selectedDate]);
+  const filteredJoins = useMemo(() => joinEvents.filter(e => new Date(e.timestamp).toLocaleDateString('en-CA') === selectedDate).sort((a, b) => b.timestamp - a.timestamp), [joinEvents, selectedDate]);
   const joinsTodayCount = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0];
-    return joinEvents.filter(e => new Date(e.timestamp).toISOString().split('T')[0] === today).length;
+    const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local time
+    return joinEvents.filter(e => {
+      const eventDate = new Date(e.timestamp).toLocaleDateString('en-CA');
+      return eventDate === today;
+    }).length;
   }, [joinEvents]);
 
   const filteredGroups = useMemo(() => {
