@@ -89,6 +89,13 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [totalMembers, setTotalMembers] = useState(0);
   const [lastUpdateId, setLastUpdateId] = useState(() => Number(localStorage.getItem('tg_last_update_id')) || 0);
+  const lastUpdateIdRef = useRef(lastUpdateId);
+  const tabId = useRef(Math.random().toString(36).substring(7));
+  const [isMaster, setIsMaster] = useState(false);
+
+  useEffect(() => {
+    lastUpdateIdRef.current = lastUpdateId;
+  }, [lastUpdateId]);
 
   const [animationDirection, setAnimationDirection] = useState<'left' | 'right'>('right');
   const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(null);
@@ -106,7 +113,6 @@ const App: React.FC = () => {
   });
   
   const importFileRef = useRef<HTMLInputElement>(null);
-  const pollingRef = useRef<any | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -154,16 +160,51 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (token && botInfo) {
-      if (pollingRef.current) clearInterval(pollingRef.current);
-      pollingRef.current = setInterval(() => {
-        discoverGroupsAndJoins(token);
-      }, 10000);
-    }
-    return () => {
-      if (pollingRef.current) clearInterval(pollingRef.current);
+    let timeoutId: any;
+    
+    const poll = async () => {
+      if (!token || !botInfo) return;
+
+      // Tab locking: only one tab should poll
+      const now = Date.now();
+      const lastPoll = Number(localStorage.getItem('tg_last_poll_time') || 0);
+      const masterTabId = localStorage.getItem('tg_master_tab_id');
+
+      // If no master or master hasn't polled in 15s, try to become master
+      if (!masterTabId || now - lastPoll > 15000 || masterTabId === tabId.current) {
+        localStorage.setItem('tg_master_tab_id', tabId.current);
+        localStorage.setItem('tg_last_poll_time', now.toString());
+        setIsMaster(true);
+        
+        try {
+          await discoverGroupsAndJoins(token);
+        } catch (err: any) {
+          if (err.message?.includes('Conflict')) {
+            console.warn("Polling conflict: Another instance is running. This tab will wait.");
+            setIsMaster(false);
+          } else {
+            console.error("Polling error", err);
+          }
+        }
+      } else {
+        setIsMaster(false);
+      }
+
+      timeoutId = setTimeout(poll, 10000);
     };
-  }, [token, botInfo, lastUpdateId]);
+
+    if (token && botInfo) {
+      poll();
+    }
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      if (localStorage.getItem('tg_master_tab_id') === tabId.current) {
+        localStorage.removeItem('tg_master_tab_id');
+        localStorage.removeItem('tg_last_poll_time');
+      }
+    };
+  }, [token, botInfo]);
 
   useEffect(() => {
     const newTotal = groups.reduce((sum, g) => sum + (g.memberCount || 0), 0);
@@ -320,10 +361,10 @@ const App: React.FC = () => {
     if (!currentToken || isScanning) return;
     setIsScanning(true);
     try {
-      const updates = await getRecentUpdates(currentToken, lastUpdateId + 1);
+      const updates = await getRecentUpdates(currentToken, lastUpdateIdRef.current + 1);
       setUpdates(updates);
       const newJoins: JoinEvent[] = [];
-      let maxId = lastUpdateId;
+      let maxId = lastUpdateIdRef.current;
       
       const memberChanges: Record<string, number> = {};
       const titleChanges: Record<string, string> = {};
@@ -491,8 +532,9 @@ const App: React.FC = () => {
       }
 
       setLastUpdateId(maxId);
-    } catch (e) {
-      console.error("Polling error", e);
+    } catch (e: any) {
+      console.error("Discovery error:", e);
+      if (e.message?.includes('Conflict')) throw e;
     } finally { setIsScanning(false); }
   };
 
