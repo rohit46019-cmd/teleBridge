@@ -93,7 +93,10 @@ async function seedData() {
 async function connectDB() {
   try {
     console.log("Connecting to MongoDB...");
-    await mongoose.connect(MONGODB_URI);
+    await mongoose.connect(MONGODB_URI, {
+      serverSelectionTimeoutMS: 5000,
+      connectTimeoutMS: 10000,
+    });
     console.log("Connected to MongoDB successfully");
     
     // Always ensure defaults exist on startup, but don't wipe user data
@@ -126,7 +129,7 @@ async function startServer() {
     try {
       console.log("Fetching groups from DB...");
       const groups = await Group.find().sort({ lastInteraction: -1 });
-      console.log(`Successfully fetched ${groups.length} groups`);
+      console.log(`Successfully fetched ${groups.length} groups from DB`);
       res.json(groups);
     } catch (error) {
       console.error("Failed to fetch groups:", error);

@@ -72,7 +72,14 @@ const App: React.FC = () => {
   const [botInfo, setBotInfo] = useState<TelegramBotInfo | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
   const [isLocked, setIsLocked] = useState(() => localStorage.getItem('tg_token_locked') !== 'false');
-  const [groups, setGroups] = useState<TelegramGroup[]>([]);
+  const [groups, setGroups] = useState<TelegramGroup[]>(() => {
+    const saved = localStorage.getItem('tg_groups');
+    try {
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
   const [joinEvents, setJoinEvents] = useState<JoinEvent[]>([]);
   const [newChatId, setNewChatId] = useState('');
   const [broadcastMessage, setBroadcastMessage] = useState('');
@@ -113,7 +120,18 @@ const App: React.FC = () => {
         
         if (groupsRes.ok) {
           const data = await groupsRes.json();
-          setGroups(data);
+          // Fallback to DEFAULT_GROUPS if DB is empty or still seeding
+          const finalGroups = data.length > 0 ? data : DEFAULT_GROUPS;
+          setGroups(finalGroups);
+          
+          // Trigger initial sync after we have groups
+          if (token) {
+            handleVerify(token).then(() => {
+              syncAllGroupsMemberCount(token, finalGroups);
+            });
+          }
+        } else {
+          setGroups(DEFAULT_GROUPS);
         }
         
         if (eventsRes.ok) setJoinEvents(await eventsRes.json());
@@ -126,14 +144,6 @@ const App: React.FC = () => {
       }
     };
     fetchData();
-  }, []);
-
-  useEffect(() => {
-    if (token) {
-      handleVerify(token).then(() => {
-        syncAllGroupsMemberCount(token);
-      });
-    } 
   }, []);
 
   useEffect(() => {
@@ -219,9 +229,12 @@ const App: React.FC = () => {
     setTouchEnd(null);
   };
 
-  const syncAllGroupsMemberCount = async (currentToken: string) => {
+  const syncAllGroupsMemberCount = async (currentToken: string, groupsToSync?: TelegramGroup[]) => {
+    const targetGroups = groupsToSync || groups;
+    if (targetGroups.length === 0) return;
+    
     try {
-      const updatedGroups = await Promise.all(groups.map(async (g) => {
+      const updatedGroups = await Promise.all(targetGroups.map(async (g) => {
         try {
           const count = await getChatMemberCount(currentToken, g.id);
           if (count !== g.memberCount) {
