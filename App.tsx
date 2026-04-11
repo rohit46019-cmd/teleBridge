@@ -296,7 +296,10 @@ const App: React.FC = () => {
   };
 
   const handleInstallClick = async () => {
-    if (!deferredPrompt) return;
+    if (!deferredPrompt) {
+      alert("Browser ka native install prompt abhi ready nahi hai. Kripya browser menu (3 dots) me jaakar 'Add to Home Screen' par click karein. Ye wahi kaam karega!");
+      return;
+    }
     deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
     if (outcome === 'accepted') {
@@ -1375,16 +1378,34 @@ const App: React.FC = () => {
                       <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">PWA Status</span>
                       <div className="flex items-center gap-2">
                         <div className={`w-2 h-2 rounded-full ${swStatus === 'registered' ? 'bg-emerald-500' : 'bg-rose-500'}`}></div>
-                        <span className="text-[10px] font-bold uppercase">{swStatus}</span>
+                        <span className="text-[10px] font-bold uppercase">{swStatus === 'registered' ? 'Active' : 'Offline Mode Off'}</span>
                       </div>
                     </div>
                     <div className="p-4 bg-slate-100 dark:bg-black/20 rounded-2xl border border-slate-200 dark:border-white/5">
                       <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">Install Ready</span>
                       <div className="flex items-center gap-2">
-                        <div className={`w-2 h-2 rounded-full ${deferredPrompt ? 'bg-emerald-500' : 'bg-slate-400'}`}></div>
-                        <span className="text-[10px] font-bold uppercase">{deferredPrompt ? 'YES' : 'NO'}</span>
+                        <div className={`w-2 h-2 rounded-full ${deferredPrompt ? 'bg-emerald-500' : 'bg-amber-500'}`}></div>
+                        <span className="text-[10px] font-bold uppercase">{deferredPrompt ? 'YES' : 'READY'}</span>
                       </div>
                     </div>
+                  </div>
+
+                  <div className="mb-6">
+                    <button 
+                      onClick={handleInstallClick}
+                      className="w-full py-6 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-[2rem] shadow-2xl hover:shadow-blue-500/20 active:scale-95 transition-all flex flex-col items-center justify-center gap-2 group"
+                    >
+                      <div className="flex items-center gap-3">
+                        <Icons.DownloadCloud size={24} className="group-hover:bounce" />
+                        <span className="text-sm font-black uppercase tracking-tighter">Download & Install App</span>
+                      </div>
+                      <span className="text-[9px] opacity-70 font-bold uppercase tracking-widest">Click here to install on this device</span>
+                    </button>
+                    {!deferredPrompt && (
+                      <p className="text-[9px] text-slate-500 text-center mt-3 px-4 leading-relaxed">
+                        Agar "Install" window nahi khulti, to browser menu (3 dots) me jaakar <b>"Add to Home Screen"</b> par click karein. Aap ise jitni baar chahein install kar sakte hain.
+                      </p>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-2 gap-3 border-t border-slate-200 dark:border-slate-800 pt-6">
