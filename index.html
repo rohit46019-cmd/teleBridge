@@ -12,6 +12,9 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="TeleBridge">
+    <meta name="application-name" content="TeleBridge">
+    <meta name="msapplication-TileColor" content="#2563eb">
+    <meta name="format-detection" content="telephone=no">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -39,13 +42,12 @@
             transition: background-color 0.3s ease, color 0.3s ease;
         }
         .glass {
-            background: rgba(255, 255, 255, 0.03);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.05);
+            background: #0f172a;
+            border: 1px solid rgba(255, 255, 255, 0.1);
         }
         .light .glass {
-            background: rgba(255, 255, 255, 0.7);
-            border: 1px solid rgba(0, 0, 0, 0.05);
+            background: #ffffff;
+            border: 1px solid rgba(0, 0, 0, 0.1);
         }
         /* Custom scrollbar */
         ::-webkit-scrollbar {
@@ -114,7 +116,10 @@
         <circle cx="380" cy="140" r="16" fill="#ffffff" />
       </svg>
       <div style="margin-top: 24px; font-family: 'Inter', sans-serif; font-weight: 900; font-size: 24px; letter-spacing: -0.5px; color: white;">TeleBridge</div>
-      <div style="margin-top: 8px; font-family: 'Inter', sans-serif; font-weight: 600; font-size: 12px; letter-spacing: 2px; color: #94a3b8; text-transform: uppercase;">Loading Workspace...</div>
+      <div id="splash-status" style="margin-top: 8px; font-family: 'Inter', sans-serif; font-weight: 600; font-size: 12px; letter-spacing: 2px; color: #94a3b8; text-transform: uppercase;">Loading Workspace...</div>
+      <div id="retry-container" style="display: none; margin-top: 20px;">
+        <button onclick="window.location.reload()" style="padding: 10px 20px; background: #2563eb; color: white; border: none; border-radius: 8px; font-family: 'Inter', sans-serif; font-weight: 700; cursor: pointer; box-shadow: 0 4px 14px 0 rgba(37, 99, 235, 0.39);">Retry Connection</button>
+      </div>
       <style>
         @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.8; transform: scale(0.95); } }
       </style>
@@ -124,6 +129,8 @@
 <script>
   // Hide splash screen when React mounts
   const splash = document.getElementById('splash-screen');
+  const splashStatus = document.getElementById('splash-status');
+  const retryContainer = document.getElementById('retry-container');
   const root = document.getElementById('root');
   
   const hideSplash = () => {
@@ -144,8 +151,25 @@
     observer.observe(root, { childList: true, subtree: true, characterData: true });
   }
 
-  // Fallback: hide splash after 10 seconds anyway
-  setTimeout(hideSplash, 10000);
+  // Handle slow cold starts
+  setTimeout(() => {
+    if (splashStatus) {
+      splashStatus.innerText = "Server is waking up...";
+      splashStatus.style.color = "#fbbf24";
+    }
+  }, 4000);
+
+  setTimeout(() => {
+    if (splashStatus) {
+      splashStatus.innerText = "Taking longer than usual...";
+    }
+    if (retryContainer) {
+      retryContainer.style.display = 'block';
+    }
+  }, 15000);
+
+  // Fallback: hide splash after 30 seconds anyway
+  setTimeout(hideSplash, 30000);
 </script>
 </body>
 </html>

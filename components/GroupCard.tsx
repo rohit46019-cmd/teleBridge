@@ -99,13 +99,13 @@ const GroupCard: React.FC<GroupCardProps> = ({ group, onClick, onTogglePin }) =>
           <div className={`absolute inset-0 blur-lg opacity-40 group-hover:opacity-60 transition-opacity duration-500 rounded-xl ${theme.accent}`} />
           <div className="w-12 h-12 rounded-xl overflow-hidden bg-slate-200 dark:bg-slate-800 flex-shrink-0 group-hover:scale-110 transition-transform duration-500 border-2 border-white/20 shadow-xl relative z-10">
             <img 
-              src={group.image} 
+              src={group.image.replace('/200', '/100')} 
               alt={group.name} 
               className="w-full h-full object-cover" 
               referrerPolicy="no-referrer"
               loading="lazy" 
               onError={(e) => {
-                (e.target as HTMLImageElement).src = `https://picsum.photos/seed/${group.id}/200`;
+                (e.target as HTMLImageElement).src = `https://picsum.photos/seed/${group.id}/100`;
               }}
             />
           </div>
@@ -126,7 +126,7 @@ const GroupCard: React.FC<GroupCardProps> = ({ group, onClick, onTogglePin }) =>
       <div className="flex items-center gap-3 relative z-10 ml-2 mr-8">
         <button 
           onClick={copyId} 
-          className="hidden md:flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-slate-800/80 hover:bg-white dark:hover:bg-slate-700 rounded-xl transition-all border border-slate-200 dark:border-slate-700 group/copy"
+          className="hidden md:flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-white dark:hover:bg-slate-700 rounded-xl transition-all border border-slate-200 dark:border-slate-700 group/copy"
         >
           <span className="text-[9px] font-mono font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest truncate max-w-[100px]">
             {copied ? 'COPIED!' : `ID: ${group.id}`}

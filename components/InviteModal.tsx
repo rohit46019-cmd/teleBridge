@@ -13,7 +13,6 @@ interface InviteModalProps {
 
 const InviteModal: React.FC<InviteModalProps> = ({ group, onClose, botToken, onInteraction }) => {
   const [link, setLink] = useState<string>('');
-  const [links, setLinks] = useState<any[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -25,24 +24,7 @@ const InviteModal: React.FC<InviteModalProps> = ({ group, onClose, botToken, onI
     if (botToken && group) {
       handleGenerateLink();
     }
-    fetchLinks();
   }, [group, botToken]);
-
-  const fetchLinks = async () => {
-    try {
-      console.log(`Fetching links for group ${group.id}...`);
-      const res = await fetch(`/api/groups/${group.id}/links`);
-      if (res.ok) {
-        const data = await res.json();
-        console.log(`Fetched ${data.length} links:`, data);
-        setLinks(data);
-      } else {
-        console.error("Failed to fetch links, status:", res.status);
-      }
-    } catch (err) {
-      console.error("Failed to fetch links", err);
-    }
-  };
 
   const handleGenerateLink = async () => {
     if (!botToken) {
@@ -71,8 +53,6 @@ const InviteModal: React.FC<InviteModalProps> = ({ group, onClose, botToken, onI
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ link: realLink }),
-      }).then(() => {
-        fetchLinks(); // Refresh the list after saving
       }).catch(err => {
         console.error("Failed to save link to DB:", err);
       });
@@ -91,7 +71,6 @@ const InviteModal: React.FC<InviteModalProps> = ({ group, onClose, botToken, onI
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ link: linkToRevoke }),
       });
-      fetchLinks();
       if (link === linkToRevoke) setLink('');
     } catch (err: any) {
       setError(err.message || 'Failed to revoke link.');
@@ -175,26 +154,6 @@ const InviteModal: React.FC<InviteModalProps> = ({ group, onClose, botToken, onI
               <div className="flex items-center gap-2">
                 <Icons.Clock size={14} className="text-slate-400" />
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Expiry: 24 Hours</span>
-              </div>
-            </div>
-            
-            <div className="mt-6">
-              <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Recent Links</h4>
-              <div className="space-y-2 max-h-[200px] overflow-y-auto custom-scrollbar pr-2">
-                {links.length > 0 ? (
-                  links.map((l, i) => (
-                    <div key={i} className="flex items-center justify-between p-3 bg-black/5 dark:bg-black/20 rounded-xl border border-black/5 dark:border-white/5 group">
-                      <span className="text-xs font-mono text-slate-600 dark:text-slate-400 truncate mr-2">{l.link}</span>
-                      <button onClick={() => handleRevokeLink(l.link)} className="text-slate-400 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Icons.Trash size={14} />
-                      </button>
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-center py-4 text-slate-400 text-[10px] uppercase tracking-widest font-medium opacity-50">
-                    No recent links found
-                  </div>
-                )}
               </div>
             </div>
           </div>
