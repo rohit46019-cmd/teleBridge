@@ -1451,6 +1451,16 @@ const App: React.FC = () => {
                         </p>
                       </div>
                     </div>
+                    
+                    <div className="mt-6 pt-4 border-t border-slate-200 dark:border-white/5">
+                      <h5 className="text-[9px] font-black text-rose-500 uppercase tracking-widest mb-2">Nahi chal raha? (Troubleshoot)</h5>
+                      <ul className="text-[9px] text-slate-500 dark:text-slate-400 space-y-2 list-disc pl-4">
+                        <li><b>Chrome Browser:</b> Android par hamesha Chrome ka use karein.</li>
+                        <li><b>HTTPS:</b> Check karein ki URL <code>https://</code> se start ho raha hai.</li>
+                        <li><b>Clear Cache:</b> Browser settings me jaakar is site ka data clear karein aur page refresh karein.</li>
+                        <li><b>Incognito:</b> Incognito mode me installation kaam nahi karti.</li>
+                      </ul>
+                    </div>
                   </div>
 
                   <div className="mt-6 border-t border-slate-200 dark:border-slate-800 pt-6">

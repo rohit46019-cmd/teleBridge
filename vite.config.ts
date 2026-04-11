@@ -14,31 +14,49 @@ export default defineConfig(({ mode }) => {
         react(),
         VitePWA({
           registerType: 'autoUpdate',
-          includeAssets: ['logo.svg', 'favicon.ico', 'robots.txt', 'apple-touch-icon.png'],
+          injectRegister: 'auto',
+          includeAssets: ['logo.svg'],
           manifest: {
-            name: 'TeleBridge Pro',
+            name: 'TeleBridge Pro Admin',
             short_name: 'TeleBridge',
             description: 'Advanced Telegram Group Management & Sync',
             theme_color: '#4f46e5',
             background_color: '#020617',
             display: 'standalone',
+            display_override: ['standalone', 'window-controls-overlay'],
             orientation: 'portrait',
-            start_url: '/',
+            start_url: '.',
             scope: '/',
+            id: '/',
             icons: [
               {
                 src: 'logo.svg',
                 sizes: '192x192',
                 type: 'image/svg+xml',
-                purpose: 'any maskable'
+                purpose: 'any'
               },
               {
                 src: 'logo.svg',
                 sizes: '512x512',
                 type: 'image/svg+xml',
-                purpose: 'any maskable'
+                purpose: 'any'
+              },
+              {
+                src: 'logo.svg',
+                sizes: '192x192',
+                type: 'image/svg+xml',
+                purpose: 'maskable'
+              },
+              {
+                src: 'logo.svg',
+                sizes: '512x512',
+                type: 'image/svg+xml',
+                purpose: 'maskable'
               }
             ]
+          },
+          devOptions: {
+            enabled: true
           },
           workbox: {
             globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
