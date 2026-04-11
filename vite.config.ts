@@ -20,16 +20,23 @@ export default defineConfig(({ mode }) => {
             short_name: 'TeleBridge',
             description: 'Advanced Telegram Group Management & Sync',
             theme_color: '#4f46e5',
+            background_color: '#020617',
+            display: 'standalone',
+            orientation: 'portrait',
+            start_url: '/',
+            scope: '/',
             icons: [
               {
                 src: 'logo.svg',
                 sizes: '192x192',
-                type: 'image/svg+xml'
+                type: 'image/svg+xml',
+                purpose: 'any maskable'
               },
               {
                 src: 'logo.svg',
                 sizes: '512x512',
-                type: 'image/svg+xml'
+                type: 'image/svg+xml',
+                purpose: 'any maskable'
               }
             ]
           },
