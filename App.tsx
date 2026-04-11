@@ -278,6 +278,23 @@ const App: React.FC = () => {
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
+  const handleShareApp = () => {
+    const url = window.location.href;
+    if (navigator.share) {
+      navigator.share({
+        title: 'TeleBridge Pro',
+        text: 'Manage your Telegram groups and hubs with TeleBridge Pro!',
+        url: url,
+      }).catch(() => {
+        navigator.clipboard.writeText(url);
+        alert("Link copied to clipboard!");
+      });
+    } else {
+      navigator.clipboard.writeText(url);
+      alert("Link copied to clipboard!");
+    }
+  };
+
   const handleInstallClick = async () => {
     if (!deferredPrompt) return;
     deferredPrompt.prompt();
@@ -1375,11 +1392,44 @@ const App: React.FC = () => {
                       <Icons.DownloadCloud size={20} />
                       <span className="text-[10px] font-black uppercase tracking-widest">Export Data</span>
                     </button>
-                    <button onClick={() => importFileRef.current?.click()} className="flex flex-col items-center justify-center gap-2 p-5 bg-emerald-600 text-white rounded-2xl shadow-lg active:scale-95 transition-all">
+                    <button onClick={handleShareApp} className="flex flex-col items-center justify-center gap-2 p-5 bg-purple-600 text-white rounded-2xl shadow-lg active:scale-95 transition-all">
+                      <Icons.Share2 size={20} />
+                      <span className="text-[10px] font-black uppercase tracking-widest">Share App</span>
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 mt-3">
+                    <button onClick={() => importFileRef.current?.click()} className="flex flex-col items-center justify-center gap-2 p-5 bg-emerald-600 text-white rounded-2xl shadow-lg active:scale-95 transition-all w-full col-span-2">
                       <Icons.UploadCloud size={20} />
                       <span className="text-[10px] font-black uppercase tracking-widest">Import Data</span>
                     </button>
                     <input type="file" ref={importFileRef} onChange={handleImport} accept=".json" className="hidden" />
+                  </div>
+
+                  <div className="mt-6 p-6 bg-slate-100 dark:bg-black/20 rounded-[2.5rem] border border-slate-200 dark:border-white/5">
+                    <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                      <Icons.Info size={14} /> Unlimited Installation Guide
+                    </h4>
+                    <div className="space-y-4">
+                      <div className="flex gap-3">
+                        <div className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] font-black shrink-0">1</div>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                          Aap is app ko <b>unlimited</b> devices (Android, iPhone, PC) par install kar sakte hain. Bas app ka link share karein aur dusre device par open karein.
+                        </p>
+                      </div>
+                      <div className="flex gap-3">
+                        <div className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] font-black shrink-0">2</div>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                          Browser menu me jayein (3 dots) aur <b>"Add to Home Screen"</b> ya <b>"Install App"</b> par click karein.
+                        </p>
+                      </div>
+                      <div className="flex gap-3">
+                        <div className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] font-black shrink-0">3</div>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                          Ek baar install hone ke baad, app bina browser ke direct open hoga aur offline bhi kaam karega.
+                        </p>
+                      </div>
+                    </div>
                   </div>
 
                   <div className="mt-6 border-t border-slate-200 dark:border-slate-800 pt-6">
