@@ -312,33 +312,40 @@ async function startServer() {
     try {
       const { token, message } = req.body;
       const groups = await Group.find();
-      const sentTo = [];
       const timestamp = Date.now();
 
-      const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+      console.log(`[Broadcast] Starting broadcast to ${groups.length} groups`);
 
-      for (const group of groups) {
+      // Use Promise.all to send messages in parallel to avoid Vercel timeout
+      // Telegram allows 30 messages per second to different chats
+      const results = await Promise.all(groups.map(async (group) => {
         try {
           const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage?chat_id=${group.id}&text=${encodeURIComponent(message)}`);
           const data = await response.json();
           if (data.ok) {
-            sentTo.push({ chatId: group.id, messageId: data.result.message_id });
+            return { chatId: group.id, messageId: data.result.message_id, success: true };
           } else {
-            if (data.description === 'Bad Request: TOPIC_CLOSED') {
-              console.warn(`Skipping group ${group.id}: Topic is closed.`);
-            } else {
-              console.error(`Failed to send to ${group.id}:`, data.description);
-            }
+            console.error(`[Broadcast] Failed to send to ${group.id}:`, data.description);
+            return { chatId: group.id, success: false, error: data.description };
           }
-          await sleep(1000); // 1-second delay between messages
         } catch (err) {
-          console.error(`Failed to send to ${group.id}`, err);
+          console.error(`[Broadcast] Error sending to ${group.id}:`, err);
+          return { chatId: group.id, success: false };
         }
-      }
+      }));
+
+      const sentTo = results.filter(r => r.success).map(r => ({ chatId: r.chatId, messageId: r.messageId }));
       
       await (Broadcast as any).create({ message, timestamp, sentTo });
-      res.json({ success: true });
+      console.log(`[Broadcast] Completed. Sent to ${sentTo.length}/${groups.length} groups`);
+      
+      res.json({ 
+        success: true, 
+        sentCount: sentTo.length, 
+        totalCount: groups.length 
+      });
     } catch (error) {
+      console.error("[Broadcast] Global error:", error);
       res.status(500).json({ error: "Failed to broadcast message" });
     }
   });

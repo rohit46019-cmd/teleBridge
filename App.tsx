@@ -344,34 +344,37 @@ const App: React.FC = () => {
         
         clearTimeout(timeoutId);
 
-        if (groupsRes.ok) {
-          const serverGroups: TelegramGroup[] = await groupsRes.json();
-          
-          // Merge Strategy: Use server data as truth, but preserve local groups not on server
-          // and use newer timestamps if available
-          setGroups(prev => {
-            const merged = [...serverGroups];
-            prev.forEach(localG => {
-              const serverG = merged.find(sg => sg.id === localG.id);
-              if (!serverG) {
-                // Local only group (maybe created offline), keep it
-                merged.push(localG);
-              } else {
-                // Compare timestamps if available
-                if ((localG.lastInteraction || 0) > (serverG.lastInteraction || 0)) {
-                  // Local is newer, keep local version for now
-                  const idx = merged.findIndex(sg => sg.id === localG.id);
-                  merged[idx] = localG;
-                }
-              }
-            });
-            return merged;
-          });
-          
-          setSyncStatus('connected');
-          setDbError(null);
-          setLastSyncTime(new Date());
+        if (!groupsRes.ok) {
+          const errorData = await groupsRes.json().catch(() => ({}));
+          throw new Error(errorData.details || errorData.error || `Server Error: ${groupsRes.status}`);
         }
+
+        const serverGroups: TelegramGroup[] = await groupsRes.json();
+        
+        // Merge Strategy: Use server data as truth, but preserve local groups not on server
+        // and use newer timestamps if available
+        setGroups(prev => {
+          const merged = [...serverGroups];
+          prev.forEach(localG => {
+            const serverG = merged.find(sg => sg.id === localG.id);
+            if (!serverG) {
+              // Local only group (maybe created offline), keep it
+              merged.push(localG);
+            } else {
+              // Compare timestamps if available
+              if ((localG.lastInteraction || 0) > (serverG.lastInteraction || 0)) {
+                // Local is newer, keep local version for now
+                const idx = merged.findIndex(sg => sg.id === localG.id);
+                merged[idx] = localG;
+              }
+            }
+          });
+          return merged;
+        });
+        
+        setSyncStatus('connected');
+        setDbError(null);
+        setLastSyncTime(new Date());
 
         if (eventsRes.ok) {
           const serverEvents: JoinEvent[] = await eventsRes.json();
@@ -385,11 +388,16 @@ const App: React.FC = () => {
         }
       } catch (err: any) {
         console.error("Initial fetch error:", err);
-        // If fetch fails, we stay in 'error' or 'syncing' status but keep using local data
         setSyncStatus('error');
         
-        const isNetworkError = err.name === 'AbortError' || err.message?.includes('Failed to fetch') || err.message?.includes('timeout');
-        setDbError(isNetworkError ? 'Slow network: Using local data' : 'Sync failed');
+        const errorMessage = err.message || String(err);
+        if (errorMessage.includes('IP not whitelisted')) {
+          setDbError('MongoDB Error: IP not whitelisted. Please allow 0.0.0.0/0 in Atlas.');
+        } else if (err.name === 'AbortError' || errorMessage.includes('Failed to fetch') || errorMessage.includes('timeout')) {
+          setDbError('Slow network: Using local data');
+        } else {
+          setDbError(errorMessage);
+        }
         
         if (syncRetryCount < 3) {
           setTimeout(() => setSyncRetryCount(prev => prev + 1), 10000);
@@ -1146,38 +1154,7 @@ const App: React.FC = () => {
                          <p className="text-[10px] font-black text-purple-100 uppercase tracking-widest mb-1 relative z-10">Bot Status</p>
                          <p className="text-xl font-black text-white uppercase relative z-10">{botInfo ? 'ACTIVE' : 'OFFLINE'}</p>
                        </div>
-                       <div className="pt-2 border-t border-white/10">
-                         <p className="text-[10px] font-black text-purple-100 uppercase tracking-widest mb-1 relative z-10">DB Sync</p>
-                         <div className="flex items-center gap-1.5 relative z-10">
-                           <div className={`w-2 h-2 rounded-full ${syncStatus === 'connected' ? 'bg-emerald-400 animate-pulse' : syncStatus === 'syncing' ? 'bg-amber-400 animate-bounce' : 'bg-rose-400'}`}></div>
-                           <p className="text-[9px] font-black text-white uppercase">{syncStatus}</p>
-                           {syncStatus === 'error' && (
-                             <button 
-                               onClick={() => setSyncRetryCount(prev => prev + 1)}
-                               className="ml-2 p-1 bg-white/20 hover:bg-white/30 rounded text-[8px] font-black text-white uppercase transition-colors"
-                             >
-                               Wake Up
-                             </button>
-                           )}
-                         </div>
-                         {syncStatus === 'error' && (
-                           <div className="mt-2 p-2 bg-rose-500/20 border border-rose-500/30 rounded-lg flex items-center gap-2 animate-pulse">
-                             <Icons.AlertTriangle size={10} className="text-rose-400" />
-                             <p className="text-[7px] font-black text-rose-200 uppercase">Server is waking up...</p>
-                           </div>
-                         )}
-                         {dbError && (
-                           <p className="text-[7px] font-black text-rose-200 uppercase mt-1 truncate max-w-full" title={dbError}>
-                             {dbError}
-                           </p>
-                         )}
-                         {lastSyncTime && !dbError && (
-                           <p className="text-[7px] font-black text-purple-200 uppercase mt-1 opacity-60">
-                             Last: {lastSyncTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                           </p>
-                         )}
-                       </div>
-                     </div>
+                    </div>
                  </div>
               </div>
               <div className="relative bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 p-8 shadow-xl overflow-hidden">
@@ -1193,6 +1170,66 @@ const App: React.FC = () => {
                    <button onClick={handleAddGroupManual} disabled={isAddingGroup || !newChatId} className="px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-xl shadow-blue-600/20 active:scale-95 disabled:opacity-50 transition-all">
                      {isAddingGroup ? 'Connecting...' : 'Inject Batch'}
                    </button>
+                 </div>
+              </div>
+
+              <div className="relative bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 p-8 shadow-xl overflow-hidden">
+                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500"></div>
+                 <div className="flex flex-wrap items-center justify-between gap-4">
+                   <div className="flex items-center gap-4">
+                     <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg ${
+                       syncStatus === 'connected' ? 'bg-emerald-500/10 text-emerald-500' : 
+                       syncStatus === 'syncing' ? 'bg-amber-500/10 text-amber-500' : 
+                       'bg-rose-500/10 text-rose-500'
+                     }`}>
+                       <Icons.RefreshCw size={24} className={syncStatus === 'syncing' ? 'animate-spin' : ''} />
+                     </div>
+                     <div>
+                       <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Database Sync Status</h4>
+                       <div className="flex items-center gap-2">
+                         <div className={`w-2 h-2 rounded-full ${
+                           syncStatus === 'connected' ? 'bg-emerald-500 animate-pulse' : 
+                           syncStatus === 'syncing' ? 'bg-amber-500 animate-bounce' : 
+                           'bg-rose-500'
+                         }`}></div>
+                         <span className="text-xs font-black uppercase tracking-widest dark:text-white">
+                           {syncStatus === 'connected' ? 'Cloud Synced' : syncStatus === 'syncing' ? 'Syncing Data...' : 'Connection Error'}
+                         </span>
+                       </div>
+                     </div>
+                   </div>
+
+                   <div className="flex items-center gap-3">
+                     {lastSyncTime && (
+                       <div className="text-right hidden sm:block">
+                         <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Last Successful Sync</p>
+                         <p className="text-[10px] font-bold dark:text-slate-300">
+                           {lastSyncTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                         </p>
+                       </div>
+                     )}
+                     <button 
+                       onClick={() => setSyncRetryCount(prev => prev + 1)}
+                       disabled={syncStatus === 'syncing'}
+                       className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 flex items-center gap-2 ${
+                         syncStatus === 'error' 
+                           ? 'bg-rose-600 text-white shadow-lg shadow-rose-600/20' 
+                           : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                       }`}
+                     >
+                       <Icons.Zap size={12} />
+                       {syncStatus === 'error' ? 'Wake Up Server' : 'Force Sync'}
+                     </button>
+                   </div>
+
+                   {dbError && (
+                     <div className="w-full mt-2 p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl flex items-center gap-3 animate-in slide-in-from-bottom-2">
+                       <Icons.AlertTriangle size={14} className="text-rose-500 shrink-0" />
+                       <p className="text-[10px] font-bold text-rose-600 dark:text-rose-400 leading-tight">
+                         {dbError}
+                       </p>
+                     </div>
+                   )}
                  </div>
               </div>
             </div>
@@ -1336,6 +1373,46 @@ const App: React.FC = () => {
                   <h3 className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-[0.4em] mb-6 flex items-center gap-2">
                     <Icons.Zap size={14} /> Bot Gateway
                   </h3>
+                  
+                  <div className="mb-8 p-6 bg-white dark:bg-black/20 rounded-[2rem] border border-slate-200 dark:border-white/5">
+                    <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2">
+                      <Icons.Radio size={14} className="text-rose-500" /> Broadcast to All Hubs
+                    </h4>
+                    <textarea 
+                      placeholder="Enter broadcast message..." 
+                      className="w-full bg-slate-50 dark:bg-black/30 border border-slate-200 dark:border-white/10 px-6 py-4 rounded-2xl text-slate-900 dark:text-white text-xs outline-none focus:ring-4 focus:ring-indigo-500/20 mb-4 transition-all"
+                      rows={3}
+                      value={broadcastMessage}
+                      onChange={e => setBroadcastMessage(e.target.value)}
+                    />
+                    <button 
+                      onClick={handleBroadcast}
+                      disabled={!broadcastMessage || !token}
+                      className="w-full py-4 bg-rose-600 text-white font-black uppercase text-xs rounded-2xl shadow-xl hover:bg-rose-500 active:scale-95 transition-all disabled:opacity-50"
+                    >
+                      Broadcast Message
+                    </button>
+
+                    {broadcasts.length > 0 && (
+                      <div className="mt-6 pt-6 border-t border-slate-200 dark:border-slate-800">
+                        <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Recent Broadcasts</h4>
+                        <div className="space-y-3 max-h-40 overflow-y-auto custom-scrollbar pr-2">
+                          {broadcasts.slice(0, 5).map(b => (
+                            <div key={b._id} className="bg-slate-50 dark:bg-black/20 p-3 rounded-xl border border-slate-200 dark:border-white/5 flex items-center justify-between">
+                              <div className="flex-1 min-w-0 mr-4">
+                                <p className="text-[10px] text-slate-900 dark:text-white truncate font-bold">{b.message}</p>
+                                <p className="text-[8px] text-slate-500">{new Date(b.timestamp).toLocaleTimeString()}</p>
+                              </div>
+                              <button onClick={() => handleDeleteBroadcast(b._id)} className="p-1.5 text-rose-500 hover:bg-rose-500 hover:text-white rounded-lg transition-all">
+                                <Icons.Trash size={12} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   <input type="password" value={token} onChange={e => setToken(e.target.value)} disabled={isLocked} className="w-full bg-white dark:bg-black/30 border border-slate-200 dark:border-white/10 px-6 py-4 rounded-2xl text-slate-900 dark:text-white font-mono text-xs outline-none focus:ring-4 focus:ring-indigo-500/20 mb-4 transition-all" />
                   <div className="flex gap-2 mb-6">
                     <button onClick={() => handleVerify(token)} className="flex-1 py-4 bg-indigo-600 text-white font-black uppercase text-xs rounded-2xl shadow-xl hover:bg-indigo-500 active:scale-95 transition-all">Sync Connection</button>
@@ -1463,40 +1540,6 @@ const App: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="mt-6 border-t border-slate-200 dark:border-slate-800 pt-6">
-                    <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Broadcast to All Hubs</h4>
-                    <textarea 
-                      placeholder="Enter broadcast message..." 
-                      className="w-full bg-white dark:bg-black/30 border border-slate-200 dark:border-white/10 px-6 py-4 rounded-2xl text-slate-900 dark:text-white text-xs outline-none focus:ring-4 focus:ring-indigo-500/20 mb-4 transition-all"
-                      rows={3}
-                      value={broadcastMessage}
-                      onChange={e => setBroadcastMessage(e.target.value)}
-                    />
-                    <button 
-                      onClick={handleBroadcast}
-                      disabled={!broadcastMessage || !token}
-                      className="w-full py-4 bg-rose-600 text-white font-black uppercase text-xs rounded-2xl shadow-xl hover:bg-rose-500 active:scale-95 transition-all disabled:opacity-50"
-                    >
-                      Broadcast Message
-                    </button>
-                  </div>
-
-                  <div className="mt-8 border-t border-slate-200 dark:border-slate-800 pt-6">
-                    <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Broadcast History</h4>
-                    <div className="space-y-3">
-                      {broadcasts.map(b => (
-                        <div key={b._id} className="bg-white dark:bg-black/20 p-4 rounded-xl border border-slate-200 dark:border-white/5 flex items-center justify-between">
-                          <div className="flex-1 min-w-0 mr-4">
-                            <p className="text-xs text-slate-900 dark:text-white truncate">{b.message}</p>
-                            <p className="text-[9px] text-slate-500">{new Date(b.timestamp).toLocaleString()}</p>
-                          </div>
-                          <button onClick={() => handleDeleteBroadcast(b._id)} className="p-2 text-rose-500 hover:bg-rose-500 hover:text-white rounded-lg transition-all">
-                            <Icons.Trash size={14} />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
                </div>
             </div>
           )}
