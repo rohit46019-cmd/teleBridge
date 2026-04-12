@@ -1101,19 +1101,19 @@ const App: React.FC = () => {
       <Sidebar activeTab={activeTab} onTabChange={handleTabChange} theme={theme} toggleTheme={toggleTheme} />
 
       <main className="flex-1 md:ml-64 px-4 md:px-6 lg:px-8 pb-28 w-full max-w-[1400px] mx-auto">
-        <header className="sticky top-0 z-40 bg-slate-50/80 dark:bg-slate-950/80 backdrop-blur-xl -mx-4 px-4 md:-mx-6 md:px-6 lg:-mx-8 lg:px-8 py-4 mb-6 border-b border-slate-200 dark:border-white/5 animate-in slide-in-from-top">
+        <header className="sticky top-0 z-40 bg-slate-50/80 dark:bg-slate-950/80 backdrop-blur-xl -mx-4 px-4 md:-mx-6 md:px-6 lg:-mx-8 lg:px-8 py-2.5 mb-4 border-b border-slate-200 dark:border-white/5 animate-in slide-in-from-top">
           <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-2.5 h-8 bg-blue-600 rounded-full shadow-[0_0_25px_rgba(37,99,235,0.7)]" />
-              <h1 key={activeTab} className="text-2xl md:text-3xl font-black tracking-tighter capitalize animate-in fade-in">{activeTab}</h1>
+            <div className="flex items-center gap-2.5">
+              <div className="w-1.5 h-6 bg-blue-600 rounded-full shadow-[0_0_20px_rgba(37,99,235,0.6)]" />
+              <h1 key={activeTab} className="text-xl md:text-2xl font-black tracking-tighter capitalize animate-in fade-in">{activeTab}</h1>
             </div>
             
-            <div className="flex items-center gap-2">
-              <button onClick={toggleTheme} className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm active:scale-90 transition-all">
-                {theme === 'dark' ? <Icons.Sun size={18} className="text-amber-500" /> : <Icons.Moon size={18} className="text-blue-600" />}
+            <div className="flex items-center gap-1.5">
+              <button onClick={toggleTheme} className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm active:scale-90 transition-all">
+                {theme === 'dark' ? <Icons.Sun size={16} className="text-amber-500" /> : <Icons.Moon size={16} className="text-blue-600" />}
               </button>
-              <button onClick={() => syncAllGroupsMemberCount(token)} disabled={isScanning} className="p-2.5 bg-blue-600 text-white rounded-xl shadow-lg active:scale-90 transition-all">
-                <Icons.Refresh size={18} className={isScanning ? 'animate-spin' : ''} />
+              <button onClick={() => syncAllGroupsMemberCount(token)} disabled={isScanning} className="p-2 bg-blue-600 text-white rounded-xl shadow-lg active:scale-90 transition-all">
+                <Icons.Refresh size={16} className={isScanning ? 'animate-spin' : ''} />
               </button>
             </div>
           </div>
