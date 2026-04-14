@@ -246,6 +246,7 @@ const App: React.FC = () => {
   const tabId = useRef(Math.random().toString(36).substring(7));
   const [isMaster, setIsMaster] = useState(false);
   const [analyticsRange, setAnalyticsRange] = useState<'1W' | '1M' | '3M' | '6M' | '1Y'>('1W');
+  const [settingsSubTab, setSettingsSubTab] = useState<'charts' | 'config'>('charts');
   const [joinRate, setJoinRate] = useState(() => {
     return Number(localStorage.getItem('tg_join_rate')) || 87;
   });
@@ -340,6 +341,33 @@ const App: React.FC = () => {
       weekTrend: getTrend(thisWeekCount, lastWeekCount)
     };
   }, [joinEvents]);
+
+  const revenueAnalysis = useMemo(() => {
+    if (!joinEvents.length) return { data: [], highest: null, lowest: null };
+
+    const dataMap: Record<string, number> = {};
+    joinEvents.forEach(event => {
+      const dateStr = new Date(event.timestamp).toLocaleDateString('en-CA');
+      dataMap[dateStr] = (dataMap[dateStr] || 0) + 1;
+    });
+
+    const data = Object.entries(dataMap)
+      .map(([date, count]) => ({
+        date,
+        revenue: count * joinRate
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    let highest = data[0];
+    let lowest = data[0];
+
+    data.forEach(item => {
+      if (item.revenue > highest.revenue) highest = item;
+      if (item.revenue < lowest.revenue) lowest = item;
+    });
+
+    return { data: data.slice(-14), highest, lowest };
+  }, [joinEvents, joinRate]);
 
   useEffect(() => {
     lastUpdateIdRef.current = lastUpdateId;
@@ -1438,169 +1466,247 @@ const App: React.FC = () => {
 
           {activeTab === 'settings' && (
             <div className={`max-w-xl space-y-6 ${animationClass}`}>
-              <div className="bg-white dark:bg-slate-900 p-6 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden">
-                <div className="flex items-center justify-between mb-6">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h2 className="text-sm font-black uppercase tracking-widest text-slate-400">Channel Analytics</h2>
-                      <div className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase flex items-center gap-1 ${comparisonStats.weekTrend >= 0 ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'}`}>
-                        {comparisonStats.weekTrend >= 0 ? <Icons.TrendingUp size={10} /> : <Icons.TrendingUp size={10} className="rotate-180" />}
-                        {Math.abs(comparisonStats.weekTrend)}%
-                      </div>
-                    </div>
-                    <div className="flex items-baseline gap-2 mt-1">
-                      <p className="text-3xl font-black tracking-tighter">{comparisonStats.thisWeek}</p>
-                      <p className="text-[10px] font-bold text-slate-500 uppercase">Joins this week</p>
-                    </div>
-                  </div>
-                  <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
-                    {(['1W', '1M', '1Y'] as const).map(range => (
-                      <button
-                        key={range}
-                        onClick={() => setAnalyticsRange(range)}
-                        className={`px-3 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${analyticsRange === range ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
-                      >
-                        {range}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="h-[180px] w-full -ml-4">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={processedChartData} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#2563eb" stopOpacity={0.2}/>
-                          <stop offset="95%" stopColor="#2563eb" stopOpacity={0}/>
-                        </linearGradient>
-                      </defs>
-                      <XAxis 
-                        dataKey="date" 
-                        axisLine={false}
-                        tickLine={false}
-                        tick={{ fontSize: 9, fontWeight: 700, fill: '#94a3b8' }}
-                        tickFormatter={(str) => {
-                          const d = new Date(str);
-                          if (analyticsRange === '1W') return d.toLocaleDateString('en-GB', { weekday: 'short' }).charAt(0);
-                          if (analyticsRange === '1Y') return d.toLocaleDateString('en-GB', { month: 'short' }).charAt(0);
-                          return d.toLocaleDateString('en-GB', { day: 'numeric' });
-                        }}
-                        minTickGap={20}
-                      />
-                      <Tooltip content={<CustomTooltip />} />
-                      <Area 
-                        type="monotone" 
-                        dataKey="count" 
-                        stroke="#2563eb" 
-                        strokeWidth={3}
-                        fillOpacity={1} 
-                        fill="url(#colorCount)" 
-                        animationDuration={1000}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 mt-6 pt-6 border-t border-slate-100 dark:border-slate-800">
-                  <div>
-                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Today</p>
-                    <div className="flex items-center gap-2">
-                      <p className="text-lg font-black">{comparisonStats.today}</p>
-                      <span className={`text-[8px] font-bold ${comparisonStats.todayTrend >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                        {comparisonStats.todayTrend >= 0 ? '+' : ''}{comparisonStats.todayTrend}%
-                      </span>
-                    </div>
-                  </div>
-                  <div>
-                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Yesterday</p>
-                    <p className="text-lg font-black">{comparisonStats.yesterday}</p>
-                  </div>
-                </div>
+              <div className="flex bg-slate-100 dark:bg-slate-800 p-1.5 rounded-[1.5rem] border border-slate-200 dark:border-slate-700 shadow-inner">
+                <button 
+                  onClick={() => setSettingsSubTab('charts')}
+                  className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${settingsSubTab === 'charts' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-lg scale-[1.02]' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                >
+                  <Icons.BarChart3 size={14} /> Analytics
+                </button>
+                <button 
+                  onClick={() => setSettingsSubTab('config')}
+                  className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${settingsSubTab === 'config' ? 'bg-white dark:bg-slate-700 text-purple-600 dark:text-purple-400 shadow-lg scale-[1.02]' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                >
+                  <Icons.Settings size={14} /> Configuration
+                </button>
               </div>
 
-               <div className="bg-indigo-700/10 p-8 rounded-[3rem] border-2 border-indigo-500/20 shadow-xl">
-                  <h3 className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-[0.4em] mb-6 flex items-center gap-2">
-                    <Icons.Zap size={14} /> Bot Gateway
-                  </h3>
-                  
-                  <div className="mb-8 p-6 bg-white dark:bg-black/20 rounded-[2rem] border border-slate-200 dark:border-white/5">
-                    <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2">
-                      <Icons.Radio size={14} className="text-rose-500" /> Broadcast to All Hubs
-                    </h4>
-                    <textarea 
-                      placeholder="Enter broadcast message..." 
-                      className="w-full bg-slate-50 dark:bg-black/30 border border-slate-200 dark:border-white/10 px-6 py-4 rounded-2xl text-slate-900 dark:text-white text-xs outline-none focus:ring-4 focus:ring-indigo-500/20 mb-4 transition-all"
-                      rows={3}
-                      value={broadcastMessage}
-                      onChange={e => setBroadcastMessage(e.target.value)}
-                    />
-                    <button 
-                      onClick={handleBroadcast}
-                      disabled={!broadcastMessage || !token}
-                      className="w-full py-4 bg-rose-600 text-white font-black uppercase text-xs rounded-2xl shadow-xl hover:bg-rose-500 active:scale-95 transition-all disabled:opacity-50"
-                    >
-                      Broadcast Message
-                    </button>
-
-                    {broadcasts.length > 0 && (
-                      <div className="mt-6 pt-6 border-t border-slate-200 dark:border-slate-800">
-                        <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Recent Broadcasts</h4>
-                        <div className="space-y-3 max-h-40 overflow-y-auto custom-scrollbar pr-2">
-                          {broadcasts.slice(0, 5).map(b => (
-                            <div key={b._id} className="bg-slate-50 dark:bg-black/20 p-3 rounded-xl border border-slate-200 dark:border-white/5 flex items-center justify-between">
-                              <div className="flex-1 min-w-0 mr-4">
-                                <p className="text-[10px] text-slate-900 dark:text-white truncate font-bold">{b.message}</p>
-                                <p className="text-[8px] text-slate-500">{new Date(b.timestamp).toLocaleTimeString()}</p>
-                              </div>
-                              <button onClick={() => handleDeleteBroadcast(b._id)} className="p-1.5 text-rose-500 hover:bg-rose-500 hover:text-white rounded-lg transition-all">
-                                <Icons.Trash size={12} />
-                              </button>
-                            </div>
-                          ))}
+              {settingsSubTab === 'charts' && (
+                <>
+                  <div className="bg-white dark:bg-slate-900 p-6 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden">
+                    <div className="flex items-center justify-between mb-6">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h2 className="text-sm font-black uppercase tracking-widest text-slate-400">Channel Analytics</h2>
+                          <div className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase flex items-center gap-1 ${comparisonStats.weekTrend >= 0 ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'}`}>
+                            {comparisonStats.weekTrend >= 0 ? <Icons.TrendingUp size={10} /> : <Icons.TrendingUp size={10} className="rotate-180" />}
+                            {Math.abs(comparisonStats.weekTrend)}%
+                          </div>
+                        </div>
+                        <div className="flex items-baseline gap-2 mt-1">
+                          <p className="text-3xl font-black tracking-tighter">{comparisonStats.thisWeek}</p>
+                          <p className="text-[10px] font-bold text-slate-500 uppercase">Joins this week</p>
                         </div>
                       </div>
-                    )}
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3 mb-4">
-                    <div className="relative">
-                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">₹</span>
-                      <input 
-                        type="number" 
-                        value={joinRate} 
-                        onChange={e => setJoinRate(Number(e.target.value))} 
-                        className="w-full bg-white dark:bg-black/30 border border-slate-200 dark:border-white/10 pl-8 pr-6 py-4 rounded-2xl text-slate-900 dark:text-white font-mono text-xs outline-none focus:ring-4 focus:ring-indigo-500/20 transition-all" 
-                        placeholder="Join Rate"
-                      />
-                      <span className="absolute -top-2 left-4 bg-white dark:bg-slate-900 px-2 text-[8px] font-black text-slate-400 uppercase tracking-widest">Revenue Rate</span>
+                      <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+                        {(['1W', '1M', '1Y'] as const).map(range => (
+                          <button
+                            key={range}
+                            onClick={() => setAnalyticsRange(range)}
+                            className={`px-3 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${analyticsRange === range ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                          >
+                            {range}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                    <input type="password" value={token} onChange={e => setToken(e.target.value)} disabled={isLocked} className="w-full bg-white dark:bg-black/30 border border-slate-200 dark:border-white/10 px-6 py-4 rounded-2xl text-slate-900 dark:text-white font-mono text-xs outline-none focus:ring-4 focus:ring-indigo-500/20 transition-all" placeholder="Bot Token" />
-                  </div>
-                  <div className="flex gap-2 mb-6">
-                    <button onClick={() => handleVerify(token)} className="flex-1 py-4 bg-indigo-600 text-white font-black uppercase text-xs rounded-2xl shadow-xl hover:bg-indigo-500 active:scale-95 transition-all">Sync Connection</button>
-                    <button onClick={() => setIsLocked(!isLocked)} className="px-6 py-4 bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-2xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all">{isLocked ? 'Unlock' : 'Lock'}</button>
+
+                    <div className="h-[180px] w-full -ml-4">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={processedChartData} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
+                          <defs>
+                            <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#2563eb" stopOpacity={0.2}/>
+                              <stop offset="95%" stopColor="#2563eb" stopOpacity={0}/>
+                            </linearGradient>
+                          </defs>
+                          <XAxis 
+                            dataKey="date" 
+                            axisLine={false}
+                            tickLine={false}
+                            tick={{ fontSize: 9, fontWeight: 700, fill: '#94a3b8' }}
+                            tickFormatter={(str) => {
+                              const d = new Date(str);
+                              if (analyticsRange === '1W') return d.toLocaleDateString('en-GB', { weekday: 'short' }).charAt(0);
+                              if (analyticsRange === '1Y') return d.toLocaleDateString('en-GB', { month: 'short' }).charAt(0);
+                              return d.toLocaleDateString('en-GB', { day: 'numeric' });
+                            }}
+                            minTickGap={20}
+                          />
+                          <Tooltip content={<CustomTooltip />} />
+                          <Area 
+                            type="monotone" 
+                            dataKey="count" 
+                            stroke="#2563eb" 
+                            strokeWidth={3}
+                            fillOpacity={1} 
+                            fill="url(#colorCount)" 
+                            animationDuration={1000}
+                          />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 mt-6 pt-6 border-t border-slate-100 dark:border-slate-800">
+                      <div>
+                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Today</p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-lg font-black">{comparisonStats.today}</p>
+                          <span className={`text-[8px] font-bold ${comparisonStats.todayTrend >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                            {comparisonStats.todayTrend >= 0 ? '+' : ''}{comparisonStats.todayTrend}%
+                          </span>
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Yesterday</p>
+                        <p className="text-lg font-black">{comparisonStats.yesterday}</p>
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3 border-t border-slate-200 dark:border-slate-800 pt-6">
-                    <button onClick={handleExport} className="flex flex-col items-center justify-center gap-2 p-5 bg-blue-600 text-white rounded-2xl shadow-lg active:scale-95 transition-all">
-                      <Icons.DownloadCloud size={20} />
-                      <span className="text-[10px] font-black uppercase tracking-widest">Export Data</span>
-                    </button>
-                    <button onClick={handleShareApp} className="flex flex-col items-center justify-center gap-2 p-5 bg-purple-600 text-white rounded-2xl shadow-lg active:scale-95 transition-all">
-                      <Icons.Share2 size={20} />
-                      <span className="text-[10px] font-black uppercase tracking-widest">Share App</span>
-                    </button>
-                  </div>
+                  <div className="grid grid-cols-1 gap-6">
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2.5rem] p-6 shadow-xl">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">Revenue Analysis (14D)</h3>
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                          <span className="text-[10px] font-bold uppercase text-slate-500">Earnings</span>
+                        </div>
+                      </div>
+                      <div className="h-[120px] w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={revenueAnalysis.data}>
+                            <XAxis dataKey="date" hide />
+                            <Tooltip 
+                              cursor={{fill: 'transparent'}}
+                              content={({ active, payload }) => {
+                                if (active && payload && payload.length) {
+                                  return (
+                                    <div className="bg-slate-900 text-white p-2 rounded-lg text-[10px] font-black border border-white/10">
+                                      <p>{new Date(payload[0].payload.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</p>
+                                      <p className="text-blue-400">₹{payload[0].value}</p>
+                                    </div>
+                                  );
+                                }
+                                return null;
+                              }}
+                            />
+                            <Bar dataKey="revenue" radius={[4, 4, 0, 0]}>
+                              {revenueAnalysis.data.map((entry, index) => (
+                                <Cell 
+                                  key={`cell-${index}`} 
+                                  fill={entry.revenue === revenueAnalysis.highest?.revenue ? '#2563eb' : '#94a3b8'} 
+                                  fillOpacity={entry.revenue === revenueAnalysis.highest?.revenue ? 1 : 0.3}
+                                />
+                              ))}
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
 
-                  <div className="grid grid-cols-2 gap-3 mt-3">
-                    <button onClick={() => importFileRef.current?.click()} className="flex flex-col items-center justify-center gap-2 p-5 bg-emerald-600 text-white rounded-2xl shadow-lg active:scale-95 transition-all w-full col-span-2">
-                      <Icons.UploadCloud size={20} />
-                      <span className="text-[10px] font-black uppercase tracking-widest">Import Data</span>
-                    </button>
-                    <input type="file" ref={importFileRef} onChange={handleImport} accept=".json" className="hidden" />
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-5 rounded-[2rem] text-white shadow-lg">
+                        <p className="text-[8px] font-black uppercase tracking-[0.2em] opacity-70 mb-1">Highest Income</p>
+                        <p className="text-xs font-black truncate">{revenueAnalysis.highest ? new Date(revenueAnalysis.highest.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : 'N/A'}</p>
+                        <p className="text-lg font-black mt-1">₹{revenueAnalysis.highest?.revenue.toLocaleString() || 0}</p>
+                      </div>
+                      <div className="bg-white dark:bg-slate-800 p-5 rounded-[2rem] border border-slate-200 dark:border-slate-700 shadow-lg">
+                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">Lowest Income</p>
+                        <p className="text-xs font-black text-slate-900 dark:text-white truncate">{revenueAnalysis.lowest ? new Date(revenueAnalysis.lowest.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : 'N/A'}</p>
+                        <p className="text-lg font-black text-slate-900 dark:text-white mt-1">₹{revenueAnalysis.lowest?.revenue.toLocaleString() || 0}</p>
+                      </div>
+                    </div>
                   </div>
-               </div>
+                </>
+              )}
+
+              {settingsSubTab === 'config' && (
+                <div className="space-y-6">
+                  <div className="bg-indigo-700/10 p-8 rounded-[3rem] border-2 border-indigo-500/20 shadow-xl">
+                    <h3 className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-[0.4em] mb-6 flex items-center gap-2">
+                      <Icons.Zap size={14} /> Bot Gateway
+                    </h3>
+                    
+                    <div className="mb-8 p-6 bg-white dark:bg-black/20 rounded-[2rem] border border-slate-200 dark:border-white/5">
+                      <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2">
+                        <Icons.Radio size={14} className="text-rose-500" /> Broadcast to All Hubs
+                      </h4>
+                      <textarea 
+                        placeholder="Enter broadcast message..." 
+                        className="w-full bg-slate-50 dark:bg-black/30 border border-slate-200 dark:border-white/10 px-6 py-4 rounded-2xl text-slate-900 dark:text-white text-xs outline-none focus:ring-4 focus:ring-indigo-500/20 mb-4 transition-all"
+                        rows={3}
+                        value={broadcastMessage}
+                        onChange={e => setBroadcastMessage(e.target.value)}
+                      />
+                      <button 
+                        onClick={handleBroadcast}
+                        disabled={!broadcastMessage || !token}
+                        className="w-full py-4 bg-rose-600 text-white font-black uppercase text-xs rounded-2xl shadow-xl hover:bg-rose-500 active:scale-95 transition-all disabled:opacity-50"
+                      >
+                        Broadcast Message
+                      </button>
+
+                      {broadcasts.length > 0 && (
+                        <div className="mt-6 pt-6 border-t border-slate-200 dark:border-slate-800">
+                          <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Recent Broadcasts</h4>
+                          <div className="space-y-3 max-h-40 overflow-y-auto custom-scrollbar pr-2">
+                            {broadcasts.slice(0, 5).map(b => (
+                              <div key={b._id} className="bg-slate-50 dark:bg-black/20 p-3 rounded-xl border border-slate-200 dark:border-white/5 flex items-center justify-between">
+                                <div className="flex-1 min-w-0 mr-4">
+                                  <p className="text-[10px] text-slate-900 dark:text-white truncate font-bold">{b.message}</p>
+                                  <p className="text-[8px] text-slate-500">{new Date(b.timestamp).toLocaleTimeString()}</p>
+                                </div>
+                                <button onClick={() => handleDeleteBroadcast(b._id)} className="p-1.5 text-rose-500 hover:bg-rose-500 hover:text-white rounded-lg transition-all">
+                                  <Icons.Trash size={12} />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 mb-4">
+                      <div className="relative">
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">₹</span>
+                        <input 
+                          type="number" 
+                          value={joinRate} 
+                          onChange={e => setJoinRate(Number(e.target.value))} 
+                          className="w-full bg-white dark:bg-black/30 border border-slate-200 dark:border-white/10 pl-8 pr-6 py-4 rounded-2xl text-slate-900 dark:text-white font-mono text-xs outline-none focus:ring-4 focus:ring-indigo-500/20 transition-all" 
+                          placeholder="Join Rate"
+                        />
+                        <span className="absolute -top-2 left-4 bg-white dark:bg-slate-900 px-2 text-[8px] font-black text-slate-400 uppercase tracking-widest">Revenue Rate</span>
+                      </div>
+                      <input type="password" value={token} onChange={e => setToken(e.target.value)} disabled={isLocked} className="w-full bg-white dark:bg-black/30 border border-slate-200 dark:border-white/10 px-6 py-4 rounded-2xl text-slate-900 dark:text-white font-mono text-xs outline-none focus:ring-4 focus:ring-indigo-500/20 transition-all" placeholder="Bot Token" />
+                    </div>
+                    <div className="flex gap-2 mb-6">
+                      <button onClick={() => handleVerify(token)} className="flex-1 py-4 bg-indigo-600 text-white font-black uppercase text-xs rounded-2xl shadow-xl hover:bg-indigo-500 active:scale-95 transition-all">Sync Connection</button>
+                      <button onClick={() => setIsLocked(!isLocked)} className="px-6 py-4 bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-2xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all">{isLocked ? 'Unlock' : 'Lock'}</button>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 border-t border-slate-200 dark:border-slate-800 pt-6">
+                      <button onClick={handleExport} className="flex flex-col items-center justify-center gap-2 p-5 bg-blue-600 text-white rounded-2xl shadow-lg active:scale-95 transition-all">
+                        <Icons.DownloadCloud size={20} />
+                        <span className="text-[10px] font-black uppercase tracking-widest">Export Data</span>
+                      </button>
+                      <button onClick={handleShareApp} className="flex flex-col items-center justify-center gap-2 p-5 bg-purple-600 text-white rounded-2xl shadow-lg active:scale-95 transition-all">
+                        <Icons.Share2 size={20} />
+                        <span className="text-[10px] font-black uppercase tracking-widest">Share App</span>
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 mt-3">
+                      <button onClick={() => importFileRef.current?.click()} className="flex flex-col items-center justify-center gap-2 p-5 bg-emerald-600 text-white rounded-2xl shadow-lg active:scale-95 transition-all w-full col-span-2">
+                        <Icons.UploadCloud size={20} />
+                        <span className="text-[10px] font-black uppercase tracking-widest">Import Data</span>
+                      </button>
+                      <input type="file" ref={importFileRef} onChange={handleImport} accept=".json" className="hidden" />
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
