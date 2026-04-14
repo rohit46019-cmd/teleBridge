@@ -6,6 +6,18 @@ import ConfirmationModal from './components/ConfirmationModal.tsx';
 import { Icons } from './constants.tsx';
 import { TelegramGroup, JoinEvent } from './types.ts';
 import { verifyBotToken, getChatDetails, TelegramBotInfo, getChatMemberCount, getRecentUpdates, kickChatMember } from './services/telegramService.ts';
+import { 
+  AreaChart, 
+  Area, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  Cell
+} from 'recharts';
 
 // Add missing constant ROW_COLORS
 const ROW_COLORS = [
@@ -153,7 +165,7 @@ const DEFAULT_GROUPS: TelegramGroup[] = [
   { "id": "-1003839638841", "name": "Bhutesh sir math parmar ssc", "memberCount": 4, "description": "Auto Discovered Hub", "category": "Telegram", "image": "https://picsum.photos/seed/-1003839638841/100", "lastInteraction": 1775504050623 }
 ];
 
-const TABS = ['dashboard', 'groups', 'analysis', 'settings', 'debug'];
+const TABS = ['dashboard', 'analytics', 'groups', 'analysis', 'settings', 'debug'];
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState(() => {
@@ -233,6 +245,101 @@ const App: React.FC = () => {
   const lastUpdateIdRef = useRef(lastUpdateId);
   const tabId = useRef(Math.random().toString(36).substring(7));
   const [isMaster, setIsMaster] = useState(false);
+  const [analyticsRange, setAnalyticsRange] = useState<'1W' | '1M' | '3M' | '6M' | '1Y'>('1W');
+  const [joinRate, setJoinRate] = useState(() => {
+    return Number(localStorage.getItem('tg_join_rate')) || 87;
+  });
+
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-white dark:bg-slate-900 p-3 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl">
+          <p className="text-[10px] font-black text-slate-400 uppercase mb-1">{new Date(label).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+          <p className="text-sm font-black text-blue-600 dark:text-blue-400">{payload[0].value} <span className="text-[10px] text-slate-500 uppercase">Joins</span></p>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  const processedChartData = useMemo(() => {
+    if (!joinEvents.length) return [];
+
+    const now = new Date();
+    let daysToLookBack = 7;
+    if (analyticsRange === '1M') daysToLookBack = 30;
+    else if (analyticsRange === '3M') daysToLookBack = 90;
+    else if (analyticsRange === '6M') daysToLookBack = 180;
+    else if (analyticsRange === '1Y') daysToLookBack = 365;
+
+    const dataMap: Record<string, number> = {};
+    
+    // Initialize all days in range with 0
+    for (let i = 0; i < daysToLookBack; i++) {
+      const d = new Date();
+      d.setDate(now.getDate() - i);
+      const dateStr = d.toLocaleDateString('en-CA');
+      dataMap[dateStr] = 0;
+    }
+
+    joinEvents.forEach(event => {
+      const dateStr = new Date(event.timestamp).toLocaleDateString('en-CA');
+      if (dataMap[dateStr] !== undefined) {
+        dataMap[dateStr]++;
+      }
+    });
+
+    return Object.entries(dataMap)
+      .map(([date, count]) => ({ date, count }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }, [joinEvents, analyticsRange]);
+
+  const comparisonStats = useMemo(() => {
+    const now = new Date();
+    const todayStr = now.toLocaleDateString('en-CA');
+    const yesterday = new Date();
+    yesterday.setDate(now.getDate() - 1);
+    const yesterdayStr = yesterday.toLocaleDateString('en-CA');
+
+    let todayCount = 0;
+    let yesterdayCount = 0;
+
+    // Weekly comparison
+    const startOfThisWeek = new Date();
+    startOfThisWeek.setDate(now.getDate() - now.getDay());
+    startOfThisWeek.setHours(0,0,0,0);
+
+    const startOfLastWeek = new Date(startOfThisWeek);
+    startOfLastWeek.setDate(startOfLastWeek.getDate() - 7);
+
+    let thisWeekCount = 0;
+    let lastWeekCount = 0;
+
+    joinEvents.forEach(event => {
+      const d = new Date(event.timestamp);
+      const dateStr = d.toLocaleDateString('en-CA');
+      
+      if (dateStr === todayStr) todayCount++;
+      if (dateStr === yesterdayStr) yesterdayCount++;
+
+      if (d >= startOfThisWeek) thisWeekCount++;
+      else if (d >= startOfLastWeek && d < startOfThisWeek) lastWeekCount++;
+    });
+
+    const getTrend = (curr: number, prev: number) => {
+      if (prev === 0) return curr > 0 ? 100 : 0;
+      return Math.round(((curr - prev) / prev) * 100);
+    };
+
+    return {
+      today: todayCount,
+      yesterday: yesterdayCount,
+      todayTrend: getTrend(todayCount, yesterdayCount),
+      thisWeek: thisWeekCount,
+      lastWeek: lastWeekCount,
+      weekTrend: getTrend(thisWeekCount, lastWeekCount)
+    };
+  }, [joinEvents]);
 
   useEffect(() => {
     lastUpdateIdRef.current = lastUpdateId;
@@ -277,6 +384,10 @@ const App: React.FC = () => {
     window.addEventListener('beforeinstallprompt', handler);
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem('tg_join_rate', joinRate.toString());
+  }, [joinRate]);
 
   const handleShareApp = () => {
     const url = window.location.href;
@@ -1127,7 +1238,7 @@ const App: React.FC = () => {
         >
           {activeTab === 'dashboard' && (
             <div className={`space-y-6 ${animationClass}`}>
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
                  <div className="bg-gradient-to-br from-blue-500 to-indigo-600 p-5 rounded-[2rem] border-b-4 border-indigo-800 shadow-[0_15px_30px_rgba(79,70,229,0.4)] transition-all hover:-translate-y-1 relative overflow-hidden">
                     <div className="absolute -right-4 -top-4 w-24 h-24 bg-white/10 rounded-full blur-xl"></div>
                     <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-4 backdrop-blur-sm"><Icons.Home size={20} className="text-white" strokeWidth={3} /></div>
@@ -1145,7 +1256,7 @@ const App: React.FC = () => {
                     <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-4 backdrop-blur-sm"><Icons.Activity size={20} className="text-white" strokeWidth={3} /></div>
                     <p className="text-[10px] font-black text-amber-50 uppercase tracking-widest mb-1 relative z-10">Joins Today</p>
                     <p className="text-3xl font-black text-white relative z-10">{joinsTodayCount}</p>
-                 </div>
+                  </div>
                  <div className="bg-gradient-to-br from-fuchsia-500 to-purple-600 p-5 rounded-[2rem] border-b-4 border-purple-800 shadow-[0_15px_30px_rgba(192,38,211,0.4)] transition-all hover:-translate-y-1 relative overflow-hidden">
                     <div className="absolute -right-4 -top-4 w-24 h-24 bg-white/10 rounded-full blur-xl"></div>
                     <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-4 backdrop-blur-sm"><Icons.Zap size={20} className="text-white" strokeWidth={3} /></div>
@@ -1156,6 +1267,24 @@ const App: React.FC = () => {
                        </div>
                     </div>
                  </div>
+                 <div className="bg-gradient-to-br from-rose-500 to-orange-600 p-5 rounded-[2rem] border-b-4 border-rose-800 shadow-[0_15px_30px_rgba(244,63,94,0.4)] transition-all hover:-translate-y-1 relative overflow-hidden">
+                    <div className="absolute -right-4 -top-4 w-24 h-24 bg-white/10 rounded-full blur-xl"></div>
+                    <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-4 backdrop-blur-sm"><Icons.TrendingUp size={20} className="text-white" strokeWidth={3} /></div>
+                    <p className="text-[10px] font-black text-rose-100 uppercase tracking-widest mb-1 relative z-10">Today's Revenue</p>
+                    <p className="text-3xl font-black text-white relative z-10">₹{(joinsTodayCount * joinRate).toLocaleString()}</p>
+                    <p className="text-[8px] font-bold text-rose-100/60 uppercase mt-1">Rate: ₹{joinRate}/join</p>
+                 </div>
+                 <button 
+                   onClick={() => setActiveTab('settings')}
+                   className="bg-gradient-to-br from-cyan-500 to-blue-600 p-5 rounded-[2rem] border-b-4 border-blue-800 shadow-[0_15px_30px_rgba(6,182,212,0.4)] transition-all hover:-translate-y-1 relative overflow-hidden text-left group"
+                 >
+                    <div className="absolute -right-4 -top-4 w-24 h-24 bg-white/10 rounded-full blur-xl group-hover:scale-110 transition-transform"></div>
+                    <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-4 backdrop-blur-sm"><Icons.BarChart3 size={20} className="text-white" strokeWidth={3} /></div>
+                    <p className="text-[10px] font-black text-cyan-50 uppercase tracking-widest mb-1 relative z-10">Analytics</p>
+                    <p className="text-xl font-black text-white relative z-10 flex items-center gap-2">
+                      VIEW GROWTH <Icons.ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+                    </p>
+                 </button>
               </div>
               <div className="relative bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 p-8 shadow-xl overflow-hidden">
                  <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500"></div>
@@ -1170,66 +1299,6 @@ const App: React.FC = () => {
                    <button onClick={handleAddGroupManual} disabled={isAddingGroup || !newChatId} className="px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-xl shadow-blue-600/20 active:scale-95 disabled:opacity-50 transition-all">
                      {isAddingGroup ? 'Connecting...' : 'Inject Batch'}
                    </button>
-                 </div>
-              </div>
-
-              <div className="relative bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 p-8 shadow-xl overflow-hidden">
-                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500"></div>
-                 <div className="flex flex-wrap items-center justify-between gap-4">
-                   <div className="flex items-center gap-4">
-                     <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg ${
-                       syncStatus === 'connected' ? 'bg-emerald-500/10 text-emerald-500' : 
-                       syncStatus === 'syncing' ? 'bg-amber-500/10 text-amber-500' : 
-                       'bg-rose-500/10 text-rose-500'
-                     }`}>
-                       <Icons.RefreshCw size={24} className={syncStatus === 'syncing' ? 'animate-spin' : ''} />
-                     </div>
-                     <div>
-                       <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Database Sync Status</h4>
-                       <div className="flex items-center gap-2">
-                         <div className={`w-2 h-2 rounded-full ${
-                           syncStatus === 'connected' ? 'bg-emerald-500 animate-pulse' : 
-                           syncStatus === 'syncing' ? 'bg-amber-500 animate-bounce' : 
-                           'bg-rose-500'
-                         }`}></div>
-                         <span className="text-xs font-black uppercase tracking-widest dark:text-white">
-                           {syncStatus === 'connected' ? 'Cloud Synced' : syncStatus === 'syncing' ? 'Syncing Data...' : 'Connection Error'}
-                         </span>
-                       </div>
-                     </div>
-                   </div>
-
-                   <div className="flex items-center gap-3">
-                     {lastSyncTime && (
-                       <div className="text-right hidden sm:block">
-                         <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Last Successful Sync</p>
-                         <p className="text-[10px] font-bold dark:text-slate-300">
-                           {lastSyncTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                         </p>
-                       </div>
-                     )}
-                     <button 
-                       onClick={() => setSyncRetryCount(prev => prev + 1)}
-                       disabled={syncStatus === 'syncing'}
-                       className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 flex items-center gap-2 ${
-                         syncStatus === 'error' 
-                           ? 'bg-rose-600 text-white shadow-lg shadow-rose-600/20' 
-                           : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
-                       }`}
-                     >
-                       <Icons.Zap size={12} />
-                       {syncStatus === 'error' ? 'Wake Up Server' : 'Force Sync'}
-                     </button>
-                   </div>
-
-                   {dbError && (
-                     <div className="w-full mt-2 p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl flex items-center gap-3 animate-in slide-in-from-bottom-2">
-                       <Icons.AlertTriangle size={14} className="text-rose-500 shrink-0" />
-                       <p className="text-[10px] font-bold text-rose-600 dark:text-rose-400 leading-tight">
-                         {dbError}
-                       </p>
-                     </div>
-                   )}
                  </div>
               </div>
             </div>
@@ -1369,6 +1438,87 @@ const App: React.FC = () => {
 
           {activeTab === 'settings' && (
             <div className={`max-w-xl space-y-6 ${animationClass}`}>
+              <div className="bg-white dark:bg-slate-900 p-6 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden">
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-sm font-black uppercase tracking-widest text-slate-400">Channel Analytics</h2>
+                      <div className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase flex items-center gap-1 ${comparisonStats.weekTrend >= 0 ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'}`}>
+                        {comparisonStats.weekTrend >= 0 ? <Icons.TrendingUp size={10} /> : <Icons.TrendingUp size={10} className="rotate-180" />}
+                        {Math.abs(comparisonStats.weekTrend)}%
+                      </div>
+                    </div>
+                    <div className="flex items-baseline gap-2 mt-1">
+                      <p className="text-3xl font-black tracking-tighter">{comparisonStats.thisWeek}</p>
+                      <p className="text-[10px] font-bold text-slate-500 uppercase">Joins this week</p>
+                    </div>
+                  </div>
+                  <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+                    {(['1W', '1M', '1Y'] as const).map(range => (
+                      <button
+                        key={range}
+                        onClick={() => setAnalyticsRange(range)}
+                        className={`px-3 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${analyticsRange === range ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                      >
+                        {range}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="h-[180px] w-full -ml-4">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={processedChartData} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#2563eb" stopOpacity={0.2}/>
+                          <stop offset="95%" stopColor="#2563eb" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <XAxis 
+                        dataKey="date" 
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fontSize: 9, fontWeight: 700, fill: '#94a3b8' }}
+                        tickFormatter={(str) => {
+                          const d = new Date(str);
+                          if (analyticsRange === '1W') return d.toLocaleDateString('en-GB', { weekday: 'short' }).charAt(0);
+                          if (analyticsRange === '1Y') return d.toLocaleDateString('en-GB', { month: 'short' }).charAt(0);
+                          return d.toLocaleDateString('en-GB', { day: 'numeric' });
+                        }}
+                        minTickGap={20}
+                      />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Area 
+                        type="monotone" 
+                        dataKey="count" 
+                        stroke="#2563eb" 
+                        strokeWidth={3}
+                        fillOpacity={1} 
+                        fill="url(#colorCount)" 
+                        animationDuration={1000}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 mt-6 pt-6 border-t border-slate-100 dark:border-slate-800">
+                  <div>
+                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Today</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-lg font-black">{comparisonStats.today}</p>
+                      <span className={`text-[8px] font-bold ${comparisonStats.todayTrend >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                        {comparisonStats.todayTrend >= 0 ? '+' : ''}{comparisonStats.todayTrend}%
+                      </span>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Yesterday</p>
+                    <p className="text-lg font-black">{comparisonStats.yesterday}</p>
+                  </div>
+                </div>
+              </div>
+
                <div className="bg-indigo-700/10 p-8 rounded-[3rem] border-2 border-indigo-500/20 shadow-xl">
                   <h3 className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-[0.4em] mb-6 flex items-center gap-2">
                     <Icons.Zap size={14} /> Bot Gateway
@@ -1413,76 +1563,23 @@ const App: React.FC = () => {
                     )}
                   </div>
 
-                  <input type="password" value={token} onChange={e => setToken(e.target.value)} disabled={isLocked} className="w-full bg-white dark:bg-black/30 border border-slate-200 dark:border-white/10 px-6 py-4 rounded-2xl text-slate-900 dark:text-white font-mono text-xs outline-none focus:ring-4 focus:ring-indigo-500/20 mb-4 transition-all" />
+                  <div className="grid grid-cols-2 gap-3 mb-4">
+                    <div className="relative">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">₹</span>
+                      <input 
+                        type="number" 
+                        value={joinRate} 
+                        onChange={e => setJoinRate(Number(e.target.value))} 
+                        className="w-full bg-white dark:bg-black/30 border border-slate-200 dark:border-white/10 pl-8 pr-6 py-4 rounded-2xl text-slate-900 dark:text-white font-mono text-xs outline-none focus:ring-4 focus:ring-indigo-500/20 transition-all" 
+                        placeholder="Join Rate"
+                      />
+                      <span className="absolute -top-2 left-4 bg-white dark:bg-slate-900 px-2 text-[8px] font-black text-slate-400 uppercase tracking-widest">Revenue Rate</span>
+                    </div>
+                    <input type="password" value={token} onChange={e => setToken(e.target.value)} disabled={isLocked} className="w-full bg-white dark:bg-black/30 border border-slate-200 dark:border-white/10 px-6 py-4 rounded-2xl text-slate-900 dark:text-white font-mono text-xs outline-none focus:ring-4 focus:ring-indigo-500/20 transition-all" placeholder="Bot Token" />
+                  </div>
                   <div className="flex gap-2 mb-6">
                     <button onClick={() => handleVerify(token)} className="flex-1 py-4 bg-indigo-600 text-white font-black uppercase text-xs rounded-2xl shadow-xl hover:bg-indigo-500 active:scale-95 transition-all">Sync Connection</button>
                     <button onClick={() => setIsLocked(!isLocked)} className="px-6 py-4 bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-2xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all">{isLocked ? 'Unlock' : 'Lock'}</button>
-                  </div>
-
-                  {deferredPrompt && (
-                    <div className="mb-6 p-6 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-3xl shadow-lg animate-pulse">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h4 className="text-white font-black text-xs uppercase tracking-widest">Install App</h4>
-                          <p className="text-blue-100 text-[10px] mt-1">Add to home screen for better experience</p>
-                        </div>
-                        <button 
-                          onClick={handleInstallClick}
-                          className="px-4 py-2 bg-white text-blue-600 font-black text-[10px] uppercase rounded-xl shadow-md active:scale-95 transition-all"
-                        >
-                          Install Now
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {isInIframe && (
-                    <div className="mb-6 p-6 bg-amber-500/10 border-2 border-amber-500/20 rounded-3xl">
-                      <div className="flex items-start gap-3">
-                        <Icons.AlertTriangle className="text-amber-500 shrink-0" size={18} />
-                        <div>
-                          <h4 className="text-amber-600 dark:text-amber-400 font-black text-[10px] uppercase tracking-widest">Installation Note</h4>
-                          <p className="text-slate-500 dark:text-slate-400 text-[10px] mt-1 leading-relaxed">
-                            Aap AI Studio ke preview me hain. App install karne ke liye upar diye gaye <b>"Open in New Tab"</b> button par click karein.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="mb-6 grid grid-cols-2 gap-3">
-                    <div className="p-4 bg-slate-100 dark:bg-black/20 rounded-2xl border border-slate-200 dark:border-white/5">
-                      <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">PWA Status</span>
-                      <div className="flex items-center gap-2">
-                        <div className={`w-2 h-2 rounded-full ${swStatus === 'registered' ? 'bg-emerald-500' : 'bg-rose-500'}`}></div>
-                        <span className="text-[10px] font-bold uppercase">{swStatus === 'registered' ? 'Active' : 'Offline Mode Off'}</span>
-                      </div>
-                    </div>
-                    <div className="p-4 bg-slate-100 dark:bg-black/20 rounded-2xl border border-slate-200 dark:border-white/5">
-                      <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">Install Ready</span>
-                      <div className="flex items-center gap-2">
-                        <div className={`w-2 h-2 rounded-full ${deferredPrompt ? 'bg-emerald-500' : 'bg-amber-500'}`}></div>
-                        <span className="text-[10px] font-bold uppercase">{deferredPrompt ? 'YES' : 'READY'}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mb-6">
-                    <button 
-                      onClick={handleInstallClick}
-                      className="w-full py-6 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-[2rem] shadow-2xl hover:shadow-blue-500/20 active:scale-95 transition-all flex flex-col items-center justify-center gap-2 group"
-                    >
-                      <div className="flex items-center gap-3">
-                        <Icons.DownloadCloud size={24} className="group-hover:bounce" />
-                        <span className="text-sm font-black uppercase tracking-tighter">Download & Install App</span>
-                      </div>
-                      <span className="text-[9px] opacity-70 font-bold uppercase tracking-widest">Click here to install on this device</span>
-                    </button>
-                    {!deferredPrompt && (
-                      <p className="text-[9px] text-slate-500 text-center mt-3 px-4 leading-relaxed">
-                        Agar "Install" window nahi khulti, to browser menu (3 dots) me jaakar <b>"Add to Home Screen"</b> par click karein. Aap ise jitni baar chahein install kar sakte hain.
-                      </p>
-                    )}
                   </div>
 
                   <div className="grid grid-cols-2 gap-3 border-t border-slate-200 dark:border-slate-800 pt-6">
@@ -1503,43 +1600,6 @@ const App: React.FC = () => {
                     </button>
                     <input type="file" ref={importFileRef} onChange={handleImport} accept=".json" className="hidden" />
                   </div>
-
-                  <div className="mt-6 p-6 bg-slate-100 dark:bg-black/20 rounded-[2.5rem] border border-slate-200 dark:border-white/5">
-                    <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
-                      <Icons.Info size={14} /> Unlimited Installation Guide
-                    </h4>
-                    <div className="space-y-4">
-                      <div className="flex gap-3">
-                        <div className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] font-black shrink-0">1</div>
-                        <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                          Aap is app ko <b>unlimited</b> devices (Android, iPhone, PC) par install kar sakte hain. Bas app ka link share karein aur dusre device par open karein.
-                        </p>
-                      </div>
-                      <div className="flex gap-3">
-                        <div className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] font-black shrink-0">2</div>
-                        <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                          Browser menu me jayein (3 dots) aur <b>"Add to Home Screen"</b> ya <b>"Install App"</b> par click karein.
-                        </p>
-                      </div>
-                      <div className="flex gap-3">
-                        <div className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] font-black shrink-0">3</div>
-                        <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                          Ek baar install hone ke baad, app bina browser ke direct open hoga aur offline bhi kaam karega.
-                        </p>
-                      </div>
-                    </div>
-                    
-                    <div className="mt-6 pt-4 border-t border-slate-200 dark:border-white/5">
-                      <h5 className="text-[9px] font-black text-rose-500 uppercase tracking-widest mb-2">Nahi chal raha? (Troubleshoot)</h5>
-                      <ul className="text-[9px] text-slate-500 dark:text-slate-400 space-y-2 list-disc pl-4">
-                        <li><b>Chrome Browser:</b> Android par hamesha Chrome ka use karein.</li>
-                        <li><b>HTTPS:</b> Check karein ki URL <code>https://</code> se start ho raha hai.</li>
-                        <li><b>Clear Cache:</b> Browser settings me jaakar is site ka data clear karein aur page refresh karein.</li>
-                        <li><b>Incognito:</b> Incognito mode me installation kaam nahi karti.</li>
-                      </ul>
-                    </div>
-                  </div>
-
                </div>
             </div>
           )}
