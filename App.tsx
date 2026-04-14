@@ -492,8 +492,6 @@ const App: React.FC = () => {
   };
 
   const [animationDirection, setAnimationDirection] = useState<'left' | 'right'>('right');
-  const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(null);
-  const [touchEnd, setTouchEnd] = useState<{ x: number; y: number } | null>(null);
   const [confirmationModalConfig, setConfirmationModalConfig] = useState<{
     isOpen: boolean;
     title: string;
@@ -737,41 +735,6 @@ const App: React.FC = () => {
     }
   };
   
-  const handleTouchStart = (e: React.TouchEvent) => {
-    setTouchEnd(null);
-    setTouchStart({ x: e.targetTouches[0].clientX, y: e.targetTouches[0].clientY });
-  };
-  
-  const handleTouchMove = (e: React.TouchEvent) => {
-    setTouchEnd({ x: e.targetTouches[0].clientX, y: e.targetTouches[0].clientY });
-  };
-  
-  const handleTouchEnd = () => {
-    if (!touchStart || !touchEnd) return;
-  
-    const horizontalDistance = touchStart.x - touchEnd.x;
-    const verticalDistance = touchStart.y - touchEnd.y;
-    const minSwipeDistance = 50;
-  
-    if (Math.abs(horizontalDistance) < minSwipeDistance || Math.abs(horizontalDistance) < Math.abs(verticalDistance)) {
-      setTouchStart(null);
-      setTouchEnd(null);
-      return;
-    }
-  
-    const currentIndex = TABS.indexOf(activeTab);
-    if (horizontalDistance > 0) { // Swipe Left
-      const nextIndex = (currentIndex + 1) % TABS.length;
-      handleTabChange(TABS[nextIndex]);
-    } else { // Swipe Right
-      const prevIndex = (currentIndex - 1 + TABS.length) % TABS.length;
-      handleTabChange(TABS[prevIndex]);
-    }
-  
-    setTouchStart(null);
-    setTouchEnd(null);
-  };
-
   const syncAllGroupsMemberCount = async (currentToken: string, groupsToSync?: TelegramGroup[]) => {
     const targetGroups = groupsToSync || groups;
     if (targetGroups.length === 0) return;
@@ -1305,9 +1268,6 @@ const App: React.FC = () => {
 
         <div 
           className="relative min-h-[70vh]"
-          onTouchStart={handleTouchStart}
-          onTouchMove={handleTouchMove}
-          onTouchEnd={handleTouchEnd}
         >
           {activeTab === 'dashboard' && (
             <div className={`space-y-6 ${animationClass}`}>
