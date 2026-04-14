@@ -245,8 +245,11 @@ const App: React.FC = () => {
   const lastUpdateIdRef = useRef(lastUpdateId);
   const tabId = useRef(Math.random().toString(36).substring(7));
   const [isMaster, setIsMaster] = useState(false);
-  const [analyticsRange, setAnalyticsRange] = useState<'1W' | '1M' | '3M' | '6M' | '1Y'>('1W');
+  const [analyticsRange, setAnalyticsRange] = useState<'1W' | '1M' | '3M' | '6M' | '1Y' | 'CUSTOM'>('1W');
+  const [analysisStartDate, setAnalysisStartDate] = useState<string>('');
+  const [analysisEndDate, setAnalysisEndDate] = useState<string>('');
   const [settingsSubTab, setSettingsSubTab] = useState<'charts' | 'config'>('charts');
+  const [revenueDays, setRevenueDays] = useState(14);
   const [joinRate, setJoinRate] = useState(() => {
     return Number(localStorage.getItem('tg_join_rate')) || 87;
   });
@@ -268,32 +271,54 @@ const App: React.FC = () => {
 
     const now = new Date();
     let daysToLookBack = 7;
-    if (analyticsRange === '1M') daysToLookBack = 30;
-    else if (analyticsRange === '3M') daysToLookBack = 90;
-    else if (analyticsRange === '6M') daysToLookBack = 180;
-    else if (analyticsRange === '1Y') daysToLookBack = 365;
+    let startDate: Date | null = null;
+    let endDate: Date | null = null;
+
+    if (analyticsRange === 'CUSTOM' && analysisStartDate && analysisEndDate) {
+      startDate = new Date(analysisStartDate);
+      startDate.setHours(0, 0, 0, 0);
+      endDate = new Date(analysisEndDate);
+      endDate.setHours(23, 59, 59, 999);
+      
+      const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
+      daysToLookBack = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+    } else {
+      if (analyticsRange === '1M') daysToLookBack = 30;
+      else if (analyticsRange === '3M') daysToLookBack = 90;
+      else if (analyticsRange === '6M') daysToLookBack = 180;
+      else if (analyticsRange === '1Y') daysToLookBack = 365;
+      
+      startDate = new Date();
+      startDate.setDate(now.getDate() - daysToLookBack + 1);
+      startDate.setHours(0, 0, 0, 0);
+      endDate = new Date();
+      endDate.setHours(23, 59, 59, 999);
+    }
 
     const dataMap: Record<string, number> = {};
     
     // Initialize all days in range with 0
     for (let i = 0; i < daysToLookBack; i++) {
-      const d = new Date();
-      d.setDate(now.getDate() - i);
+      const d = new Date(startDate!);
+      d.setDate(startDate!.getDate() + i);
       const dateStr = d.toLocaleDateString('en-CA');
       dataMap[dateStr] = 0;
     }
 
     joinEvents.forEach(event => {
-      const dateStr = new Date(event.timestamp).toLocaleDateString('en-CA');
-      if (dataMap[dateStr] !== undefined) {
-        dataMap[dateStr]++;
+      const d = new Date(event.timestamp);
+      if (d >= startDate! && d <= endDate!) {
+        const dateStr = d.toLocaleDateString('en-CA');
+        if (dataMap[dateStr] !== undefined) {
+          dataMap[dateStr]++;
+        }
       }
     });
 
     return Object.entries(dataMap)
       .map(([date, count]) => ({ date, count }))
       .sort((a, b) => a.date.localeCompare(b.date));
-  }, [joinEvents, analyticsRange]);
+  }, [joinEvents, analyticsRange, analysisStartDate, analysisEndDate]);
 
   const comparisonStats = useMemo(() => {
     const now = new Date();
@@ -345,10 +370,30 @@ const App: React.FC = () => {
   const revenueAnalysis = useMemo(() => {
     if (!joinEvents.length) return { data: [], highest: null, lowest: null };
 
+    let startDate: Date | null = null;
+    let endDate: Date | null = null;
+
+    if (analyticsRange === 'CUSTOM' && analysisStartDate && analysisEndDate) {
+      startDate = new Date(analysisStartDate);
+      startDate.setHours(0, 0, 0, 0);
+      endDate = new Date(analysisEndDate);
+      endDate.setHours(23, 59, 59, 999);
+    } else {
+      const now = new Date();
+      startDate = new Date();
+      startDate.setDate(now.getDate() - revenueDays + 1);
+      startDate.setHours(0, 0, 0, 0);
+      endDate = new Date();
+      endDate.setHours(23, 59, 59, 999);
+    }
+
     const dataMap: Record<string, number> = {};
     joinEvents.forEach(event => {
-      const dateStr = new Date(event.timestamp).toLocaleDateString('en-CA');
-      dataMap[dateStr] = (dataMap[dateStr] || 0) + 1;
+      const d = new Date(event.timestamp);
+      if (d >= startDate! && d <= endDate!) {
+        const dateStr = d.toLocaleDateString('en-CA');
+        dataMap[dateStr] = (dataMap[dateStr] || 0) + 1;
+      }
     });
 
     const data = Object.entries(dataMap)
@@ -358,16 +403,16 @@ const App: React.FC = () => {
       }))
       .sort((a, b) => a.date.localeCompare(b.date));
 
-    let highest = data[0];
-    let lowest = data[0];
+    let highest = data[0] || null;
+    let lowest = data[0] || null;
 
     data.forEach(item => {
-      if (item.revenue > highest.revenue) highest = item;
-      if (item.revenue < lowest.revenue) lowest = item;
+      if (highest === null || item.revenue > highest.revenue) highest = item;
+      if (lowest === null || item.revenue < lowest.revenue) lowest = item;
     });
 
-    return { data: data.slice(-14), highest, lowest };
-  }, [joinEvents, joinRate]);
+    return { data, highest, lowest };
+  }, [joinEvents, joinRate, revenueDays, analyticsRange, analysisStartDate, analysisEndDate]);
 
   useEffect(() => {
     lastUpdateIdRef.current = lastUpdateId;
@@ -1483,23 +1528,11 @@ const App: React.FC = () => {
 
               {settingsSubTab === 'charts' && (
                 <>
-                  <div className="bg-white dark:bg-slate-900 p-6 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden">
-                    <div className="flex items-center justify-between mb-6">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h2 className="text-sm font-black uppercase tracking-widest text-slate-400">Channel Analytics</h2>
-                          <div className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase flex items-center gap-1 ${comparisonStats.weekTrend >= 0 ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'}`}>
-                            {comparisonStats.weekTrend >= 0 ? <Icons.TrendingUp size={10} /> : <Icons.TrendingUp size={10} className="rotate-180" />}
-                            {Math.abs(comparisonStats.weekTrend)}%
-                          </div>
-                        </div>
-                        <div className="flex items-baseline gap-2 mt-1">
-                          <p className="text-3xl font-black tracking-tighter">{comparisonStats.thisWeek}</p>
-                          <p className="text-[10px] font-bold text-slate-500 uppercase">Joins this week</p>
-                        </div>
-                      </div>
+                  <div className="bg-white dark:bg-slate-900 p-6 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 shadow-xl mb-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">Analysis Period</h3>
                       <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
-                        {(['1W', '1M', '1Y'] as const).map(range => (
+                        {(['1W', '1M', '1Y', 'CUSTOM'] as const).map(range => (
                           <button
                             key={range}
                             onClick={() => setAnalyticsRange(range)}
@@ -1508,6 +1541,53 @@ const App: React.FC = () => {
                             {range}
                           </button>
                         ))}
+                      </div>
+                    </div>
+                    
+                    {analyticsRange === 'CUSTOM' && (
+                      <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                        <div className="space-y-1">
+                          <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-2">Start Date</p>
+                          <input 
+                            type="date" 
+                            value={analysisStartDate} 
+                            onChange={e => setAnalysisStartDate(e.target.value)}
+                            className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-[10px] font-bold outline-none focus:ring-2 focus:ring-blue-500/20"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-2">End Date</p>
+                          <input 
+                            type="date" 
+                            value={analysisEndDate} 
+                            onChange={e => setAnalysisEndDate(e.target.value)}
+                            className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-[10px] font-bold outline-none focus:ring-2 focus:ring-blue-500/20"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="bg-white dark:bg-slate-900 p-6 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden">
+                    <div className="flex items-center justify-between mb-6">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h2 className="text-sm font-black uppercase tracking-widest text-slate-400">Channel Analytics</h2>
+                          {analyticsRange !== 'CUSTOM' && (
+                            <div className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase flex items-center gap-1 ${comparisonStats.weekTrend >= 0 ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'}`}>
+                              {comparisonStats.weekTrend >= 0 ? <Icons.TrendingUp size={10} /> : <Icons.TrendingUp size={10} className="rotate-180" />}
+                              {Math.abs(comparisonStats.weekTrend)}%
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-baseline gap-2 mt-1">
+                          <p className="text-3xl font-black tracking-tighter">
+                            {analyticsRange === 'CUSTOM' ? processedChartData.reduce((acc, curr) => acc + curr.count, 0) : comparisonStats.thisWeek}
+                          </p>
+                          <p className="text-[10px] font-bold text-slate-500 uppercase">
+                            {analyticsRange === 'CUSTOM' ? 'Total Joins in Period' : 'Joins this week'}
+                          </p>
+                        </div>
                       </div>
                     </div>
 
@@ -1567,40 +1647,59 @@ const App: React.FC = () => {
                   <div className="grid grid-cols-1 gap-6">
                     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2.5rem] p-6 shadow-xl">
                       <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">Revenue Analysis (14D)</h3>
-                        <div className="flex items-center gap-2">
-                          <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                          <span className="text-[10px] font-bold uppercase text-slate-500">Earnings</span>
+                        <div>
+                          <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">Revenue Analysis</h3>
+                          <p className="text-[10px] font-bold text-slate-500 uppercase mt-0.5">
+                            {analyticsRange === 'CUSTOM' ? 'Custom Period' : `Last ${revenueDays} Days`}
+                          </p>
                         </div>
+                        {analyticsRange !== 'CUSTOM' && (
+                          <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+                            {([7, 14, 30, 90] as const).map(days => (
+                              <button
+                                key={days}
+                                onClick={() => setRevenueDays(days)}
+                                className={`px-2.5 py-1 text-[8px] font-black uppercase rounded-lg transition-all ${revenueDays === days ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                              >
+                                {days}D
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                      <div className="h-[120px] w-full">
+                      <div className="h-[100px] w-full -ml-4">
                         <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={revenueAnalysis.data}>
+                          <AreaChart data={revenueAnalysis.data} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
+                            <defs>
+                              <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3}/>
+                                <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
+                              </linearGradient>
+                            </defs>
                             <XAxis dataKey="date" hide />
                             <Tooltip 
-                              cursor={{fill: 'transparent'}}
                               content={({ active, payload }) => {
                                 if (active && payload && payload.length) {
                                   return (
-                                    <div className="bg-slate-900 text-white p-2 rounded-lg text-[10px] font-black border border-white/10">
-                                      <p>{new Date(payload[0].payload.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</p>
-                                      <p className="text-blue-400">₹{payload[0].value}</p>
+                                    <div className="bg-slate-900 text-white p-2 rounded-lg text-[10px] font-black border border-white/10 shadow-2xl">
+                                      <p className="opacity-60">{new Date(payload[0].payload.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</p>
+                                      <p className="text-indigo-400 text-xs">₹{payload[0].value?.toLocaleString()}</p>
                                     </div>
                                   );
                                 }
                                 return null;
                               }}
                             />
-                            <Bar dataKey="revenue" radius={[4, 4, 0, 0]}>
-                              {revenueAnalysis.data.map((entry, index) => (
-                                <Cell 
-                                  key={`cell-${index}`} 
-                                  fill={entry.revenue === revenueAnalysis.highest?.revenue ? '#2563eb' : '#94a3b8'} 
-                                  fillOpacity={entry.revenue === revenueAnalysis.highest?.revenue ? 1 : 0.3}
-                                />
-                              ))}
-                            </Bar>
-                          </BarChart>
+                            <Area 
+                              type="monotone" 
+                              dataKey="revenue" 
+                              stroke="#6366f1" 
+                              strokeWidth={2.5}
+                              fillOpacity={1} 
+                              fill="url(#colorRevenue)" 
+                              animationDuration={1500}
+                            />
+                          </AreaChart>
                         </ResponsiveContainer>
                       </div>
                     </div>
