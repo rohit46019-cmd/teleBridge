@@ -67,14 +67,14 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, theme, toggle
           <button
             key={item.id}
             onClick={() => onTabChange(item.id)}
-            className={`flex flex-col items-center gap-0.5 p-2 rounded-xl transition-all active:scale-90 relative ${
+            className={`flex flex-col items-center gap-1 px-2 py-1.5 rounded-xl transition-all active:scale-90 relative ${
               activeTab === item.id ? `${item.color}` : 'text-slate-400'
             }`}
           >
-            <item.icon size={20} strokeWidth={activeTab === item.id ? 2.5 : 2} />
-            {activeTab === item.id && (
-              <div className="absolute -bottom-0.5 w-1 h-1 rounded-full bg-current" />
-            )}
+            <item.icon size={18} strokeWidth={activeTab === item.id ? 2.5 : 2} />
+            <span className={`text-[8px] font-black uppercase tracking-tighter ${activeTab === item.id ? 'opacity-100' : 'opacity-60'}`}>
+              {item.label}
+            </span>
           </button>
         ))}
       </nav>
