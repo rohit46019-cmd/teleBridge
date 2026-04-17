@@ -1,5 +1,4 @@
 import express from "express";
-import { createServer as createViteServer } from "vite";
 import mongoose from "mongoose";
 import cors from "cors";
 import path from "path";
@@ -314,29 +313,42 @@ async function startServer() {
       const groups = await Group.find();
       const timestamp = Date.now();
 
+      if (!groups.length) {
+        return res.json({ success: true, sentCount: 0, totalCount: 0 });
+      }
+
       console.log(`[Broadcast] Starting broadcast to ${groups.length} groups`);
 
-      // Use Promise.all to send messages in parallel to avoid Vercel timeout
-      // Telegram allows 30 messages per second to different chats
-      const results = await Promise.all(groups.map(async (group) => {
+      // 1. Initial save so we don't lose the record if it timeouts
+      const broadcastRecord = await (Broadcast as any).create({ 
+        message, 
+        timestamp, 
+        sentTo: [] 
+      });
+
+      // 2. Parallel sending with a timeout safety
+      // Telegram allows 30 msg/sec. For Vercel, we need to be fast.
+      const sendPromises = groups.map(async (group) => {
         try {
-          const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage?chat_id=${group.id}&text=${encodeURIComponent(message)}`);
+          const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage?chat_id=${group.id}&text=${encodeURIComponent(message)}`, {
+            signal: AbortSignal.timeout(8000) // 8 second timeout per request
+          });
           const data = await response.json();
           if (data.ok) {
             return { chatId: group.id, messageId: data.result.message_id, success: true };
-          } else {
-            console.error(`[Broadcast] Failed to send to ${group.id}:`, data.description);
-            return { chatId: group.id, success: false, error: data.description };
           }
         } catch (err) {
           console.error(`[Broadcast] Error sending to ${group.id}:`, err);
-          return { chatId: group.id, success: false };
         }
-      }));
+        return { chatId: group.id, success: false };
+      });
 
-      const sentTo = results.filter(r => r.success).map(r => ({ chatId: r.chatId, messageId: r.messageId }));
+      const results = await Promise.all(sendPromises);
+      const sentTo = results.filter((r: any) => r.success).map((r: any) => ({ chatId: r.chatId, messageId: r.messageId }));
       
-      await (Broadcast as any).create({ message, timestamp, sentTo });
+      // 3. Update the record with final results
+      await (Broadcast as any).findByIdAndUpdate(broadcastRecord._id, { sentTo });
+      
       console.log(`[Broadcast] Completed. Sent to ${sentTo.length}/${groups.length} groups`);
       
       res.json({ 
@@ -344,9 +356,9 @@ async function startServer() {
         sentCount: sentTo.length, 
         totalCount: groups.length 
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("[Broadcast] Global error:", error);
-      res.status(500).json({ error: "Failed to broadcast message" });
+      res.status(500).json({ error: "Failed to broadcast message", details: error.message });
     }
   });
 
@@ -384,6 +396,7 @@ async function startServer() {
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",

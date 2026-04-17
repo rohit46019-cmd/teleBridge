@@ -165,7 +165,7 @@ const DEFAULT_GROUPS: TelegramGroup[] = [
   { "id": "-1003839638841", "name": "Bhutesh sir math parmar ssc", "memberCount": 4, "description": "Auto Discovered Hub", "category": "Telegram", "image": "https://picsum.photos/seed/-1003839638841/100", "lastInteraction": 1775504050623 }
 ];
 
-const TABS = ['dashboard', 'analytics', 'groups', 'analysis', 'settings', 'debug'];
+const TABS = ['dashboard', 'groups', 'analysis', 'settings'];
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState(() => {
@@ -189,6 +189,7 @@ const App: React.FC = () => {
   const [token, setToken] = useState(localStorage.getItem('tg_bot_token') || DEFAULT_TOKEN);
   const [botInfo, setBotInfo] = useState<TelegramBotInfo | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
+  const [isSyncingToDb, setIsSyncingToDb] = useState(false);
   const [isLocked, setIsLocked] = useState(() => localStorage.getItem('tg_token_locked') !== 'false');
   const [groups, setGroups] = useState<TelegramGroup[]>(() => {
     const saved = localStorage.getItem('tg_groups');
@@ -247,6 +248,12 @@ const App: React.FC = () => {
   const [isMaster, setIsMaster] = useState(false);
   const [analyticsRange, setAnalyticsRange] = useState<'1W' | '1M' | '3M' | '6M' | '1Y' | 'CUSTOM'>('1W');
   const [analysisStartDate, setAnalysisStartDate] = useState<string>('');
+  const [notification, setNotification] = useState<{message: string, type: 'success' | 'alert' | 'info'} | null>(null);
+
+  const showNotification = (message: string, type: 'success' | 'alert' | 'info' = 'info') => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification(null), 3000);
+  };
   const [analysisEndDate, setAnalysisEndDate] = useState<string>('');
   const [settingsSubTab, setSettingsSubTab] = useState<'charts' | 'config'>('charts');
   const [revenueDays, setRevenueDays] = useState(14);
@@ -471,17 +478,17 @@ const App: React.FC = () => {
         url: url,
       }).catch(() => {
         navigator.clipboard.writeText(url);
-        alert("Link copied to clipboard!");
+        showNotification("Link copied to clipboard!", 'success');
       });
     } else {
       navigator.clipboard.writeText(url);
-      alert("Link copied to clipboard!");
+      showNotification("Link copied to clipboard!", 'success');
     }
   };
 
   const handleInstallClick = async () => {
     if (!deferredPrompt) {
-      alert("Browser ka native install prompt abhi ready nahi hai. Kripya browser menu (3 dots) me jaakar 'Add to Home Screen' par click karein. Ye wahi kaam karega!");
+      showNotification("Install via browser menu (3 dots) -> 'Add to Home Screen'", 'info');
       return;
     }
     deferredPrompt.prompt();
@@ -735,30 +742,95 @@ const App: React.FC = () => {
     }
   };
   
+  const syncDataToDatabase = async () => {
+    if (isSyncingToDb) return;
+    if (pendingGroups.length === 0 && pendingJoins.length === 0) {
+      showNotification("No pending data to update.", 'info');
+      return;
+    }
+
+    setIsSyncingToDb(true);
+    try {
+      // Sync Groups
+      if (pendingGroups.length > 0) {
+        const res = await fetch('/api/groups/bulk-update', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(pendingGroups)
+        });
+        if (!res.ok) throw new Error("Groups sync failed");
+      }
+
+      // Sync Joins
+      if (pendingJoins.length > 0) {
+        const res = await fetch('/api/events', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(pendingJoins)
+        });
+        if (!res.ok) throw new Error("Joins sync failed");
+      }
+
+      setPendingGroups([]);
+      setPendingJoins([]);
+      setSyncStatus('connected');
+      setLastSyncTime(new Date());
+      showNotification("Database updated successfully!", 'success');
+    } catch (err: any) {
+      console.error("Manual sync error:", err);
+      showNotification(`Update failed: ${err.message}`, 'alert');
+    } finally {
+      setIsSyncingToDb(false);
+    }
+  };
+
   const syncAllGroupsMemberCount = async (currentToken: string, groupsToSync?: TelegramGroup[]) => {
     const targetGroups = groupsToSync || groups;
     if (targetGroups.length === 0) return;
     
     try {
-      const updatedGroups = await Promise.all(targetGroups.map(async (g) => {
+      const updatedGroups: TelegramGroup[] = [];
+      const groupsToPending: TelegramGroup[] = [];
+
+      await Promise.all(targetGroups.map(async (g) => {
         try {
           const count = await getChatMemberCount(currentToken, g.id);
           if (count !== g.memberCount) {
             const updatedGroup = { ...g, memberCount: count };
-            // Persist to backend
-            await fetch('/api/groups', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(updatedGroup)
-            });
-            return updatedGroup;
+            updatedGroups.push(updatedGroup);
+            groupsToPending.push(updatedGroup);
+          } else {
+            updatedGroups.push(g);
           }
-          return g;
         } catch (e) {
-          return g;
+          updatedGroups.push(g);
         }
       }));
-      setGroups(updatedGroups);
+
+      // Update local state
+      setGroups(prev => {
+        const newGroups = [...prev];
+        updatedGroups.forEach(ug => {
+          const idx = newGroups.findIndex(g => g.id === ug.id);
+          if (idx !== -1) newGroups[idx] = ug;
+        });
+        return newGroups;
+      });
+
+      // Queue for manual sync
+      if (groupsToPending.length > 0) {
+        setPendingGroups(prev => {
+          const combined = [...prev];
+          groupsToPending.forEach(pg => {
+            const idx = combined.findIndex(g => g.id === pg.id);
+            if (idx !== -1) combined[idx] = pg;
+            else combined.push(pg);
+          });
+          return combined;
+        });
+      }
+
+      showNotification(`Bot injection check complete: ${groupsToPending.length} groups updated locally.`, 'success');
     } catch (e) {
       console.error("Global sync failed", e);
     }
@@ -783,50 +855,54 @@ const App: React.FC = () => {
   const handleAddGroupManual = async () => {
     if (!token || !newChatId) return;
 
-    const normalizedId = newChatId.startsWith('-100') ? newChatId : `-100${newChatId.replace(/^-/, '')}`;
-    if (groups.some(g => g.id === newChatId || g.id === normalizedId)) {
-      alert("This batch is already injected!");
-      setNewChatId('');
-      return;
-    }
+    const ids = newChatId.split(/[,\s]+/).map(s => s.trim()).filter(Boolean);
+    if (ids.length === 0) return;
 
     setIsAddingGroup(true);
-    try {
-      const chat = await getChatDetails(token, newChatId);
-      const count = await getChatMemberCount(token, newChatId);
-      const newGroup: TelegramGroup = {
-        id: chat.id.toString(),
-        name: chat.title,
-        memberCount: count,
-        description: chat.description || 'Synced Hub',
-        category: 'Telegram',
-        image: `https://picsum.photos/seed/${chat.id}/200`,
-        lastInteraction: Date.now()
-      };
-      
-      // Update local state immediately (Offline First)
-      setGroups(prev => [newGroup, ...prev.filter(g => g.id !== newGroup.id)]);
-      setNewChatId('');
-      
-      // Attempt sync
-      try {
-        const res = await fetch('/api/groups', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(newGroup)
-        });
-        if (!res.ok) throw new Error("Sync failed");
-      } catch (e) {
-        console.warn("Background sync failed, added to queue", e);
-        setPendingGroups(prev => [...prev.filter(g => g.id !== newGroup.id), newGroup]);
+    let successCount = 0;
+    let failCount = 0;
+    const newDiscovered: TelegramGroup[] = [];
+
+    for (const rawId of ids) {
+      const normalizedId = rawId.startsWith('-100') ? rawId : `-100${rawId.replace(/^-/, '')}`;
+      if (groups.some(g => g.id === rawId || g.id === normalizedId)) {
+        continue;
       }
 
-      alert("Batch successfully injected! (Saved locally)");
-    } catch (err: any) { 
-      alert(err.message); 
-    } finally { 
-      setIsAddingGroup(false); 
+      try {
+        const chat = await getChatDetails(token, rawId);
+        const count = await getChatMemberCount(token, rawId);
+        const newGroup: TelegramGroup = {
+          id: chat.id.toString(),
+          name: chat.title,
+          memberCount: count,
+          description: chat.description || 'Synced Hub',
+          category: 'Telegram',
+          image: `https://picsum.photos/seed/${chat.id}/200`,
+          lastInteraction: Date.now()
+        };
+        newDiscovered.push(newGroup);
+        successCount++;
+      } catch (err: any) { 
+        console.warn(`Failed to inject group ${rawId}:`, err);
+        failCount++;
+      }
     }
+
+    if (newDiscovered.length > 0) {
+      setGroups(prev => [...newDiscovered, ...prev]);
+      setPendingGroups(prev => [...prev, ...newDiscovered]);
+      showNotification(`${successCount} batches successfully injected! (Saved locally).`, 'success');
+    }
+
+    if (failCount > 0 && successCount === 0) {
+      showNotification(`Injection failed for all ${failCount} IDs. Check token/permissions.`, 'alert');
+    } else if (failCount > 0) {
+      showNotification(`${failCount} IDs failed. Check token/permissions.`, 'info');
+    }
+
+    setNewChatId('');
+    setIsAddingGroup(false);
   };
 
   const discoverGroupsAndJoins = async (currentToken: string) => {
@@ -964,47 +1040,21 @@ const App: React.FC = () => {
             return newGroups;
           });
 
-          // Background sync
-          try {
-            const res = await fetch('/api/groups/bulk-update', {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(uniqueNewGroups)
+          // Queue for manual sync (Saving locally first)
+          setPendingGroups(prev => {
+            const combined = [...prev];
+            uniqueNewGroups.forEach(ng => {
+              if (!combined.some(p => p.id === ng.id)) combined.push(ng);
             });
-            if (!res.ok) throw new Error("Bulk sync failed");
-          } catch (e) {
-            console.warn("Bulk group sync failed, adding to queue", e);
-            setPendingGroups(prev => {
-              const combined = [...prev];
-              uniqueNewGroups.forEach(ng => {
-                if (!combined.some(p => p.id === ng.id)) combined.push(ng);
-              });
-              return combined;
-            });
-          }
+            return combined;
+          });
         }
       }
 
-      if (newJoins.length > 0 || pendingJoins.length > 0) {
-        const joinsToSave = [...pendingJoins, ...newJoins];
-        try {
-          const res = await fetch('/api/events', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(joinsToSave)
-          });
-          
-          if (res.ok) {
-            setPendingJoins([]);
-            setSyncStatus('connected');
-          } else {
-            throw new Error("Failed to save to DB");
-          }
-        } catch (err) {
-          console.error("Failed to save joins to DB, keeping in pending queue", err);
-          setPendingJoins(joinsToSave);
-          setSyncStatus('error');
-        }
+      if (newJoins.length > 0) {
+        // Queue for manual sync
+        setPendingJoins(prev => [...prev, ...newJoins]);
+      }
 
         if (newJoins.length > 0) {
           setJoinEvents(prev => {
@@ -1012,10 +1062,9 @@ const App: React.FC = () => {
             return combined.filter((v, i, a) => a.findIndex(t => t.userId === v.userId && t.timestamp === v.timestamp) === i).slice(0, 10000);
           });
         }
-      }
 
       if (Object.keys(memberChanges).length > 0 || Object.keys(titleChanges).length > 0) {
-        let updatedGroupsToSave: TelegramGroup[] = [];
+        const updatedGroupsToPending: TelegramGroup[] = [];
         setGroups(prevGroups => {
           const newGroups = prevGroups.map(g => {
             const hasMemberChange = memberChanges[g.id] !== undefined;
@@ -1029,18 +1078,24 @@ const App: React.FC = () => {
               if (hasTitleChange) {
                 updatedGroup.name = titleChanges[g.id];
               }
-              updatedGroupsToSave.push(updatedGroup);
+              updatedGroupsToPending.push(updatedGroup);
               return updatedGroup;
             }
             return g;
           });
           return newGroups;
         });
-        if (updatedGroupsToSave.length > 0) {
-          await fetch('/api/groups/bulk-update', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(updatedGroupsToSave)
+
+        // Queue for manual sync
+        if (updatedGroupsToPending.length > 0) {
+          setPendingGroups(prev => {
+            const combined = [...prev];
+            updatedGroupsToPending.forEach(pg => {
+              const idx = combined.findIndex(g => g.id === pg.id);
+              if (idx !== -1) combined[idx] = pg;
+              else combined.push(pg);
+            });
+            return combined;
           });
         }
       }
@@ -1090,7 +1145,7 @@ const App: React.FC = () => {
       fetch(`/api/events/${userId}/${timestamp}`, { method: 'DELETE' })
         .catch(e => console.warn("Failed to delete event from DB", e));
     } catch (err: any) { 
-      alert(`Operation failed: ${err.message}. Local data updated.`); 
+      showNotification(`Operation failed: ${err.message}. Local data updated.`, 'alert'); 
     }
   };
 
@@ -1147,8 +1202,8 @@ const App: React.FC = () => {
           setToken(data.token);
           handleVerify(data.token);
         }
-        alert('Data imported!');
-      } catch (err) { alert('Import failed.'); }
+        showNotification('Data imported!', 'success');
+      } catch (err) { showNotification('Import failed.', 'alert'); }
     };
     reader.readAsText(file);
     if (e.target) e.target.value = '';
@@ -1172,12 +1227,12 @@ const App: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, message: broadcastMessage }),
       });
-      alert("Broadcast successful!");
+      showNotification("Broadcast successful!", 'success');
       setBroadcastMessage('');
       const res = await fetch('/api/broadcast');
       if (res.ok) setBroadcasts(await res.json());
     } catch (err: any) {
-      alert(`Broadcast failed: ${err.message}`);
+      showNotification(`Broadcast failed: ${err.message}`, 'alert');
     }
   };
 
@@ -1189,11 +1244,11 @@ const App: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token }),
       });
-      alert("Broadcast deleted!");
+      showNotification("Broadcast deleted!", 'success');
       const res = await fetch('/api/broadcast');
       if (res.ok) setBroadcasts(await res.json());
     } catch (err: any) {
-      alert(`Delete failed: ${err.message}`);
+      showNotification(`Delete failed: ${err.message}`, 'alert');
     }
   };
 
@@ -1330,7 +1385,7 @@ const App: React.FC = () => {
                  <div className="flex flex-col sm:flex-row gap-3">
                    <input type="text" placeholder="Enter Telegram Chat ID (-100...)" className="flex-1 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 px-6 py-4 rounded-2xl text-xs font-mono outline-none focus:ring-4 focus:ring-blue-500/10 shadow-inner" value={newChatId} onChange={e => setNewChatId(e.target.value)} />
                    <button onClick={handleAddGroupManual} disabled={isAddingGroup || !newChatId} className="px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-xl shadow-blue-600/20 active:scale-95 disabled:opacity-50 transition-all">
-                     {isAddingGroup ? 'Connecting...' : 'Inject Batch'}
+                     {isAddingGroup ? 'Connecting...' : 'Inject Batch(es)'}
                    </button>
                  </div>
               </div>
@@ -1374,8 +1429,16 @@ const App: React.FC = () => {
                   )}
                 </div>
                 <div className="relative">
-                  <button onClick={() => setShowFilterMenu(!showFilterMenu)} className="p-3 bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm hover:bg-slate-100 dark:hover:bg-slate-800 transition-all">
-                    <Icons.Filter size={18} className="text-slate-600 dark:text-slate-400" />
+                  <button 
+                    onClick={() => setShowFilterMenu(!showFilterMenu)} 
+                    className={`flex items-center gap-2 p-3 ${filterOption !== 'recent' ? 'bg-blue-600 text-white border-blue-500' : 'bg-white dark:bg-slate-900/50 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400'} border rounded-2xl shadow-sm hover:brightness-110 transition-all`}
+                  >
+                    <Icons.Filter size={18} />
+                    {filterOption !== 'recent' && (
+                      <span className="text-[10px] font-black uppercase tracking-widest hidden sm:inline">
+                        {filterOption.replace(/([A-Z])/g, ' $1')}
+                      </span>
+                    )}
                   </button>
                   {showFilterMenu && (
                     <div className="absolute right-0 top-full mt-2 w-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl z-20 py-2">
@@ -1745,6 +1808,36 @@ const App: React.FC = () => {
                       <button onClick={() => setIsLocked(!isLocked)} className="px-6 py-4 bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-2xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all">{isLocked ? 'Unlock' : 'Lock'}</button>
                     </div>
 
+                    <div className="mb-6 p-4 bg-blue-500/10 border border-blue-500/20 rounded-2xl">
+                      <div className="flex items-center justify-between mb-3">
+                        <div>
+                          <p className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest">Pending Sync</p>
+                          <p className="text-xs font-bold text-slate-500">{pendingGroups.length} Batches, {pendingJoins.length} Joins</p>
+                        </div>
+                        {isSyncingToDb ? <Icons.Refresh className="animate-spin text-blue-500" size={20} /> : <Icons.Database className="text-blue-500" size={20} />}
+                      </div>
+                      <button 
+                        onClick={syncDataToDatabase}
+                        disabled={isSyncingToDb || (pendingGroups.length === 0 && pendingJoins.length === 0)}
+                        className="w-full py-3 bg-blue-600 text-white font-black uppercase text-[10px] tracking-widest rounded-xl shadow-lg hover:bg-blue-500 active:scale-95 transition-all disabled:opacity-50 disabled:grayscale"
+                      >
+                        {isSyncingToDb ? 'Updating Database...' : 'Update To Database'}
+                      </button>
+                    </div>
+
+                    <div className="mb-6 bg-emerald-500/5 dark:bg-emerald-500/10 p-6 rounded-[2rem] border border-emerald-500/20">
+                      <h4 className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-[0.2em] mb-3 flex items-center gap-2">
+                        <Icons.Search size={14} /> Auto-Discovery Help
+                      </h4>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed font-bold">
+                        Bot auto-detects existing groups if someone sends a message. 
+                        To force discovery: 
+                        <br/><span className="text-emerald-500">1. Go to Group</span>
+                        <br/><span className="text-emerald-500">2. Type /start or any message</span>
+                        <br/><span className="text-slate-500">3. App will auto-inject the batch!</span>
+                      </p>
+                    </div>
+
                     <div className="grid grid-cols-2 gap-3 border-t border-slate-200 dark:border-slate-800 pt-6">
                       <button onClick={handleExport} className="flex flex-col items-center justify-center gap-2 p-5 bg-blue-600 text-white rounded-2xl shadow-lg active:scale-95 transition-all">
                         <Icons.DownloadCloud size={20} />
@@ -1782,6 +1875,23 @@ const App: React.FC = () => {
           onConfirm={confirmationModalConfig.onConfirm}
           onClose={() => setConfirmationModalConfig(prev => ({ ...prev, isOpen: false }))}
         />
+      )}
+
+      {notification && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[100] w-max max-w-[90vw] animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <div className={`px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 border backdrop-blur-md ${
+            notification.type === 'success' 
+              ? 'bg-emerald-500/90 border-emerald-400 text-white' 
+              : notification.type === 'alert'
+              ? 'bg-rose-500/90 border-rose-400 text-white'
+              : 'bg-indigo-600/90 border-indigo-500 text-white'
+          }`}>
+            {notification.type === 'success' && <Icons.CheckCircle size={18} />}
+            {notification.type === 'alert' && <Icons.AlertCircle size={18} />}
+            {notification.type === 'info' && <Icons.Info size={18} />}
+            <span className="text-xs font-black uppercase tracking-widest">{notification.message}</span>
+          </div>
+        </div>
       )}
     </div>
   );

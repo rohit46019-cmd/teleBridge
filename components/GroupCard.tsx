@@ -86,15 +86,15 @@ const GroupCard: React.FC<GroupCardProps> = ({ group, onClick, onTogglePin }) =>
 
       <button 
         onClick={(e) => onTogglePin(e, group.id)} 
-        className={`absolute top-2 right-2 p-1.5 rounded-lg transition-all shadow-sm z-20 border 
+        className={`absolute top-2 left-2 p-1 rounded-lg transition-all shadow-md z-20 border backdrop-blur-md
           ${group.pinned 
             ? 'bg-amber-400 text-white border-amber-300 scale-110 rotate-12' 
-            : 'bg-white/80 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-400 hover:text-blue-500'}`}
+            : 'bg-white/90 dark:bg-slate-800/90 border-slate-200 dark:border-slate-700 text-slate-400 hover:text-blue-500'}`}
       >
-         <span className="text-[10px] leading-none">{group.pinned ? '📌' : '📍'}</span>
+         <span className="text-[9px] leading-none">{group.pinned ? '📌' : '📍'}</span>
       </button>
 
-      <div className="flex items-center gap-4 relative z-10 flex-1 min-w-0">
+      <div className="flex items-center gap-4 relative z-10 flex-1 min-w-0 ml-4">
         <div className="relative">
           <div className={`absolute inset-0 blur-lg opacity-40 group-hover:opacity-60 transition-opacity duration-500 rounded-xl ${theme.accent}`} />
           <div className="w-12 h-12 rounded-xl overflow-hidden bg-slate-200 dark:bg-slate-800 flex-shrink-0 group-hover:scale-110 transition-transform duration-500 border-2 border-white/20 shadow-xl relative z-10">
@@ -123,7 +123,7 @@ const GroupCard: React.FC<GroupCardProps> = ({ group, onClick, onTogglePin }) =>
         </div>
       </div>
 
-      <div className="flex items-center gap-3 relative z-10 ml-2 mr-8">
+      <div className="flex items-center gap-3 relative z-10 ml-2">
         <button 
           onClick={copyId} 
           className="hidden md:flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-white dark:hover:bg-slate-700 rounded-xl transition-all border border-slate-200 dark:border-slate-700 group/copy"

@@ -139,7 +139,7 @@ const InviteModal: React.FC<InviteModalProps> = ({ group, onClose, botToken, onI
             </button>
             <button 
               onClick={copyToClipboard}
-              className={`flex-1 py-3.5 rounded-xl text-sm font-bold transition-all active:scale-95 border ${copied ? 'bg-emerald-500 text-white border-emerald-500 shadow-lg shadow-emerald-500/25' : 'bg-white/5 border-white/10 text-slate-700 dark:text-slate-200 hover:bg-white/10'}`}
+              className={`flex-1 py-3.5 rounded-xl text-sm font-bold transition-all active:scale-95 border ${copied ? 'bg-emerald-500 text-white border-emerald-500 shadow-xl shadow-emerald-500/20' : 'bg-indigo-50 dark:bg-indigo-500/10 border-indigo-200 dark:border-indigo-500/20 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-500/20'}`}
             >
               {copied ? 'Copied' : 'Duplicate'}
             </button>

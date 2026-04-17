@@ -13,8 +13,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, theme, toggle
     { id: 'dashboard', label: 'Overview', icon: Icons.Home, color: 'text-blue-500' },
     { id: 'groups', label: 'Hubs', icon: Icons.Users, color: 'text-indigo-500' },
     { id: 'analysis', label: 'Audit', icon: Icons.Activity, color: 'text-emerald-500' },
-    { id: 'settings', label: 'Nodes', icon: Icons.Settings, color: 'text-purple-500' },
-    { id: 'debug', label: 'Debug', icon: Icons.RefreshCw, color: 'text-amber-500' },
+    { id: 'settings', label: 'Settings', icon: Icons.Settings, color: 'text-purple-500' },
   ];
 
   return (
@@ -67,12 +66,12 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, theme, toggle
           <button
             key={item.id}
             onClick={() => onTabChange(item.id)}
-            className={`flex flex-col items-center gap-1 px-2 py-1.5 rounded-xl transition-all active:scale-90 relative ${
-              activeTab === item.id ? `${item.color}` : 'text-slate-400'
+            className={`flex flex-col items-center gap-1.5 px-4 py-2 rounded-2xl transition-all active:scale-95 relative ${
+              activeTab === item.id ? `${item.color} bg-slate-100 dark:bg-slate-800/50 shadow-inner` : 'text-slate-500'
             }`}
           >
-            <item.icon size={18} strokeWidth={activeTab === item.id ? 2.5 : 2} />
-            <span className={`text-[8px] font-black uppercase tracking-tighter ${activeTab === item.id ? 'opacity-100' : 'opacity-60'}`}>
+            <item.icon size={20} strokeWidth={activeTab === item.id ? 2.5 : 1.5} />
+            <span className={`text-[10px] font-black uppercase tracking-widest ${activeTab === item.id ? 'opacity-100' : 'opacity-40'}`}>
               {item.label}
             </span>
           </button>
