@@ -9,6 +9,7 @@ export interface TelegramGroup {
   lastInteraction?: number; // Timestamp of last usage
   interactionCount?: number;
   pinned?: boolean;
+  createdAt?: number;
 }
 
 export interface JoinEvent {

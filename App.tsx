@@ -5,7 +5,7 @@ import InviteModal from './components/InviteModal.tsx';
 import ConfirmationModal from './components/ConfirmationModal.tsx';
 import { Icons } from './constants.tsx';
 import { TelegramGroup, JoinEvent } from './types.ts';
-import { verifyBotToken, getChatDetails, TelegramBotInfo, getChatMemberCount, getRecentUpdates, kickChatMember } from './services/telegramService.ts';
+import { verifyBotToken, getChatDetails, TelegramBotInfo, getChatMemberCount, getRecentUpdates, kickChatMember, banMember } from './services/telegramService.ts';
 import { 
   AreaChart, 
   Area, 
@@ -176,7 +176,7 @@ const App: React.FC = () => {
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [showRecentSearches, setShowRecentSearches] = useState(false);
-  const [filterOption, setFilterOption] = useState<'mostMembers' | 'leastMembers' | 'frequent' | 'recent'>('recent');
+  const [filterOption, setFilterOption] = useState<'mostMembers' | 'leastMembers' | 'frequent' | 'recent' | 'newAdded' | 'activeToday'>('recent');
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toLocaleDateString('en-CA'));
   const [updates, setUpdates] = useState<any[]>([]);
@@ -879,7 +879,8 @@ const App: React.FC = () => {
           description: chat.description || 'Synced Hub',
           category: 'Telegram',
           image: `https://picsum.photos/seed/${chat.id}/200`,
-          lastInteraction: Date.now()
+          lastInteraction: Date.now(),
+          createdAt: Date.now()
         };
         newDiscovered.push(newGroup);
         successCount++;
@@ -942,7 +943,8 @@ const App: React.FC = () => {
               description: chat.description || 'Auto Discovered Hub',
               category: 'Telegram',
               image: `https://picsum.photos/seed/${chat.id}/200`,
-              lastInteraction: Date.now()
+              lastInteraction: Date.now(),
+              createdAt: Date.now()
             });
           }
         }
@@ -960,7 +962,8 @@ const App: React.FC = () => {
                 description: chat.description || 'Auto Discovered Hub',
                 category: 'Telegram',
                 image: `https://picsum.photos/seed/${chat.id}/200`,
-                lastInteraction: Date.now()
+                lastInteraction: Date.now(),
+                createdAt: Date.now()
               });
             }
           }
@@ -1120,8 +1123,17 @@ const App: React.FC = () => {
     setConfirmationModalConfig({
       isOpen: true,
       title: `Confirm Removal`,
-      message: `Are you sure you want to remove ${joinEvent.userName} from ${joinEvent.chatTitle}? This action cannot be undone.`,
+      message: `Are you sure you want to remove ${joinEvent.userName} from ${joinEvent.chatTitle}? They will be able to rejoin if they have a valid link.`,
       onConfirm: () => handleExecuteKick(joinEvent.chatId, joinEvent.userId, `${joinEvent.userId}-${joinEvent.timestamp}`),
+    });
+  };
+
+  const handleRequestBan = (joinEvent: JoinEvent) => {
+    setConfirmationModalConfig({
+      isOpen: true,
+      title: `Confirm Permanent Ban`,
+      message: `Are you sure you want to permanently BAN ${joinEvent.userName} from ${joinEvent.chatTitle}? They will NOT be able to rejoin even with a valid link.`,
+      onConfirm: () => handleExecuteBan(joinEvent.chatId, joinEvent.userId, `${joinEvent.userId}-${joinEvent.timestamp}`),
     });
   };
 
@@ -1146,6 +1158,31 @@ const App: React.FC = () => {
         .catch(e => console.warn("Failed to delete event from DB", e));
     } catch (err: any) { 
       showNotification(`Operation failed: ${err.message}. Local data updated.`, 'alert'); 
+    }
+  };
+
+  const handleExecuteBan = async (chatId: number, userId: number, eventId: string) => {
+    setConfirmationModalConfig(prev => ({ ...prev, isOpen: false }));
+    if (!token) return;
+    
+    // Update local state immediately (Offline First)
+    setJoinEvents(prev => prev.filter(e => `${e.userId}-${e.timestamp}` !== eventId));
+    setGroups(prevGroups => prevGroups.map(g => {
+      if (g.id === chatId.toString()) {
+        return { ...g, memberCount: Math.max(0, (g.memberCount || 0) - 1) };
+      }
+      return g;
+    }));
+
+    try {
+      await banMember(token, chatId, userId);
+      const timestamp = eventId.split('-')[1];
+      // Background sync for DB
+      fetch(`/api/events/${userId}/${timestamp}`, { method: 'DELETE' })
+        .catch(e => console.warn("Failed to delete event from DB", e));
+      showNotification("User banned permanently.", 'success');
+    } catch (err: any) { 
+      showNotification(`Ban failed: ${err.message}. Local data updated.`, 'alert'); 
     }
   };
 
@@ -1269,10 +1306,22 @@ const App: React.FC = () => {
     let filtered = groups
       .filter(g => {
         const normalizedName = normalizeText(g.name);
+        const normalizedDesc = normalizeText(g.description || '');
         const normalizedQuery = normalizeText(debouncedSearchQuery);
-        return normalizedName.includes(normalizedQuery) || g.id.includes(debouncedSearchQuery);
+        return normalizedName.includes(normalizedQuery) || 
+               normalizedDesc.includes(normalizedQuery) ||
+               g.id.includes(debouncedSearchQuery);
       });
     
+    if (filterOption === 'activeToday') {
+      const today = new Date().toLocaleDateString('en-CA');
+      const activeIds = new Set(joinEvents
+        .filter(e => new Date(e.timestamp).toLocaleDateString('en-CA') === today)
+        .map(e => e.chatId.toString())
+      );
+      filtered = filtered.filter(g => activeIds.has(g.id));
+    }
+
     switch (filterOption) {
       case 'mostMembers':
         filtered.sort((a, b) => (b.memberCount || 0) - (a.memberCount || 0));
@@ -1285,6 +1334,9 @@ const App: React.FC = () => {
         break;
       case 'recent':
         filtered.sort((a, b) => (b.lastInteraction || 0) - (a.lastInteraction || 0));
+        break;
+      case 'newAdded':
+        filtered.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
         break;
     }
     filtered.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
@@ -1445,10 +1497,23 @@ const App: React.FC = () => {
                     )}
                   </button>
                   {showFilterMenu && (
-                    <div className="absolute right-0 top-full mt-2 w-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl z-20 py-2">
-                      {['recent', 'frequent', 'mostMembers', 'leastMembers'].map(option => (
-                        <button key={option} onClick={() => { setFilterOption(option as any); setShowFilterMenu(false); }} className={`w-full text-left px-4 py-2 text-xs font-bold capitalize ${filterOption === option ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'text-slate-600 dark:text-slate-400'}`}>
-                          {option.replace(/([A-Z])/g, ' $1')}
+                    <div className="absolute right-0 top-full mt-2 w-56 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl z-20 py-2 overflow-hidden">
+                      <p className="px-4 py-1 text-[9px] font-black text-slate-400 uppercase tracking-widest bg-slate-50 dark:bg-slate-800/50 mb-1">Sort & Filter</p>
+                      {[
+                        { id: 'recent', label: 'Last Active', icon: <Icons.Zap size={12} /> },
+                        { id: 'newAdded', label: 'Newly Added', icon: <Icons.PlusCircle size={12} /> },
+                        { id: 'activeToday', label: 'Active Today', icon: <Icons.Activity size={12} /> },
+                        { id: 'frequent', label: 'Most Frequent', icon: <Icons.BarChart size={12} /> },
+                        { id: 'mostMembers', label: 'Biggest Community', icon: <Icons.Users size={12} /> },
+                        { id: 'leastMembers', label: 'Smallest Community', icon: <Icons.User size={12} /> },
+                      ].map(opt => (
+                        <button 
+                          key={opt.id} 
+                          onClick={() => { setFilterOption(opt.id as any); setShowFilterMenu(false); }} 
+                          className={`w-full text-left px-4 py-2.5 text-xs font-bold flex items-center gap-3 transition-colors ${filterOption === opt.id ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}
+                        >
+                          <span className={filterOption === opt.id ? 'text-blue-600' : 'text-slate-400'}>{opt.icon}</span>
+                          {opt.label}
                         </button>
                       ))}
                     </div>
@@ -1514,7 +1579,14 @@ const App: React.FC = () => {
                             <td className="px-1 py-2 text-[8px] font-bold text-slate-500 truncate max-w-[80px]">{e.chatTitle.substring(0, 12)}</td>
                             <td className="px-1 py-2 text-[8px] font-mono text-slate-400">{formatTime12h(e.timestamp).replace(' ', '')}</td>
                             <td className="px-1 py-2 text-right">
-                              <button onClick={() => handleRequestKick(e)} className="p-0.5 text-rose-500 hover:bg-rose-500 hover:text-white rounded-md transition-all"><Icons.Trash size={12}/></button>
+                              <div className="flex justify-end gap-1">
+                                <button onClick={() => handleRequestKick(e)} title="Kick Member" className="p-0.5 text-orange-500 hover:bg-orange-500 hover:text-white rounded-md transition-all">
+                                  <Icons.Trash size={12}/>
+                                </button>
+                                <button onClick={() => handleRequestBan(e)} title="Permanent Ban" className="p-0.5 text-rose-600 hover:bg-rose-600 hover:text-white rounded-md transition-all">
+                                  <Icons.Ban size={12}/>
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         ))}

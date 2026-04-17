@@ -102,6 +102,14 @@ export async function kickChatMember(token: string, chatId: string | number, use
   return true;
 }
 
+export async function banMember(token: string, chatId: string | number, userId: number): Promise<boolean> {
+  // Only ban, no unban. This prevents re-joining.
+  const response = await fetchWithTimeout(`${BASE_URL}${token}/banChatMember?chat_id=${chatId}&user_id=${userId}`);
+  const data = await response.json();
+  if (!data.ok) throw new Error(data.description || 'Failed to ban member');
+  return true;
+}
+
 export async function sendMessage(token: string, chatId: string | number, text: string): Promise<boolean> {
   const response = await fetchWithTimeout(`${BASE_URL}${token}/sendMessage?chat_id=${chatId}&text=${encodeURIComponent(text)}`);
   const data = await response.json();
