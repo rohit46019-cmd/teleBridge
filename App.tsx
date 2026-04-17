@@ -1239,11 +1239,15 @@ const App: React.FC = () => {
   const handleDeleteBroadcast = async (id: string) => {
     if (!token) return;
     try {
-      await fetch(`/api/broadcast/${id}`, {
+      const response = await fetch(`/api/broadcast/${id}?token=${encodeURIComponent(token)}`, {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token }),
       });
+      
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to delete');
+      }
+
       showNotification("Broadcast deleted!", 'success');
       const res = await fetch('/api/broadcast');
       if (res.ok) setBroadcasts(await res.json());

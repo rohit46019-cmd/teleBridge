@@ -373,15 +373,23 @@ async function startServer() {
 
   app.delete("/api/broadcast/:id", async (req, res) => {
     try {
-      const { token } = req.body;
+      const token = req.query.token || req.headers['x-bot-token'];
+      if (!token) {
+        return res.status(400).json({ error: "Bot token is required for deletion" });
+      }
+
       const broadcast = await (Broadcast as any).findById(req.params.id);
       if (!broadcast) {
         return res.status(404).json({ error: "Broadcast not found" });
       }
 
-      for (const item of broadcast.sentTo) {
+      for (const item of (broadcast.sentTo || [])) {
+        if (!item.chatId || !item.messageId) continue;
         try {
-          await fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${item.chatId}&message_id=${item.messageId}`);
+          // Add a small timeout to prevent hanging on one deletion
+          await fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${item.chatId}&message_id=${item.messageId}`, {
+            signal: AbortSignal.timeout(5000)
+          });
         } catch (err) {
           console.error(`Failed to delete message ${item.messageId} from ${item.chatId}`, err);
         }
