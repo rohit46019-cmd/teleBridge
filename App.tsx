@@ -1745,7 +1745,7 @@ const App: React.FC = () => {
 
               {settingsSubTab === 'config' && (
                 <div className="space-y-6">
-                  <div className="bg-indigo-700/10 p-8 rounded-[3rem] border-2 border-indigo-500/20 shadow-xl">
+                  <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-[2rem] shadow-sm">
                     <h3 className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-[0.4em] mb-6 flex items-center gap-2">
                       <Icons.Zap size={14} /> Bot Gateway
                     </h3>
@@ -1839,13 +1839,13 @@ const App: React.FC = () => {
                     </div>
 
                     <div className="grid grid-cols-2 gap-3 border-t border-slate-200 dark:border-slate-800 pt-6">
-                      <button onClick={handleExport} className="flex flex-col items-center justify-center gap-2 p-5 bg-blue-600 text-white rounded-2xl shadow-lg active:scale-95 transition-all">
+                      <button onClick={handleExport} className="flex flex-col items-center justify-center gap-2 p-5 bg-indigo-600 text-white rounded-2xl shadow-lg active:scale-95 transition-all">
                         <Icons.DownloadCloud size={20} />
-                        <span className="text-[10px] font-black uppercase tracking-widest">Export Data</span>
+                        <span className="text-[10px] font-black uppercase tracking-widest">Export</span>
                       </button>
                       <button onClick={handleShareApp} className="flex flex-col items-center justify-center gap-2 p-5 bg-purple-600 text-white rounded-2xl shadow-lg active:scale-95 transition-all">
                         <Icons.Share2 size={20} />
-                        <span className="text-[10px] font-black uppercase tracking-widest">Share App</span>
+                        <span className="text-[10px] font-black uppercase tracking-widest">Share</span>
                       </button>
                     </div>
 
