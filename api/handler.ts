@@ -334,30 +334,46 @@ app.post("/api/webhook/:token", async (req, res) => {
 
         // Auto Welcome logic
         if (autoWelcome) {
-          for (const member of new_chat_members) {
-            if (member.is_bot) continue; // Skip welcoming other bots
-            
-            const userName = member.first_name || 'Member';
-            const text = `Welcome <a href="tg://user?id=${member.id}">${userName}</a> to the group! 🎉`;
-            
-            activeTasks.push(
-              fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ chat_id: chat.id, text, parse_mode: 'HTML' })
-              })
-              .then(res => res.json())
-              .then(data => {
-                if (data.ok && data.result) {
-                   setTimeout(() => {
-                     fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${chat.id}&message_id=${data.result.message_id}`)
-                       .catch(err => console.error(`[Webhook] Welcome delete error:`, err))
-                   }, 15000);
-                }
-              })
-              .catch(err => console.error(`[Webhook] Welcome message send error:`, err))
-            );
-          }
+          activeTasks.push(
+            (async () => {
+               const sentMessages: number[] = [];
+               
+               // First send all welcome messages
+               for (const member of new_chat_members) {
+                 if (member.is_bot) continue;
+                 
+                 const userName = member.first_name || 'Member';
+                 const text = `Welcome <a href="tg://user?id=${member.id}">${userName}</a> to the group! 🎉`;
+                 
+                 try {
+                   const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+                     method: 'POST',
+                     headers: { 'Content-Type': 'application/json' },
+                     body: JSON.stringify({ chat_id: chat.id, text, parse_mode: 'HTML' })
+                   });
+                   const data = await res.json();
+                   if (data.ok && data.result) {
+                     sentMessages.push(data.result.message_id);
+                   }
+                 } catch (err) {
+                   console.error(`[Webhook] Welcome message send error:`, err);
+                 }
+               }
+               
+               // If any were sent, hold the Vercel execution for 15 seconds, then delete them
+               if (sentMessages.length > 0) {
+                 await new Promise(resolve => setTimeout(resolve, 15000));
+                 
+                 for (const msgId of sentMessages) {
+                   try {
+                     await fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${chat.id}&message_id=${msgId}`);
+                   } catch (err) {
+                     console.error(`[Webhook] Welcome delete error:`, err);
+                   }
+                 }
+               }
+            })()
+          );
         }
       }
     }
