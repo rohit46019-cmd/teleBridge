@@ -20,6 +20,14 @@ export interface JoinEvent {
   timestamp: number;
 }
 
+export interface BannedUser {
+  userId: number;
+  userName: string;
+  chatId: number;
+  chatTitle: string;
+  timestamp: number;
+}
+
 export interface InviteLink {
   id: string;
   link: string;

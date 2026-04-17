@@ -4,8 +4,8 @@ import GroupCard from './components/GroupCard.tsx';
 import InviteModal from './components/InviteModal.tsx';
 import ConfirmationModal from './components/ConfirmationModal.tsx';
 import { Icons } from './constants.tsx';
-import { TelegramGroup, JoinEvent } from './types.ts';
-import { verifyBotToken, getChatDetails, TelegramBotInfo, getChatMemberCount, getRecentUpdates, kickChatMember, banMember } from './services/telegramService.ts';
+import { TelegramGroup, JoinEvent, BannedUser } from './types.ts';
+import { verifyBotToken, getChatDetails, TelegramBotInfo, getChatMemberCount, getRecentUpdates, kickChatMember, banMember, unbanMember } from './services/telegramService.ts';
 import { 
   AreaChart, 
   Area, 
@@ -179,6 +179,7 @@ const App: React.FC = () => {
   const [filterOption, setFilterOption] = useState<'mostMembers' | 'leastMembers' | 'frequent' | 'recent' | 'newAdded' | 'activeToday'>('recent');
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toLocaleDateString('en-CA'));
+  const [auditSubTab, setAuditSubTab] = useState<'audit' | 'blocked'>('audit');
   const [updates, setUpdates] = useState<any[]>([]);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const saved = localStorage.getItem('theme');
@@ -187,6 +188,15 @@ const App: React.FC = () => {
   });
   
   const [token, setToken] = useState(localStorage.getItem('tg_bot_token') || DEFAULT_TOKEN);
+  const [bannedUsers, setBannedUsers] = useState<BannedUser[]>(() => {
+    const saved = localStorage.getItem('tg_banned_users');
+    try {
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
   const [botInfo, setBotInfo] = useState<TelegramBotInfo | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
   const [isSyncingToDb, setIsSyncingToDb] = useState(false);
@@ -439,6 +449,10 @@ const App: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('tg_pending_groups', JSON.stringify(pendingGroups));
   }, [pendingGroups]);
+
+  useEffect(() => {
+    localStorage.setItem('tg_banned_users', JSON.stringify(bannedUsers));
+  }, [bannedUsers]);
 
   useEffect(() => {
     localStorage.setItem('tg_join_events', JSON.stringify(joinEvents));
@@ -739,6 +753,9 @@ const App: React.FC = () => {
     
     if (currentIndex !== newIndex) {
       setActiveTab(newTab);
+      if (newTab === 'analysis') {
+        setAuditSubTab('audit');
+      }
     }
   };
   
@@ -1176,13 +1193,37 @@ const App: React.FC = () => {
 
     try {
       await banMember(token, chatId, userId);
-      const timestamp = eventId.split('-')[1];
+      const timestamp = parseInt(eventId.split('-')[1]);
+      
+      // Add to banned users list
+      const event = joinEvents.find(e => `${e.userId}-${e.timestamp}` === eventId);
+      if (event) {
+        setBannedUsers(prev => [...prev, {
+          userId: event.userId,
+          userName: event.userName,
+          chatId: event.chatId,
+          chatTitle: event.chatTitle,
+          timestamp: Date.now()
+        }]);
+      }
+
       // Background sync for DB
       fetch(`/api/events/${userId}/${timestamp}`, { method: 'DELETE' })
         .catch(e => console.warn("Failed to delete event from DB", e));
       showNotification("User banned permanently.", 'success');
     } catch (err: any) { 
       showNotification(`Ban failed: ${err.message}. Local data updated.`, 'alert'); 
+    }
+  };
+
+  const handleUnban = async (banned: BannedUser) => {
+    if (!token) return;
+    try {
+      await unbanMember(token, banned.chatId, banned.userId);
+      setBannedUsers(prev => prev.filter(u => u.userId !== banned.userId || u.chatId !== banned.chatId));
+      showNotification(`User ${banned.userName} unbanned successfully.`, 'success');
+    } catch (err: any) {
+      showNotification(`Failed to unban: ${err.message}`, 'alert');
     }
   };
 
@@ -1259,15 +1300,23 @@ const App: React.FC = () => {
   const handleBroadcast = async () => {
     if (!broadcastMessage || !token) return;
     try {
-      await fetch('/api/broadcast', {
+      const response = await fetch('/api/broadcast', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, message: broadcastMessage }),
       });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({ error: `Server error (${response.status})` }));
+        throw new Error(data.error || 'Failed to broadcast');
+      }
+
       showNotification("Broadcast successful!", 'success');
       setBroadcastMessage('');
       const res = await fetch('/api/broadcast');
-      if (res.ok) setBroadcasts(await res.json());
+      if (res.ok) {
+        setBroadcasts(await res.json().catch(() => []));
+      }
     } catch (err: any) {
       showNotification(`Broadcast failed: ${err.message}`, 'alert');
     }
@@ -1281,13 +1330,31 @@ const App: React.FC = () => {
       });
       
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to delete');
+        let errorMessage = 'Failed to delete';
+        try {
+          const contentType = response.headers.get('content-type');
+          if (contentType && contentType.includes('application/json')) {
+            const data = await response.json();
+            errorMessage = data.error || errorMessage;
+          } else {
+            const text = await response.text();
+            errorMessage = text || `Server error (${response.status})`;
+          }
+        } catch (e) {
+          errorMessage = `Server error (${response.status})`;
+        }
+        throw new Error(errorMessage);
       }
 
       showNotification("Broadcast deleted!", 'success');
       const res = await fetch('/api/broadcast');
-      if (res.ok) setBroadcasts(await res.json());
+      if (res.ok) {
+        try {
+          setBroadcasts(await res.json());
+        } catch (e) {
+          console.error("Failed to parse broadcasts list", e);
+        }
+      }
     } catch (err: any) {
       showNotification(`Delete failed: ${err.message}`, 'alert');
     }
@@ -1538,64 +1605,144 @@ const App: React.FC = () => {
 
           {activeTab === 'analysis' && (
             <div className={`space-y-6 ${animationClass}`}>
-              <div className="flex flex-col md:flex-row gap-4">
-                 <div className="flex-1 bg-indigo-600 p-6 rounded-[2.5rem] border-b-4 border-indigo-900 shadow-xl text-white relative overflow-hidden active:scale-95 transition-transform">
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-1 opacity-80">Total Joined ({selectedDate})</p>
-                    <p className="text-4xl font-black">{filteredJoins.length}</p>
-                    <div className="absolute -right-4 -bottom-4 w-20 h-20 bg-white/5 rounded-full" />
-                 </div>
-                 <div className="flex-1 bg-rose-500 p-6 rounded-[2.5rem] border-b-4 border-rose-800 shadow-xl text-white relative overflow-hidden active:scale-95 transition-transform">
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-1 opacity-80">Live Audit</p>
-                    <p className="text-4xl font-black">{isScanning ? 'SYNCING...' : 'ACTIVE'}</p>
-                    <div className="absolute -right-4 -bottom-4 w-20 h-20 bg-white/5 rounded-full" />
-                 </div>
-                 <div className="bg-slate-900 p-6 rounded-[2.5rem] border-b-4 border-black shadow-xl flex flex-col justify-center min-w-[220px]">
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Window Selector</p>
-                    <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="bg-white/5 border-none text-white text-xs font-black uppercase outline-none rounded-xl p-2 w-full" />
-                 </div>
+              <div className="flex bg-slate-100 dark:bg-slate-800 p-1.5 rounded-[1.5rem] border border-slate-200 dark:border-slate-700 shadow-inner mb-6">
+                <button 
+                  onClick={() => setAuditSubTab('audit')}
+                  className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${auditSubTab === 'audit' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-lg scale-[1.02]' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                >
+                  <Icons.Activity size={14} /> Audit Log
+                </button>
+                <button 
+                  onClick={() => setAuditSubTab('blocked')}
+                  className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${auditSubTab === 'blocked' ? 'bg-white dark:bg-slate-700 text-rose-600 dark:text-rose-400 shadow-lg scale-[1.02]' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                >
+                  <Icons.Ban size={14} /> Block List
+                </button>
               </div>
 
-              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2.5rem] overflow-hidden shadow-2xl">
-                 <div className="overflow-y-auto max-h-[55vh] custom-scrollbar">
-                   <table className="w-full text-left">
-                      <thead className="sticky top-0 bg-slate-50 dark:bg-slate-950 backdrop-blur-md z-10">
-                        <tr>
-                          <th className="px-1 py-2 text-[8px] font-black text-slate-400 uppercase tracking-widest text-center">SL</th>
-                          <th className="px-1 py-2 text-[8px] font-black text-slate-400 uppercase tracking-widest">Identity</th>
-                          <th className="px-1 py-2 text-[8px] font-black text-slate-400 uppercase tracking-widest">Target</th>
-                          <th className="px-1 py-2 text-[8px] font-black text-slate-400 uppercase tracking-widest">Time</th>
-                          <th className="px-1 py-2 text-[8px] font-black text-slate-400 uppercase tracking-widest text-right">Action</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                        {filteredJoins.map((e, idx) => (
-                          <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
-                            <td className="px-1 py-2 text-[9px] font-mono text-slate-500 text-center">{idx + 1}</td>
-                            <td className="px-1 py-2">
-                               <div className={`inline-flex items-center px-1.5 py-0.5 rounded-full border ${ROW_COLORS[idx % ROW_COLORS.length]} font-black text-[8px] uppercase`}>
-                                 {e.userName.substring(0, 8)}
-                               </div>
-                            </td>
-                            <td className="px-1 py-2 text-[8px] font-bold text-slate-500 truncate max-w-[80px]">{e.chatTitle.substring(0, 12)}</td>
-                            <td className="px-1 py-2 text-[8px] font-mono text-slate-400">{formatTime12h(e.timestamp).replace(' ', '')}</td>
-                            <td className="px-1 py-2 text-right">
-                              <div className="flex justify-end gap-1">
-                                <button onClick={() => handleRequestKick(e)} title="Kick Member" className="p-0.5 text-orange-500 hover:bg-orange-500 hover:text-white rounded-md transition-all">
-                                  <Icons.Trash size={12}/>
-                                </button>
-                                <button onClick={() => handleRequestBan(e)} title="Permanent Ban" className="p-0.5 text-rose-600 hover:bg-rose-600 hover:text-white rounded-md transition-all">
-                                  <Icons.Ban size={12}/>
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                   </table>
-                 </div>
-              </div>
+              {auditSubTab === 'audit' ? (
+                <>
+                  <div className="flex flex-col md:flex-row gap-4">
+                     <div className="flex-1 bg-indigo-600 p-6 rounded-[2.5rem] border-b-4 border-indigo-900 shadow-xl text-white relative overflow-hidden active:scale-95 transition-transform">
+                        <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-1 opacity-80">Total Joined ({selectedDate})</p>
+                        <p className="text-4xl font-black">{filteredJoins.length}</p>
+                        <div className="absolute -right-4 -bottom-4 w-20 h-20 bg-white/5 rounded-full" />
+                     </div>
+                     <div className="flex-1 bg-rose-500 p-6 rounded-[2.5rem] border-b-4 border-rose-800 shadow-xl text-white relative overflow-hidden active:scale-95 transition-transform">
+                        <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-1 opacity-80">Live Audit</p>
+                        <p className="text-4xl font-black">{isScanning ? 'SYNCING...' : 'ACTIVE'}</p>
+                        <div className="absolute -right-4 -bottom-4 w-20 h-20 bg-white/5 rounded-full" />
+                     </div>
+                     <div className="bg-slate-900 p-6 rounded-[2.5rem] border-b-4 border-black shadow-xl flex flex-col justify-center min-w-[220px]">
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Window Selector</p>
+                        <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="bg-white/5 border-none text-white text-xs font-black uppercase outline-none rounded-xl p-2 w-full" />
+                     </div>
+                  </div>
+
+                  <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2.5rem] overflow-hidden shadow-2xl">
+                     <div className="overflow-y-auto max-h-[55vh] custom-scrollbar">
+                       <table className="w-full text-left">
+                          <thead className="sticky top-0 bg-slate-50 dark:bg-slate-950 backdrop-blur-md z-10">
+                            <tr>
+                              <th className="px-1 py-2 text-[8px] font-black text-slate-400 uppercase tracking-widest text-center">SL</th>
+                              <th className="px-1 py-2 text-[8px] font-black text-slate-400 uppercase tracking-widest">Identity</th>
+                              <th className="px-1 py-2 text-[8px] font-black text-slate-400 uppercase tracking-widest">Target</th>
+                              <th className="px-1 py-2 text-[8px] font-black text-slate-400 uppercase tracking-widest">Time</th>
+                              <th className="px-1 py-2 text-[8px] font-black text-slate-400 uppercase tracking-widest text-right">Action</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                            {filteredJoins.map((e, idx) => (
+                              <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                                <td className="px-1 py-2 text-[9px] font-mono text-slate-500 text-center">{idx + 1}</td>
+                                <td className="px-1 py-2">
+                                   <div className={`inline-flex items-center px-1.5 py-0.5 rounded-full border ${ROW_COLORS[idx % ROW_COLORS.length]} font-black text-[8px] uppercase`}>
+                                     {e.userName.substring(0, 8)}
+                                   </div>
+                                </td>
+                                <td className="px-1 py-2 text-[8px] font-bold text-slate-500 truncate max-w-[80px]">{e.chatTitle.substring(0, 12)}</td>
+                                <td className="px-1 py-2 text-[8px] font-mono text-slate-400">{formatTime12h(e.timestamp).replace(' ', '')}</td>
+                                <td className="px-1 py-2 text-right">
+                                  <div className="flex justify-end gap-1">
+                                    <button onClick={() => handleRequestKick(e)} title="Kick Member" className="p-0.5 text-orange-500 hover:bg-orange-500 hover:text-white rounded-md transition-all">
+                                      <Icons.Trash size={12}/>
+                                    </button>
+                                    <button onClick={() => handleRequestBan(e)} title="Permanent Ban" className="p-0.5 text-rose-600 hover:bg-rose-600 hover:text-white rounded-md transition-all">
+                                      <Icons.Ban size={12}/>
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                       </table>
+                     </div>
+                  </div>
+                </>
+              ) : (
+                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2.5rem] overflow-hidden shadow-xl border-b-8 border-slate-200 dark:border-slate-800">
+                    <div className="p-8 border-b border-slate-100 dark:divide-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+                      <h2 className="text-xl font-black uppercase tracking-tight">Block List</h2>
+                      <p className="text-xs font-bold text-slate-500 mt-1 uppercase tracking-widest">Managing permanently banned members</p>
+                    </div>
+                    
+                    <div className="p-0 overflow-x-auto max-h-[60vh]">
+                      {bannedUsers.length === 0 ? (
+                        <div className="p-12 text-center">
+                          <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-3xl flex items-center justify-center mx-auto mb-4">
+                             <Icons.CheckCircle className="text-slate-400" size={32} />
+                          </div>
+                          <h3 className="font-black text-slate-900 dark:text-white uppercase tracking-tight">No Banned Users</h3>
+                          <p className="text-xs font-bold text-slate-500 mt-1 uppercase tracking-widest">Everything is clean!</p>
+                        </div>
+                      ) : (
+                        <table className="w-full text-left">
+                          <thead className="sticky top-0 bg-slate-50 dark:bg-slate-950 backdrop-blur-md z-10">
+                            <tr>
+                              <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">User ID</th>
+                              <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Name</th>
+                              <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Chat</th>
+                              <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Banned At</th>
+                              <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Delete</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                            {bannedUsers.map((user, idx) => (
+                              <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                                <td className="px-6 py-4">
+                                  <span className="text-[10px] font-mono font-black text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-md">{user.userId}</span>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <div className="text-sm font-black text-slate-900 dark:text-white">{user.userName}</div>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <div className="text-xs font-bold text-blue-600 dark:text-blue-400">{user.chatTitle}</div>
+                                  <div className="text-[10px] font-mono text-slate-400 tracking-tighter">{user.chatId}</div>
+                                </td>
+                                <td className="px-6 py-4 text-xs font-bold text-slate-500">
+                                  {new Date(user.timestamp).toLocaleString('en-CA', { dateStyle: 'short', timeStyle: 'short' })}
+                                </td>
+                                <td className="px-6 py-4 text-right">
+                                  <button 
+                                    onClick={() => handleUnban(user)}
+                                    className="px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-rose-500/30 active:scale-95 transition-all flex items-center gap-2 ml-auto"
+                                  >
+                                    <Icons.X size={12} strokeWidth={3} />
+                                    Unban
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                </div>
+              )}
             </div>
           )}
+
+
 
           {activeTab === 'debug' && (
             <div className={`space-y-6 ${animationClass}`}>

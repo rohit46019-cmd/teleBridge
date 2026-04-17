@@ -383,20 +383,30 @@ async function startServer() {
         return res.status(404).json({ error: "Broadcast not found" });
       }
 
-      for (const item of (broadcast.sentTo || [])) {
-        if (!item.chatId || !item.messageId) continue;
-        try {
-          // Add a small timeout to prevent hanging on one deletion
-          await fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${item.chatId}&message_id=${item.messageId}`, {
-            signal: AbortSignal.timeout(5000)
-          });
-        } catch (err) {
-          console.error(`Failed to delete message ${item.messageId} from ${item.chatId}`, err);
-        }
+      // Delete from DB immediately to free up the request
+      await (Broadcast as any).findByIdAndDelete(req.params.id);
+
+      // Perform Telegram deletions in background to avoid Vercel/Cloud Run timeouts
+      if (broadcast.sentTo && broadcast.sentTo.length > 0) {
+        (async () => {
+          console.log(`[DeleteBroadcast] Starting background deletion of ${broadcast.sentTo.length} messages`);
+          // Use Promise.all with chunks or just map if the number is reasonable
+          // For now, map is fine as we don't await it here.
+          await Promise.allSettled(broadcast.sentTo.map(async (item: any) => {
+            if (!item.chatId || !item.messageId) return;
+            try {
+              await fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${item.chatId}&message_id=${item.messageId}`, {
+                signal: AbortSignal.timeout(5000)
+              });
+            } catch (err) {
+              // Ignore individual deletion errors
+            }
+          }));
+          console.log(`[DeleteBroadcast] Background deletion completed for ${req.params.id}`);
+        })().catch(err => console.error("Background deletion failed", err));
       }
 
-      await (Broadcast as any).findByIdAndDelete(req.params.id);
-      res.json({ success: true });
+      res.json({ success: true, message: "Broadcast deletion started in background" });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete broadcast" });
     }
