@@ -123,3 +123,14 @@ export async function sendMessage(token: string, chatId: string | number, text: 
   if (!data.ok) throw new Error(data.description || 'Failed to send message');
   return true;
 }
+
+export async function deleteMessage(token: string, chatId: string | number, messageId: number): Promise<boolean> {
+  try {
+    const response = await fetchWithTimeout(`${BASE_URL}${token}/deleteMessage?chat_id=${chatId}&message_id=${messageId}`);
+    const data = await response.json();
+    return data.ok;
+  } catch (error) {
+    console.warn(`Failed to delete message ${messageId} in ${chatId}:`, error);
+    return false;
+  }
+}

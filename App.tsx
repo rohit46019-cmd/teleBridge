@@ -5,7 +5,7 @@ import InviteModal from './components/InviteModal.tsx';
 import ConfirmationModal from './components/ConfirmationModal.tsx';
 import { Icons } from './constants.tsx';
 import { TelegramGroup, JoinEvent, BannedUser } from './types.ts';
-import { verifyBotToken, getChatDetails, TelegramBotInfo, getChatMemberCount, getRecentUpdates, kickChatMember, banMember, unbanMember } from './services/telegramService.ts';
+import { verifyBotToken, getChatDetails, TelegramBotInfo, getChatMemberCount, getRecentUpdates, kickChatMember, banMember, unbanMember, deleteMessage } from './services/telegramService.ts';
 import { 
   AreaChart, 
   Area, 
@@ -188,6 +188,9 @@ const App: React.FC = () => {
   });
   
   const [token, setToken] = useState(localStorage.getItem('tg_bot_token') || DEFAULT_TOKEN);
+  const [autoCleanServiceMessages, setAutoCleanServiceMessages] = useState(() => {
+    return localStorage.getItem('tg_auto_clean') === 'true';
+  });
   const [bannedUsers, setBannedUsers] = useState<BannedUser[]>(() => {
     const saved = localStorage.getItem('tg_banned_users');
     try {
@@ -441,6 +444,10 @@ const App: React.FC = () => {
     }, 300);
     return () => clearTimeout(timer);
   }, [searchQuery]);
+
+  useEffect(() => {
+    localStorage.setItem('tg_auto_clean', autoCleanServiceMessages.toString());
+  }, [autoCleanServiceMessages]);
 
   useEffect(() => {
     localStorage.setItem('tg_pending_joins', JSON.stringify(pendingJoins));
@@ -1014,6 +1021,11 @@ const App: React.FC = () => {
           const chatId = u.message.chat.id;
           const chatTitle = u.message.chat.title;
           const chatIdStr = chatId.toString();
+
+          // Auto-clean join messages if enabled
+          if (autoCleanServiceMessages) {
+            deleteMessage(currentToken, chatId, u.message.message_id).catch(() => {});
+          }
           
           u.message.new_chat_members.forEach((newUser: any) => {
             newJoins.push({
@@ -1029,7 +1041,13 @@ const App: React.FC = () => {
 
         if (u.message && u.message.left_chat_member) {
           const chatIdStr = u.message.chat.id.toString();
+          const chatId = u.message.chat.id;
           memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) - 1;
+
+          // Auto-clean leave messages if enabled
+          if (autoCleanServiceMessages) {
+            deleteMessage(currentToken, chatId, u.message.message_id).catch(() => {});
+          }
         }
 
         if (u.message && u.message.new_chat_title) {
@@ -1681,9 +1699,9 @@ const App: React.FC = () => {
                 </>
               ) : (
                 <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2.5rem] overflow-hidden shadow-xl border-b-8 border-slate-200 dark:border-slate-800">
-                    <div className="p-8 border-b border-slate-100 dark:divide-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
-                      <h2 className="text-xl font-black uppercase tracking-tight">Block List</h2>
-                      <p className="text-xs font-bold text-slate-500 mt-1 uppercase tracking-widest">Managing permanently banned members</p>
+                    <div className="p-4 border-b border-slate-100 dark:divide-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+                      <h2 className="text-lg font-black uppercase tracking-tight">Block List</h2>
+                      <p className="text-[10px] font-bold text-slate-500 mt-0.5 uppercase tracking-widest">Managing permanently banned members</p>
                     </div>
                     
                     <div className="p-0 overflow-x-auto max-h-[60vh]">
@@ -1699,36 +1717,37 @@ const App: React.FC = () => {
                         <table className="w-full text-left">
                           <thead className="sticky top-0 bg-slate-50 dark:bg-slate-950 backdrop-blur-md z-10">
                             <tr>
-                              <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">User ID</th>
-                              <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Name</th>
-                              <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Chat</th>
-                              <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Banned At</th>
-                              <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Delete</th>
+                              <th className="px-2 py-1.5 text-[8px] font-black text-slate-400 uppercase tracking-widest">User ID</th>
+                              <th className="px-2 py-1.5 text-[8px] font-black text-slate-400 uppercase tracking-widest">Name</th>
+                              <th className="px-2 py-1.5 text-[8px] font-black text-slate-400 uppercase tracking-widest">Chat</th>
+                              <th className="px-2 py-1.5 text-[8px] font-black text-slate-400 uppercase tracking-widest">Banned At</th>
+                              <th className="px-2 py-1.5 text-[8px] font-black text-slate-400 uppercase tracking-widest text-right">Delete</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                             {bannedUsers.map((user, idx) => (
                               <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
-                                <td className="px-6 py-4">
-                                  <span className="text-[10px] font-mono font-black text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-md">{user.userId}</span>
+                                <td className="px-2 py-1.5">
+                                  <span className="text-[8px] font-mono font-black text-slate-400 bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded">{user.userId}</span>
                                 </td>
-                                <td className="px-6 py-4">
-                                  <div className="text-sm font-black text-slate-900 dark:text-white">{user.userName}</div>
+                                <td className="px-2 py-1.5">
+                                  <div className="text-[9px] font-black text-slate-900 dark:text-white truncate max-w-[70px]">{user.userName}</div>
                                 </td>
-                                <td className="px-6 py-4">
-                                  <div className="text-xs font-bold text-blue-600 dark:text-blue-400">{user.chatTitle}</div>
-                                  <div className="text-[10px] font-mono text-slate-400 tracking-tighter">{user.chatId}</div>
+                                <td className="px-2 py-1.5">
+                                  <div className="text-[9px] font-bold text-blue-600 dark:text-blue-400 truncate max-w-[80px]">{user.chatTitle}</div>
+                                  <div className="text-[8px] font-mono text-slate-400 tracking-tighter opacity-70">{user.chatId}</div>
                                 </td>
-                                <td className="px-6 py-4 text-xs font-bold text-slate-500">
-                                  {new Date(user.timestamp).toLocaleString('en-CA', { dateStyle: 'short', timeStyle: 'short' })}
+                                <td className="px-2 py-1.5 text-[8px] font-bold text-slate-500 whitespace-nowrap">
+                                  {new Date(user.timestamp).toLocaleString('en-CA', { dateStyle: 'short', timeStyle: 'short' }).replace(',', '')}
                                 </td>
-                                <td className="px-6 py-4 text-right">
+                                <td className="px-2 py-1.5 text-right">
                                   <button 
                                     onClick={() => handleUnban(user)}
-                                    className="px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-rose-500/30 active:scale-95 transition-all flex items-center gap-2 ml-auto"
+                                    className="p-1.5 bg-rose-500 hover:bg-rose-600 text-white rounded-lg text-[8px] font-black uppercase tracking-tight shadow shadow-rose-500/30 active:scale-95 transition-all inline-flex items-center gap-1"
+                                    title="Unban User"
                                   >
-                                    <Icons.X size={12} strokeWidth={3} />
-                                    Unban
+                                    <Icons.X size={10} strokeWidth={3} />
+                                    <span className="hidden sm:inline">Unban</span>
                                   </button>
                                 </td>
                               </tr>
@@ -1972,6 +1991,30 @@ const App: React.FC = () => {
                     <h3 className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-[0.4em] mb-6 flex items-center gap-2">
                       <Icons.Zap size={14} /> Bot Gateway
                     </h3>
+                    
+                    <div className="mb-8 p-6 bg-white dark:bg-black/20 rounded-[2rem] border border-slate-200 dark:border-white/5">
+                      <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center justify-between">
+                        <span>Group Cleanup</span>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[8px] font-black ${autoCleanServiceMessages ? 'text-emerald-500' : 'text-slate-400'}`}>
+                            {autoCleanServiceMessages ? 'ACTIVE' : 'OFF'}
+                          </span>
+                          <button 
+                            onClick={() => setAutoCleanServiceMessages(!autoCleanServiceMessages)}
+                            className={`w-10 h-5 rounded-full transition-all relative ${autoCleanServiceMessages ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'}`}
+                          >
+                            <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${autoCleanServiceMessages ? 'left-6' : 'left-1'}`} />
+                          </button>
+                        </div>
+                      </h4>
+                      <div className="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-100 dark:border-slate-800">
+                        <p className="text-[10px] font-bold text-slate-600 dark:text-slate-400">
+                          <Icons.ShieldCheck size={14} className="inline mr-1 text-emerald-500" />
+                          Automatically delete "User Joined" and "User Left" service messages from groups. 
+                          Requires bot to have <span className="text-emerald-500 underline">Delete Messages</span> permissions.
+                        </p>
+                      </div>
+                    </div>
                     
                     <div className="mb-8 p-6 bg-white dark:bg-black/20 rounded-[2rem] border border-slate-200 dark:border-white/5">
                       <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2">

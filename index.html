@@ -18,6 +18,26 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <script>
+        // Suppress benign [vite] websocket errors in development environment
+        (function() {
+            const originalError = console.error;
+            const originalWarn = console.warn;
+            const filter = (msg) => {
+                if (typeof msg === 'string' && (msg.includes('[vite] failed to connect to websocket') || msg.includes('[vite] connection lost'))) {
+                    return true;
+                }
+                return false;
+            };
+            console.error = function() {
+                if (filter(arguments[0])) return;
+                originalError.apply(console, arguments);
+            };
+            console.warn = function() {
+                if (filter(arguments[0])) return;
+                originalWarn.apply(console, arguments);
+            };
+        })();
+
         tailwind.config = {
             darkMode: 'class',
             theme: {
