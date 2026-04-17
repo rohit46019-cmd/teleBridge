@@ -134,3 +134,17 @@ export async function deleteMessage(token: string, chatId: string | number, mess
     return false;
   }
 }
+
+export async function setWebhook(token: string, url: string): Promise<boolean> {
+  const response = await fetchWithTimeout(`${BASE_URL}${token}/setWebhook?url=${encodeURIComponent(url)}&allowed_updates=["message", "chat_member"]`);
+  const data = await response.json();
+  if (!data.ok) throw new Error(data.description || 'Failed to set webhook');
+  return true;
+}
+
+export async function deleteWebhook(token: string): Promise<boolean> {
+  const response = await fetchWithTimeout(`${BASE_URL}${token}/deleteWebhook`);
+  const data = await response.json();
+  if (!data.ok) throw new Error(data.description || 'Failed to delete webhook');
+  return true;
+}

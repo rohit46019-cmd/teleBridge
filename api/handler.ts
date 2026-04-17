@@ -264,4 +264,112 @@ app.delete("/api/broadcast/:id", async (req, res) => {
   }
 })
 
+// Webhook Handler for 24/7 Join/Leave Cleanup & Welcome
+app.post("/api/webhook/:token", async (req, res) => {
+  try {
+    const { token } = req.params
+    const autoWelcome = req.query.welcome === 'true'
+    // Also extracting auto clean query param if passed, defaulting to true to be safe
+    const autoClean = req.query.clean !== 'false'
+    const update = req.body
+
+    const activeTasks: Promise<any>[] = [];
+
+    // Handle service messages (join/leave)
+    if (update.message) {
+      const { message_id, chat, new_chat_members, left_chat_member } = update.message
+      
+      // Update Group registry
+      if (chat && (chat.type === 'group' || chat.type === 'supergroup')) {
+        activeTasks.push(
+          (Group as any).findOneAndUpdate(
+            { id: chat.id.toString() }, 
+            { 
+               id: chat.id.toString(), 
+               name: chat.title || 'Unknown Group',
+               $setOnInsert: { 
+                 category: 'Telegram',
+                 image: `https://picsum.photos/seed/${chat.id}/200`,
+                 lastInteraction: Date.now(),
+                 interactionCount: 0
+               }
+            }, 
+            { upsert: true }
+          ).exec().catch(() => {})
+        );
+      }
+
+      if ((new_chat_members || left_chat_member) && autoClean) {
+        console.log(`[Webhook] Service message detected in ${chat.id}. Deleting...`)
+        
+        // Asynchronously delete the service message
+        activeTasks.push(
+          fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${chat.id}&message_id=${message_id}`)
+            .catch(err => console.error(`[Webhook] Delete failed:`, err))
+        );
+      }
+
+      // Auto Welcome and DB Save
+      if (new_chat_members) {
+        
+        // Log joins to database
+        const eventsToSave: any[] = [];
+        new_chat_members.forEach((member: any) => {
+          eventsToSave.push({
+            userId: member.id,
+            userName: member.first_name + (member.last_name ? ` ${member.last_name}` : ''),
+            chatId: chat.id,
+            chatTitle: chat.title || 'Unknown Group',
+            timestamp: update.message.date ? update.message.date * 1000 : Date.now()
+          });
+        });
+
+        if (eventsToSave.length > 0) {
+          activeTasks.push(
+            Promise.all(eventsToSave.map(ev => 
+               (JoinEvent as any).findOneAndUpdate({ userId: ev.userId, timestamp: ev.timestamp }, ev, { upsert: true })
+            )).catch(err => console.error("Webhook DB Save Error:", err))
+          );
+        }
+
+        // Auto Welcome logic
+        if (autoWelcome) {
+          for (const member of new_chat_members) {
+            if (member.is_bot) continue; // Skip welcoming other bots
+            
+            const userName = member.first_name || 'Member';
+            const text = `Welcome <a href="tg://user?id=${member.id}">${userName}</a> to the group! 🎉`;
+            
+            activeTasks.push(
+              fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ chat_id: chat.id, text, parse_mode: 'HTML' })
+              })
+              .then(res => res.json())
+              .then(data => {
+                if (data.ok && data.result) {
+                   setTimeout(() => {
+                     fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${chat.id}&message_id=${data.result.message_id}`)
+                       .catch(err => console.error(`[Webhook] Welcome delete error:`, err))
+                   }, 15000);
+                }
+              })
+              .catch(err => console.error(`[Webhook] Welcome message send error:`, err))
+            );
+          }
+        }
+      }
+    }
+
+    // Await core tasks before responding, so Vercel doesn't kill the lambda
+    await Promise.allSettled(activeTasks);
+
+    res.status(200).send("OK")
+  } catch (error) {
+    console.error("[Webhook] Error:", error)
+    res.status(200).send("OK") // Always return 200 to Telegram
+  }
+})
+
 export default app

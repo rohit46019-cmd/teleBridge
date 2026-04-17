@@ -5,7 +5,7 @@ import InviteModal from './components/InviteModal.tsx';
 import ConfirmationModal from './components/ConfirmationModal.tsx';
 import { Icons } from './constants.tsx';
 import { TelegramGroup, JoinEvent, BannedUser } from './types.ts';
-import { verifyBotToken, getChatDetails, TelegramBotInfo, getChatMemberCount, getRecentUpdates, kickChatMember, banMember, unbanMember, deleteMessage } from './services/telegramService.ts';
+import { verifyBotToken, getChatDetails, TelegramBotInfo, getChatMemberCount, getRecentUpdates, kickChatMember, banMember, unbanMember, deleteMessage, setWebhook, deleteWebhook } from './services/telegramService.ts';
 import { 
   AreaChart, 
   Area, 
@@ -191,6 +191,9 @@ const App: React.FC = () => {
   const [autoCleanServiceMessages, setAutoCleanServiceMessages] = useState(() => {
     return localStorage.getItem('tg_auto_clean') === 'true';
   });
+  const [autoWelcome, setAutoWelcome] = useState(() => {
+    return localStorage.getItem('tg_auto_welcome') === 'true';
+  });
   const [bannedUsers, setBannedUsers] = useState<BannedUser[]>(() => {
     const saved = localStorage.getItem('tg_banned_users');
     try {
@@ -248,6 +251,10 @@ const App: React.FC = () => {
   });
   const [isAddingGroup, setIsAddingGroup] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
+  const [isProcessingWebhook, setIsProcessingWebhook] = useState(false);
+  const [webhookActive, setWebhookActive] = useState(() => {
+    return localStorage.getItem('tg_webhook_active') === 'true';
+  });
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
   const [syncStatus, setSyncStatus] = useState<'connected' | 'error' | 'syncing'>('syncing');
   const [dbError, setDbError] = useState<string | null>(null);
@@ -448,6 +455,14 @@ const App: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('tg_auto_clean', autoCleanServiceMessages.toString());
   }, [autoCleanServiceMessages]);
+
+  useEffect(() => {
+    localStorage.setItem('tg_auto_welcome', autoWelcome.toString());
+  }, [autoWelcome]);
+
+  useEffect(() => {
+    localStorage.setItem('tg_webhook_active', webhookActive.toString());
+  }, [webhookActive]);
 
   useEffect(() => {
     localStorage.setItem('tg_pending_joins', JSON.stringify(pendingJoins));
@@ -1035,6 +1050,25 @@ const App: React.FC = () => {
               chatTitle: chatTitle,
               timestamp: u.message.date ? u.message.date * 1000 : Date.now()
             });
+
+            // Frontend fallback for Auto-welcome if webhook is disabled
+            if (autoWelcome && !webhookActive && !newUser.is_bot) {
+              const userName = newUser.first_name || 'Member';
+              const text = `Welcome <a href="tg://user?id=${newUser.id}">${userName}</a> to the group! 🎉`;
+              fetch(`https://api.telegram.org/bot${currentToken}/sendMessage`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' })
+              })
+              .then(res => res.json())
+              .then(data => {
+                if (data.ok) {
+                  setTimeout(() => {
+                    deleteMessage(currentToken, chatId, data.result.message_id).catch(() => {});
+                  }, 15000);
+                }
+              }).catch(() => {});
+            }
           });
           memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) + u.message.new_chat_members.length;
         }
@@ -1141,6 +1175,11 @@ const App: React.FC = () => {
       setLastUpdateId(maxId);
       setLastSyncTime(new Date());
     } catch (e: any) {
+      if (e.message?.includes('Conflict')) {
+        console.log("Polling skipped: Webhook (24/7 background mode) is currently handling updates.");
+        return;
+      }
+
       const isNetworkError = e.message?.includes('timeout') || e.message?.includes('Failed to fetch') || e.message?.includes('NetworkError');
       
       if (isNetworkError) {
@@ -1150,7 +1189,6 @@ const App: React.FC = () => {
       } else {
         console.error("Discovery error:", e);
       }
-      if (e.message?.includes('Conflict')) throw e;
     } finally { setIsScanning(false); }
   };
 
@@ -1313,6 +1351,36 @@ const App: React.FC = () => {
     a.href = url;
     a.download = `telebridge-data-${selectedDate}.json`;
     a.click();
+  };
+
+  const handleSetWebhook = async () => {
+    if (!token) return;
+    setIsProcessingWebhook(true);
+    try {
+      const baseUrl = window.location.origin;
+      const webhookUrl = `${baseUrl}/api/webhook/${token}?welcome=${autoWelcome}&clean=${autoCleanServiceMessages}`;
+      await setWebhook(token, webhookUrl);
+      setWebhookActive(true);
+      showNotification("Webhook set! 24/7 background mode is now ACTIVE.", "success");
+    } catch (err: any) {
+      showNotification(`Failed to set webhook: ${err.message}`, "alert");
+    } finally {
+      setIsProcessingWebhook(false);
+    }
+  };
+
+  const handleDeleteWebhook = async () => {
+    if (!token) return;
+    setIsProcessingWebhook(true);
+    try {
+      await deleteWebhook(token);
+      setWebhookActive(false);
+      showNotification("Webhook disabled. Background cleanup is now OFF.", "info");
+    } catch (err: any) {
+      showNotification(`Failed to delete webhook: ${err.message}`, "alert");
+    } finally {
+      setIsProcessingWebhook(false);
+    }
   };
 
   const handleBroadcast = async () => {
@@ -1992,9 +2060,14 @@ const App: React.FC = () => {
                       <Icons.Zap size={14} /> Bot Gateway
                     </h3>
                     
-                    <div className="mb-8 p-6 bg-white dark:bg-black/20 rounded-[2rem] border border-slate-200 dark:border-white/5">
-                      <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center justify-between">
-                        <span>Group Cleanup</span>
+                    <div className="mb-8 p-6 bg-white dark:bg-black/20 rounded-[2rem] border border-slate-200 dark:border-white/5 space-y-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1 flex items-center justify-between">
+                            Group Cleanup
+                          </h4>
+                          <p className="text-[9px] text-slate-500 font-bold">Auto-delete Join/Leave messages</p>
+                        </div>
                         <div className="flex items-center gap-2">
                           <span className={`text-[8px] font-black ${autoCleanServiceMessages ? 'text-emerald-500' : 'text-slate-400'}`}>
                             {autoCleanServiceMessages ? 'ACTIVE' : 'OFF'}
@@ -2006,13 +2079,59 @@ const App: React.FC = () => {
                             <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${autoCleanServiceMessages ? 'left-6' : 'left-1'}`} />
                           </button>
                         </div>
-                      </h4>
-                      <div className="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-100 dark:border-slate-800">
+                      </div>
+
+                      <div className="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-800">
+                        <div>
+                          <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1 flex items-center justify-between">
+                            Group Welcome
+                          </h4>
+                          <p className="text-[9px] text-slate-500 font-bold">Tag user & delete after 15s</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[8px] font-black ${autoWelcome ? 'text-emerald-500' : 'text-slate-400'}`}>
+                            {autoWelcome ? 'ACTIVE' : 'OFF'}
+                          </span>
+                          <button 
+                            onClick={() => setAutoWelcome(!autoWelcome)}
+                            className={`w-10 h-5 rounded-full transition-all relative ${autoWelcome ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'}`}
+                          >
+                            <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${autoWelcome ? 'left-6' : 'left-1'}`} />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-100 dark:border-slate-800 mt-6 !mt-6">
                         <p className="text-[10px] font-bold text-slate-600 dark:text-slate-400">
                           <Icons.ShieldCheck size={14} className="inline mr-1 text-emerald-500" />
-                          Automatically delete "User Joined" and "User Left" service messages from groups. 
-                          Requires bot to have <span className="text-emerald-500 underline">Delete Messages</span> permissions.
+                          Requires bot to have <span className="text-emerald-500 underline">Delete Messages</span> permissions. If you change settings, please <b>Restart Background Worker</b> to apply them to 24/7 mode!
                         </p>
+                        
+                        <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-800">
+                           <div className="flex items-center justify-between">
+                             <div>
+                               <p className="text-[10px] font-black uppercase text-slate-400 mb-1">Background Worker (24/7)</p>
+                               <p className="text-[9px] text-slate-500">Enable this to run cleanup & welcome 24/7.</p>
+                             </div>
+                             {webhookActive ? (
+                               <button 
+                                 onClick={handleDeleteWebhook}
+                                 disabled={isProcessingWebhook}
+                                 className="px-3 py-1.5 bg-rose-500/10 text-rose-500 text-[9px] font-black uppercase rounded-lg border border-rose-500/20 hover:bg-rose-500 hover:text-white transition-all disabled:opacity-50 whitespace-nowrap ml-2"
+                               >
+                                 {isProcessingWebhook ? 'Working...' : 'Stop Background'}
+                               </button>
+                             ) : (
+                               <button 
+                                 onClick={handleSetWebhook}
+                                 disabled={isProcessingWebhook}
+                                 className="px-3 py-1.5 bg-emerald-500/10 text-emerald-500 text-[9px] font-black uppercase rounded-lg border border-emerald-500/20 hover:bg-emerald-500 hover:text-white transition-all disabled:opacity-50 whitespace-nowrap ml-2"
+                               >
+                                 {isProcessingWebhook ? 'Working...' : 'Start Background'}
+                               </button>
+                             )}
+                           </div>
+                        </div>
                       </div>
                     </div>
                     
