@@ -645,6 +645,42 @@ const App: React.FC = () => {
     const poll = async () => {
       if (!token || !botInfo) return;
 
+      // If webhook is active, we don't query Telegram, but we must query our DB to refresh the UI
+      if (webhookActive) {
+        try {
+          const [groupsRes, eventsRes] = await Promise.all([
+            fetch('/api/groups'),
+            fetch('/api/events')
+          ]);
+          
+          if (groupsRes.ok) {
+            const serverGroups: TelegramGroup[] = await groupsRes.json();
+            setGroups(prev => {
+              const merged = [...serverGroups];
+              prev.forEach(localG => {
+                const serverG = merged.find(sg => sg.id === localG.id);
+                if (!serverG) merged.push(localG);
+              });
+              return merged;
+            });
+          }
+          if (eventsRes.ok) {
+            const serverEvents: JoinEvent[] = await eventsRes.json();
+            setJoinEvents(prev => {
+              const combined = [...serverEvents, ...prev];
+              return combined.filter((v, i, a) => 
+                a.findIndex(t => t.userId === v.userId && t.timestamp === v.timestamp) === i
+              ).sort((a, b) => b.timestamp - a.timestamp).slice(0, 10000);
+            });
+          }
+        } catch (err) {
+          console.error("DB background sync error:", err);
+        }
+        
+        timeoutId = setTimeout(poll, 5000);
+        return;
+      }
+
       // Tab locking: only one tab should poll
       const now = Date.now();
       const lastPoll = Number(localStorage.getItem('tg_last_poll_time') || 0);
@@ -707,7 +743,7 @@ const App: React.FC = () => {
         localStorage.removeItem('tg_last_poll_time');
       }
     };
-  }, [token, botInfo]);
+  }, [token, botInfo, webhookActive]);
 
   useEffect(() => {
     const newTotal = groups.reduce((sum, g) => sum + (g.memberCount || 0), 0);
