@@ -576,6 +576,12 @@ const App: React.FC = () => {
           throw new Error(errorData.details || errorData.error || `Server Error: ${groupsRes.status}`);
         }
 
+        const isJsonGroups = groupsRes.headers.get("content-type")?.includes("application/json");
+        if (!isJsonGroups) {
+           const text = await groupsRes.text();
+           console.error("Initial /api/groups expected JSON but got text:", text.slice(0, 100));
+           throw new Error("Invalid response format from server (expected JSON)");
+        }
         const serverGroups: TelegramGroup[] = await groupsRes.json();
         
         // Merge Strategy: Use server data as truth, but preserve local groups not on server
@@ -604,14 +610,19 @@ const App: React.FC = () => {
         setLastSyncTime(new Date());
 
         if (eventsRes.ok) {
-          const serverEvents: JoinEvent[] = await eventsRes.json();
-          setJoinEvents(prev => {
-            // Merge events by timestamp and userId to avoid duplicates
-            const combined = [...serverEvents, ...prev];
-            return combined.filter((v, i, a) => 
-              a.findIndex(t => t.userId === v.userId && t.timestamp === v.timestamp) === i
-            ).sort((a, b) => b.timestamp - a.timestamp).slice(0, 10000);
-          });
+          const isJsonEvents = eventsRes.headers.get("content-type")?.includes("application/json");
+          if (isJsonEvents) {
+            const serverEvents: JoinEvent[] = await eventsRes.json();
+            setJoinEvents(prev => {
+              // Merge events by timestamp and userId to avoid duplicates
+              const combined = [...serverEvents, ...prev];
+              return combined.filter((v, i, a) => 
+                a.findIndex(t => t.userId === v.userId && t.timestamp === v.timestamp) === i
+              ).sort((a, b) => b.timestamp - a.timestamp).slice(0, 10000);
+            });
+          } else {
+            console.error("Initial /api/events expected JSON but got text.");
+          }
         }
       } catch (err: any) {
         console.error("Initial fetch error:", err);
@@ -656,24 +667,36 @@ const App: React.FC = () => {
           ]);
           
           if (groupsRes.ok) {
-            const serverGroups: TelegramGroup[] = await groupsRes.json();
-            setGroups(prev => {
-              const merged = [...serverGroups];
-              prev.forEach(localG => {
-                const serverG = merged.find(sg => sg.id === localG.id);
-                if (!serverG) merged.push(localG);
+            const isJson = groupsRes.headers.get("content-type")?.includes("application/json");
+            if (isJson) {
+              const serverGroups: TelegramGroup[] = await groupsRes.json();
+              setGroups(prev => {
+                const merged = [...serverGroups];
+                prev.forEach(localG => {
+                  const serverG = merged.find(sg => sg.id === localG.id);
+                  if (!serverG) merged.push(localG);
+                });
+                return merged;
               });
-              return merged;
-            });
+            } else {
+              const text = await groupsRes.text();
+              console.error("Expected JSON for /api/groups but got text:", text.slice(0, 100));
+            }
           }
           if (eventsRes.ok) {
-            const serverEvents: JoinEvent[] = await eventsRes.json();
-            setJoinEvents(prev => {
-              const combined = [...serverEvents, ...prev];
-              return combined.filter((v, i, a) => 
-                a.findIndex(t => t.userId === v.userId && t.timestamp === v.timestamp) === i
-              ).sort((a, b) => b.timestamp - a.timestamp).slice(0, 10000);
-            });
+            const isJson = eventsRes.headers.get("content-type")?.includes("application/json");
+            if (isJson) {
+              const serverEvents: JoinEvent[] = await eventsRes.json();
+              setJoinEvents(prev => {
+                const combined = [...serverEvents, ...prev];
+                return combined.filter((v, i, a) => 
+                  a.findIndex(t => t.userId === v.userId && t.timestamp === v.timestamp) === i
+                ).sort((a, b) => b.timestamp - a.timestamp).slice(0, 10000);
+              });
+            } else {
+              const text = await eventsRes.text();
+              console.error("Expected JSON for /api/events but got text:", text.slice(0, 100));
+            }
           }
         } catch (err) {
           console.error("DB background sync error:", err);
@@ -1621,17 +1644,18 @@ const App: React.FC = () => {
                     </p>
                  </button>
               </div>
-              <div className="relative rounded-[2.5rem] border border-blue-500/20 p-8 shadow-2xl shadow-blue-500/10 overflow-hidden bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-slate-900 dark:via-indigo-950/30 dark:to-purple-950/20">
-                 <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500"></div>
-                 <h2 className="text-lg font-black uppercase tracking-tight mb-4 flex items-center gap-3">
-                   <div className="p-2 bg-blue-50 dark:bg-blue-500/10 rounded-xl text-blue-600 dark:text-blue-400">
-                     <Icons.Zap size={20} />
+              <div className="relative rounded-[2.5rem] border border-white/10 p-8 shadow-2xl overflow-hidden bg-gradient-to-br from-violet-600 via-fuchsia-600 to-orange-500 text-white transform transition-all duration-300 hover:scale-[1.01] hover:shadow-fuchsia-500/20">
+                 <div className="absolute top-0 right-0 w-64 h-64 bg-white/20 rounded-full blur-3xl -mr-16 -mt-16 mix-blend-overlay pointer-events-none"></div>
+                 <div className="absolute bottom-0 left-0 w-64 h-64 bg-yellow-300/20 rounded-full blur-3xl -ml-16 -mb-16 mix-blend-overlay pointer-events-none"></div>
+                 <h2 className="text-xl font-black uppercase tracking-tight mb-4 flex items-center gap-3 relative z-10">
+                   <div className="p-3 bg-white/20 rounded-2xl backdrop-blur-sm shadow-inner border border-white/20 text-yellow-300">
+                     <Icons.Zap size={24} />
                    </div>
-                   Fast Batch Injection
+                   <span className="bg-gradient-to-r from-white to-orange-200 bg-clip-text text-transparent drop-shadow-sm">Fast Batch Injection</span>
                  </h2>
-                 <div className="flex flex-col sm:flex-row gap-3">
-                   <input type="text" placeholder="Enter Telegram Chat ID (-100...)" className="flex-1 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 px-6 py-4 rounded-2xl text-xs font-mono outline-none focus:ring-4 focus:ring-blue-500/10 shadow-inner" value={newChatId} onChange={e => setNewChatId(e.target.value)} />
-                   <button onClick={handleAddGroupManual} disabled={isAddingGroup || !newChatId} className="px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-xl shadow-blue-600/20 active:scale-95 disabled:opacity-50 transition-all">
+                 <div className="flex flex-col sm:flex-row gap-3 relative z-10">
+                   <input type="text" placeholder="Enter Telegram Chat ID (-100...)" className="flex-1 bg-black/20 border border-white/20 px-6 py-4 rounded-2xl text-xs font-mono outline-none focus:ring-4 focus:ring-white/30 shadow-inner placeholder:text-white/50 text-white backdrop-blur-sm" value={newChatId} onChange={e => setNewChatId(e.target.value)} />
+                   <button onClick={handleAddGroupManual} disabled={isAddingGroup || !newChatId} className="px-8 py-4 bg-white text-fuchsia-900 hover:bg-fuchsia-50 rounded-2xl text-xs font-black uppercase tracking-widest shadow-[0_10px_30px_rgba(0,0,0,0.3)] active:scale-95 disabled:opacity-50 transition-all border border-white">
                      {isAddingGroup ? 'Connecting...' : 'Inject Batch(es)'}
                    </button>
                  </div>
