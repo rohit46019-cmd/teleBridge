@@ -61,7 +61,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, theme, toggle
         </div>
       </aside>
 
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex items-center justify-around p-1.5 pb-5 z-50 shadow-[0_-10px_40px_rgba(0,0,0,0.1)]">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex items-center justify-around p-1.5 z-50 shadow-[0_-10px_40px_rgba(0,0,0,0.1)]">
         {menuItems.map((item) => (
           <button
             key={item.id}

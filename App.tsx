@@ -178,7 +178,7 @@ const App: React.FC = () => {
   const [showRecentSearches, setShowRecentSearches] = useState(false);
   const [filterOption, setFilterOption] = useState<'mostMembers' | 'leastMembers' | 'frequent' | 'recent' | 'newAdded' | 'activeToday'>('recent');
   const [showFilterMenu, setShowFilterMenu] = useState(false);
-  const [selectedDate, setSelectedDate] = useState<string>(new Date().toLocaleDateString('en-CA'));
+  const [selectedDate, setSelectedDate] = useState<string>(new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }));
   const [auditSubTab, setAuditSubTab] = useState<'audit' | 'blocked'>('audit');
   const [updates, setUpdates] = useState<any[]>([]);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
@@ -349,18 +349,20 @@ const App: React.FC = () => {
 
   const comparisonStats = useMemo(() => {
     const now = new Date();
-    const todayStr = now.toLocaleDateString('en-CA');
-    const yesterday = new Date();
-    yesterday.setDate(now.getDate() - 1);
-    const yesterdayStr = yesterday.toLocaleDateString('en-CA');
+    // Helper to format date in IST
+    const getIstDateStr = (date: Date) => date.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+
+    const todayStr = getIstDateStr(now);
+    const yesterday = new Date(now.getTime() - 86400000);
+    const yesterdayStr = getIstDateStr(yesterday);
 
     let todayCount = 0;
     let yesterdayCount = 0;
 
-    // Weekly comparison
-    const startOfThisWeek = new Date();
-    startOfThisWeek.setDate(now.getDate() - now.getDay());
-    startOfThisWeek.setHours(0,0,0,0);
+    // Weekly comparison - still using event timestamps but dateStr is IST
+    const startOfThisWeek = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Kolkata"})); 
+    startOfThisWeek.setHours(0, 0, 0, 0); 
+    startOfThisWeek.setDate(startOfThisWeek.getDate() - startOfThisWeek.getDay());
 
     const startOfLastWeek = new Date(startOfThisWeek);
     startOfLastWeek.setDate(startOfLastWeek.getDate() - 7);
@@ -370,10 +372,10 @@ const App: React.FC = () => {
 
     joinEvents.forEach(event => {
       const d = new Date(event.timestamp);
-      const dateStr = d.toLocaleDateString('en-CA');
+      const dateStr = getIstDateStr(d);
       
       if (dateStr === todayStr) todayCount++;
-      if (dateStr === yesterdayStr) yesterdayCount++;
+      else if (dateStr === yesterdayStr) yesterdayCount++;
 
       if (d >= startOfThisWeek) thisWeekCount++;
       else if (d >= startOfLastWeek && d < startOfThisWeek) lastWeekCount++;
@@ -1482,11 +1484,11 @@ const App: React.FC = () => {
     }
   };
 
-  const filteredJoins = useMemo(() => joinEvents.filter(e => new Date(e.timestamp).toLocaleDateString('en-CA') === selectedDate).sort((a, b) => b.timestamp - a.timestamp), [joinEvents, selectedDate]);
+  const filteredJoins = useMemo(() => joinEvents.filter(e => new Date(e.timestamp).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }) === selectedDate).sort((a, b) => b.timestamp - a.timestamp), [joinEvents, selectedDate]);
   const joinsTodayCount = useMemo(() => {
-    const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local time
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
     return joinEvents.filter(e => {
-      const eventDate = new Date(e.timestamp).toLocaleDateString('en-CA');
+      const eventDate = new Date(e.timestamp).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
       return eventDate === today;
     }).length;
   }, [joinEvents]);
@@ -1619,7 +1621,7 @@ const App: React.FC = () => {
                     </p>
                  </button>
               </div>
-              <div className="relative bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 p-8 shadow-xl overflow-hidden">
+              <div className="relative bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 p-8 shadow-xl overflow-hidden bg-gradient-to-br from-indigo-50/50 to-white dark:from-indigo-950/20 dark:to-slate-900">
                  <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500"></div>
                  <h2 className="text-lg font-black uppercase tracking-tight mb-4 flex items-center gap-3">
                    <div className="p-2 bg-blue-50 dark:bg-blue-500/10 rounded-xl text-blue-600 dark:text-blue-400">
