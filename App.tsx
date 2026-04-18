@@ -1573,8 +1573,8 @@ const App: React.FC = () => {
         >
           {activeTab === 'dashboard' && (
             <div className={`space-y-6 ${animationClass}`}>
-              <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-                 <div className="bg-gradient-to-br from-blue-500 to-indigo-600 p-5 rounded-[2rem] border-b-4 border-indigo-800 shadow-[0_15px_30px_rgba(79,70,229,0.4)] transition-all hover:-translate-y-1 relative overflow-hidden">
+               <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="bg-gradient-to-br from-blue-500 to-indigo-600 p-5 rounded-[2rem] border-b-4 border-indigo-800 shadow-[0_15px_30px_rgba(79,70,229,0.4)] transition-all hover:-translate-y-1 relative overflow-hidden">
                     <div className="absolute -right-4 -top-4 w-24 h-24 bg-white/10 rounded-full blur-xl"></div>
                     <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-4 backdrop-blur-sm"><Icons.Home size={20} className="text-white" strokeWidth={3} /></div>
                     <p className="text-[10px] font-black text-blue-100 uppercase tracking-widest mb-1 relative z-10">Batches</p>
