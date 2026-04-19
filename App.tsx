@@ -1172,20 +1172,23 @@ const App: React.FC = () => {
              
              // Frontend fallback for Auto-welcome if webhook is disabled
              if (autoWelcome && !webhookActive && !ev.is_bot) {
-               const text = `Welcome <a href="tg://user?id=${ev.userId}">${ev.userName || 'Member'}</a> to the group! 🎉`;
-               fetch(`https://api.telegram.org/bot${currentToken}/sendMessage`, {
-                 method: 'POST',
-                 headers: { 'Content-Type': 'application/json' },
-                 body: JSON.stringify({ chat_id: ev.chatId, text, parse_mode: 'HTML' })
-               })
-               .then(res => res.json())
-               .then(data => {
-                 if (data.ok) {
-                   setTimeout(() => {
-                     deleteMessage(currentToken, ev.chatId, data.result.message_id).catch(() => {});
-                   }, 15000);
-                 }
-               }).catch(() => {});
+               setTimeout(() => {
+                 const escapedName = (ev.userName || 'Awesome Member').toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+                 const text = `🎉 <b>Welcome to the Hub!</b> 🎉\n\nHey <a href="tg://user?id=${ev.userId}"><b>${escapedName}</b></a>, we're thrilled to have you here! ✨\n\n<i>Enjoy your stay, and keep it friendly!</i> 🚀`;
+                 fetch(`https://api.telegram.org/bot${currentToken}/sendMessage`, {
+                   method: 'POST',
+                   headers: { 'Content-Type': 'application/json' },
+                   body: JSON.stringify({ chat_id: ev.chatId, text, parse_mode: 'HTML' })
+                 })
+                 .then(res => res.json())
+                 .then(data => {
+                   if (data.ok) {
+                     setTimeout(() => {
+                        deleteMessage(currentToken, ev.chatId, data.result.message_id).catch(() => {});
+                     }, 60000); // 1 MINUTE
+                   }
+                 }).catch(() => {});
+               }, 5000); // 5 SECONDS delay
              }
           }
         }
