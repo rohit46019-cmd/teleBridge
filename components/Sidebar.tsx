@@ -27,28 +27,25 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, theme, toggle
         </div>
 
         <nav className="flex-1 mt-8 px-4 space-y-1.5">
-          {menuItems.map((item) => {
-            const Icon = item.icon;
-            return (
-              <button
-                key={item.id}
-                onClick={() => onTabChange(item.id)}
-                className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all duration-300 group relative ${
-                  activeTab === item.id
-                    ? `bg-slate-100 dark:bg-slate-800 shadow-sm border border-slate-200 dark:border-slate-700`
-                    : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/50'
-                }`}
-              >
-                <div className={`${activeTab === item.id ? item.color : 'text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300'} transition-colors`}>
-                  <Icon size={18} strokeWidth={activeTab === item.id ? 2.5 : 2} />
-                </div>
-                <span className={`font-medium text-sm ${activeTab === item.id ? 'text-slate-900 dark:text-white font-semibold' : ''}`}>{item.label}</span>
-                {activeTab === item.id && (
-                  <div className={`absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r-full bg-current ${item.color}`} />
-                )}
-              </button>
-            );
-          })}
+          {menuItems.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => onTabChange(item.id)}
+              className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all duration-300 group relative ${
+                activeTab === item.id
+                  ? `bg-slate-100 dark:bg-slate-800 shadow-sm border border-slate-200 dark:border-slate-700`
+                  : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/50'
+              }`}
+            >
+              <div className={`${activeTab === item.id ? item.color : 'text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300'} transition-colors`}>
+                <item.icon size={18} strokeWidth={activeTab === item.id ? 2.5 : 2} />
+              </div>
+              <span className={`font-medium text-sm ${activeTab === item.id ? 'text-slate-900 dark:text-white font-semibold' : ''}`}>{item.label}</span>
+              {activeTab === item.id && (
+                <div className={`absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r-full bg-current ${item.color}`} />
+              )}
+            </button>
+          ))}
         </nav>
 
         <div className="p-6">
@@ -65,23 +62,20 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, theme, toggle
       </aside>
 
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex items-center justify-around p-1.5 z-50 shadow-[0_-10px_40px_rgba(0,0,0,0.1)]">
-        {menuItems.map((item) => {
-          const Icon = item.icon;
-          return (
-            <button
-              key={item.id}
-              onClick={() => onTabChange(item.id)}
-              className={`flex flex-col items-center gap-1.5 px-4 py-2 rounded-2xl transition-all active:scale-95 relative ${
-                activeTab === item.id ? `${item.color} bg-slate-100 dark:bg-slate-800/50 shadow-inner` : 'text-slate-500'
-              }`}
-            >
-              <Icon size={20} strokeWidth={activeTab === item.id ? 2.5 : 1.5} />
-              <span className={`text-[10px] font-black uppercase tracking-widest ${activeTab === item.id ? 'opacity-100' : 'opacity-40'}`}>
-                {item.label}
-              </span>
-            </button>
-          );
-        })}
+        {menuItems.map((item) => (
+          <button
+            key={item.id}
+            onClick={() => onTabChange(item.id)}
+            className={`flex flex-col items-center gap-1.5 px-4 py-2 rounded-2xl transition-all active:scale-95 relative ${
+              activeTab === item.id ? `${item.color} bg-slate-100 dark:bg-slate-800/50 shadow-inner` : 'text-slate-500'
+            }`}
+          >
+            <item.icon size={20} strokeWidth={activeTab === item.id ? 2.5 : 1.5} />
+            <span className={`text-[10px] font-black uppercase tracking-widest ${activeTab === item.id ? 'opacity-100' : 'opacity-40'}`}>
+              {item.label}
+            </span>
+          </button>
+        ))}
       </nav>
     </>
   );

@@ -165,7 +165,7 @@ const DEFAULT_GROUPS: TelegramGroup[] = [
   { "id": "-1003839638841", "name": "Bhutesh sir math parmar ssc", "memberCount": 4, "description": "Auto Discovered Hub", "category": "Telegram", "image": "https://picsum.photos/seed/-1003839638841/100", "lastInteraction": 1775504050623 }
 ];
 
-const TABS = ['dashboard', 'groups', 'analysis', 'logs', 'settings'];
+const TABS = ['dashboard', 'groups', 'analysis', 'settings'];
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState(() => {
@@ -249,57 +249,6 @@ const App: React.FC = () => {
       return [];
     }
   });
-
-  const [diagnostics, setDiagnostics] = useState<any[]>([]);
-  const [isClearingLogs, setIsClearingLogs] = useState(false);
-  const [webhookInfo, setWebhookInfo] = useState<any>(null);
-  const [isCheckingWebhook, setIsCheckingWebhook] = useState(false);
-
-  useEffect(() => {
-    let interval: any;
-    if (activeTab === 'logs') {
-      const fetchData = async () => {
-        try {
-          // Fetch logs
-          const res = await fetch('/api/diagnostics');
-          if (res.ok) {
-            const data = await res.json();
-            setDiagnostics(data);
-          }
-
-          // Fetch Webhook Info
-          if (token && !isLocked) {
-             const wbRes = await fetch(`/api/diagnostics/webhook-check?token=${token}`);
-             if (wbRes.ok) {
-               const wbData = await wbRes.json();
-               if (wbData.ok) setWebhookInfo(wbData.result);
-             }
-          }
-        } catch (e) {
-          console.error("Failed to fetch diagnostics:", e);
-        }
-      };
-      
-      fetchData();
-      interval = setInterval(fetchData, 3000);
-    }
-    return () => clearInterval(interval);
-  }, [activeTab, token, isLocked]);
-
-  const handleClearLogs = async () => {
-    setIsClearingLogs(true);
-    try {
-      const res = await fetch('/api/diagnostics', { method: 'DELETE' });
-      if (res.ok) {
-        setDiagnostics([]);
-        showNotification("Logs cleared successfully", "success");
-      }
-    } catch (e) {
-      showNotification("Failed to clear logs", "alert");
-    } finally {
-      setIsClearingLogs(false);
-    }
-  };
   const [isAddingGroup, setIsAddingGroup] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [isProcessingWebhook, setIsProcessingWebhook] = useState(false);
@@ -1223,23 +1172,20 @@ const App: React.FC = () => {
              
              // Frontend fallback for Auto-welcome if webhook is disabled
              if (autoWelcome && !webhookActive && !ev.is_bot) {
-               setTimeout(() => {
-                 const escapedName = (ev.userName || 'Awesome Member').toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-                 const text = `🎉 <b>Welcome to the Hub!</b> 🎉\n\nHey <a href="tg://user?id=${ev.userId}"><b>${escapedName}</b></a>, we're thrilled to have you here! ✨\n\n<i>Enjoy your stay, and keep it friendly!</i> 🚀`;
-                 fetch(`https://api.telegram.org/bot${currentToken}/sendMessage`, {
-                   method: 'POST',
-                   headers: { 'Content-Type': 'application/json' },
-                   body: JSON.stringify({ chat_id: ev.chatId, text, parse_mode: 'HTML' })
-                 })
-                 .then(res => res.json())
-                 .then(data => {
-                   if (data.ok) {
-                     setTimeout(() => {
-                        deleteMessage(currentToken, ev.chatId, data.result.message_id).catch(() => {});
-                     }, 70000); // 70 SECONDS
-                   }
-                 }).catch(() => {});
-               }, 10000); // 10 SECONDS delay
+               const text = `Welcome <a href="tg://user?id=${ev.userId}">${ev.userName || 'Member'}</a> to the group! 🎉`;
+               fetch(`https://api.telegram.org/bot${currentToken}/sendMessage`, {
+                 method: 'POST',
+                 headers: { 'Content-Type': 'application/json' },
+                 body: JSON.stringify({ chat_id: ev.chatId, text, parse_mode: 'HTML' })
+               })
+               .then(res => res.json())
+               .then(data => {
+                 if (data.ok) {
+                   setTimeout(() => {
+                     deleteMessage(currentToken, ev.chatId, data.result.message_id).catch(() => {});
+                   }, 15000);
+                 }
+               }).catch(() => {});
              }
           }
         }
@@ -1512,10 +1458,6 @@ const App: React.FC = () => {
       await setWebhook(token, webhookUrl);
       setWebhookActive(true);
       showNotification("Webhook set! 24/7 background mode is now ACTIVE.", "success");
-      // Advise logs check
-      setTimeout(() => {
-        showNotification("Check 'Logs' in settings to see real-time signals.", "info");
-      }, 2000);
     } catch (err: any) {
       showNotification(`Failed to set webhook: ${err.message}`, "alert");
     } finally {
@@ -1863,15 +1805,6 @@ const App: React.FC = () => {
 
               {auditSubTab === 'audit' ? (
                 <>
-                  <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-3xl flex items-center gap-4 mb-4">
-                     <Icons.AlertCircle className="text-amber-500 shrink-0" size={20} />
-                     <div className="flex-1">
-                       <p className="text-xs font-black text-amber-700 dark:text-amber-400 uppercase tracking-widest">Hidden Member Tracking</p>
-                       <p className="text-[10px] font-bold text-slate-600 dark:text-slate-400 mt-0.5 leading-relaxed italic">
-                         Agar aapne participants hide kiye hain, to bot ka <b>ADMIN</b> hona zaroori hai. Admin permission se hi hidden joins track hote hain.
-                       </p>
-                     </div>
-                  </div>
                   <div className="flex flex-col md:flex-row gap-4">
                      <div className="flex-1 bg-indigo-600 p-6 rounded-[2.5rem] border-b-4 border-indigo-900 shadow-xl text-white relative overflow-hidden active:scale-95 transition-transform">
                         <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-1 opacity-80">Total Joined ({selectedDate})</p>
@@ -2002,195 +1935,6 @@ const App: React.FC = () => {
                 <pre className="text-xs font-mono bg-slate-100 dark:bg-slate-950 p-4 rounded-xl overflow-x-auto max-h-[60vh]">
                   {JSON.stringify(updates, null, 2)}
                 </pre>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'logs' && (
-            <div className={`space-y-6 ${animationClass}`}>
-              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2.5rem] p-6 shadow-xl flex flex-col h-[75vh]">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4 shrink-0">
-                  <div className="flex items-center gap-3">
-                    <button 
-                      onClick={() => setActiveTab('settings')}
-                      className="w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all mr-2"
-                      title="Back to Settings"
-                    >
-                      <Icons.X size={18} strokeWidth={3} />
-                    </button>
-                    <div className="w-10 h-10 bg-amber-500 rounded-xl flex items-center justify-center shadow-lg shadow-amber-500/20">
-                      <Icons.Terminal className="text-white" size={20} strokeWidth={2.5} />
-                    </div>
-                    <div>
-                      <h2 className="text-lg font-black tracking-tight text-slate-900 dark:text-white">Real-time Bot Logs</h2>
-                      <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Live webhook monitoring</p>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-                    {!webhookActive && (
-                      <div className="px-3 py-2 bg-rose-500/10 border border-rose-500/20 rounded-xl flex items-center gap-2 mr-auto sm:mr-0">
-                        <Icons.AlertTriangle className="text-rose-500" size={14} />
-                        <span className="text-[8px] font-black text-rose-600 uppercase tracking-widest leading-none">Webhook Inactive - Start Background Mode first</span>
-                      </div>
-                    )}
-                    <button 
-                      onClick={handleClearLogs}
-                      disabled={isClearingLogs || diagnostics.length === 0}
-                      className="flex-1 sm:flex-none px-4 py-2 bg-rose-500/10 text-rose-500 text-[10px] font-black uppercase rounded-xl border border-rose-500/20 hover:bg-rose-500 hover:text-white transition-all disabled:opacity-50"
-                    >
-                      {isClearingLogs ? 'Clearing...' : 'Clear All Logs'}
-                    </button>
-                    <div className="px-3 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center gap-2">
-                       <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                       <span className="text-[8px] font-black text-emerald-600 uppercase tracking-widest">Polling DB</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-6">
-                  <div className="flex-1 min-h-0 bg-slate-950 rounded-[2rem] border border-slate-800 overflow-hidden flex flex-col relative group">
-                    <div className="absolute inset-0 bg-gradient-to-b from-blue-500/5 to-transparent pointer-events-none" />
-                    
-                    {diagnostics.length === 0 ? (
-                      <div className="flex-1 flex flex-col items-center justify-center text-slate-600 p-8 text-center">
-                        <Icons.Terminal size={48} className="mb-4 opacity-10" />
-                        <p className="text-sm font-black uppercase tracking-widest opacity-40">No signals detected</p>
-                        <p className="text-[10px] font-bold opacity-30 mt-2">Waiting for Telegram webhook data...</p>
-                      </div>
-                    ) : (
-                      <div className="flex-1 overflow-y-auto p-6 space-y-4 font-mono custom-scrollbar">
-                        {diagnostics.map((log, i) => (
-                          <div key={i} className="animate-in fade-in slide-in-from-bottom-2 duration-500">
-                            <div className="flex items-start gap-4 p-4 bg-white/5 hover:bg-white/10 rounded-2xl transition-all border border-white/5 group/row hover:border-white/10">
-                              <div className="flex flex-col items-center gap-2 shrink-0 pt-1">
-                                <span className="text-[9px] font-black text-slate-500 tabular-nums">
-                                  {new Date(log.time).toLocaleTimeString([], { hour12: false })}
-                                </span>
-                                <div className={`w-1 h-8 rounded-full ${
-                                  log.type === 'message' ? 'bg-blue-500/40' :
-                                  log.type === 'chat_member' ? 'bg-emerald-500/40' :
-                                  log.type === 'join_request' ? 'bg-amber-500/40' :
-                                  log.type === 'system_log' ? 'bg-indigo-500/40' :
-                                  log.type === 'system_error' ? 'bg-rose-500/40' :
-                                  'bg-purple-500/40'
-                                }`} />
-                              </div>
-                              
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-3 mb-2">
-                                  <span className={`text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest ${
-                                    log.type === 'message' ? 'bg-blue-500 text-white' :
-                                    log.type === 'chat_member' ? 'bg-emerald-500 text-white' :
-                                    log.type === 'join_request' ? 'bg-amber-500 text-white' :
-                                    log.type === 'my_chat_member' ? 'bg-purple-500 text-white' :
-                                    log.type === 'system_log' ? 'bg-indigo-500 text-white' :
-                                    log.type === 'system_error' ? 'bg-rose-500 text-white' :
-                                    'bg-slate-500 text-white'
-                                  }`}>
-                                    {log.type}
-                                  </span>
-                                  <span className="text-[9px] font-black text-slate-600 uppercase tracking-tighter truncate">
-                                    {log.payload?.message?.from?.first_name || log.payload?.chat_join_request?.from?.first_name || log.payload?.chat_member?.new_chat_member?.user?.first_name || 'System Event'}
-                                  </span>
-                                </div>
-                                <pre className="text-[11px] text-slate-300 overflow-x-auto custom-scrollbar-horizontal whitespace-pre-wrap break-all leading-relaxed bg-black/40 p-4 rounded-xl border border-white/5 shadow-inner">
-                                  {JSON.stringify(log.payload, null, 2)}
-                                </pre>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="w-full lg:w-80 flex flex-col gap-4">
-                     <div className="bg-slate-50 dark:bg-slate-800/50 rounded-3xl p-6 border border-slate-200 dark:border-slate-800">
-                        <div className="flex items-center gap-3 mb-4">
-                           <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-500">
-                              <Icons.ShieldCheck size={16} />
-                           </div>
-                           <h3 className="text-xs font-black uppercase tracking-widest text-slate-900 dark:text-white">Webhook Health</h3>
-                        </div>
-
-                        {webhookInfo ? (
-                          <div className="space-y-4">
-                             <div className="space-y-1">
-                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Active URL</p>
-                                <p className="text-[10px] font-mono break-all text-blue-600 dark:text-blue-400 bg-white dark:bg-black/20 p-2 rounded-lg border border-slate-200 dark:border-slate-800">
-                                   {webhookInfo.url || 'None Set'}
-                                </p>
-                             </div>
-                             
-                             <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Pending</p>
-                                   <p className={`text-lg font-black ${webhookInfo.pending_update_count > 0 ? 'text-amber-500' : 'text-emerald-500'}`}>
-                                      {webhookInfo.pending_update_count}
-                                   </p>
-                                </div>
-                                <div>
-                                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Max Conn</p>
-                                   <p className="text-lg font-black text-slate-900 dark:text-white">
-                                      {webhookInfo.max_connections || '-'}
-                                   </p>
-                                </div>
-                             </div>
-
-                             {webhookInfo.last_error_message && (
-                               <div className="p-3 bg-rose-500/10 border border-border-rose-500/20 rounded-xl">
-                                  <p className="text-[8px] font-black text-rose-500 uppercase tracking-widest mb-1">Last Error</p>
-                                  <p className="text-[10px] font-bold text-rose-600 leading-tight">
-                                     {webhookInfo.last_error_message}
-                                  </p>
-                                  <p className="text-[8px] font-medium text-rose-400 mt-1 tabular-nums">
-                                     {new Date(webhookInfo.last_error_date * 1000).toLocaleString()}
-                                  </p>
-                               </div>
-                             )}
-
-                             <div className="p-3 bg-blue-500/5 rounded-xl border border-blue-500/10">
-                                <p className="text-[9px] font-black text-blue-600 uppercase tracking-widest mb-1">Allowed Updates</p>
-                                <div className="flex flex-wrap gap-1">
-                                   {(webhookInfo.allowed_updates || []).map((u: string) => (
-                                     <span key={u} className="text-[8px] font-bold bg-white dark:bg-black/20 px-1.5 py-0.5 rounded border border-blue-500/10">{u}</span>
-                                   ))}
-                                </div>
-                             </div>
-
-                             <button 
-                                onClick={handleSetWebhook}
-                                className="w-full py-2 bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl shadow-lg shadow-indigo-600/20 hover:scale-[1.02] transition-transform"
-                             >
-                                Force Update Webhook
-                             </button>
-                          </div>
-                        ) : (
-                          <div className="text-center py-8">
-                             <div className="w-8 h-8 rounded-full border-2 border-slate-300 border-t-blue-500 animate-spin mx-auto mb-3" />
-                             <p className="text-[10px] font-bold text-slate-500">Checking Telegram Status...</p>
-                          </div>
-                        )}
-                     </div>
-
-                     <div className="bg-amber-500/10 border border-amber-500/20 rounded-3xl p-6">
-                        <div className="flex items-center gap-3 mb-3 text-amber-600">
-                           <Icons.AlertCircle size={18} />
-                           <h3 className="text-xs font-black uppercase tracking-widest">Deep Debug Tip</h3>
-                        </div>
-                        <p className="text-[10px] font-bold text-amber-700/80 leading-relaxed italic">
-                           "Hidden Member" groups mein bot blind ho jata hai jab tak wo admin na ho.
-                           <br/><br/>
-                           Agar logs mein <b>JOIN_REQUEST</b> ya <b>CHAT_MEMBER</b> signals nahi aa rahe, to check karein ki bot admin hai ya nahi.
-                        </p>
-                     </div>
-                  </div>
-                </div>
-                
-                <div className="mt-4 flex items-center justify-between px-2 shrink-0">
-                   <p className="text-[10px] font-bold text-slate-500">Showing last 50 events</p>
-                   <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">Auto-refresh Active</p>
-                </div>
               </div>
             </div>
           )}
@@ -2439,7 +2183,7 @@ const App: React.FC = () => {
                           <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1 flex items-center justify-between">
                             Group Welcome
                           </h4>
-                          <p className="text-[9px] text-slate-500 font-bold">10s delay, Tag user & delete after 70s</p>
+                          <p className="text-[9px] text-slate-500 font-bold">5s delay, Tag user & delete after 60s</p>
                         </div>
                         <div className="flex items-center gap-2">
                           <span className={`text-[8px] font-black ${autoWelcome ? 'text-emerald-500' : 'text-slate-400'}`}>
@@ -2587,17 +2331,17 @@ const App: React.FC = () => {
                       </button>
                     </div>
 
-                      <div className="grid grid-cols-2 gap-3 mt-3">
-                        <button onClick={() => importFileRef.current?.click()} className="flex flex-col items-center justify-center gap-2 p-5 bg-emerald-600 text-white rounded-2xl shadow-lg active:scale-95 transition-all w-full col-span-1">
-                          <Icons.UploadCloud size={20} />
-                          <span className="text-[10px] font-black uppercase tracking-widest">Import</span>
-                        </button>
-                        <button onClick={() => setActiveTab('logs')} className="flex flex-col items-center justify-center gap-2 p-5 bg-amber-600 text-white rounded-2xl shadow-lg active:scale-95 transition-all w-full col-span-1">
-                          <Icons.Terminal size={20} />
-                          <span className="text-[10px] font-black uppercase tracking-widest">Log</span>
-                        </button>
-                        <input type="file" ref={importFileRef} onChange={handleImport} accept=".json" className="hidden" />
-                      </div>
+                    <div className="grid grid-cols-2 gap-3 mt-3">
+                      <button onClick={() => importFileRef.current?.click()} className="flex flex-col items-center justify-center gap-2 p-5 bg-emerald-600 text-white rounded-2xl shadow-lg active:scale-95 transition-all w-full col-span-1">
+                        <Icons.UploadCloud size={20} />
+                        <span className="text-[10px] font-black uppercase tracking-widest">Import</span>
+                      </button>
+                      <button onClick={() => window.open('/api/diagnostics', '_blank')} className="flex flex-col items-center justify-center gap-2 p-5 bg-amber-600 text-white rounded-2xl shadow-lg active:scale-95 transition-all w-full col-span-1">
+                        <Icons.Activity size={20} />
+                        <span className="text-[10px] font-black uppercase tracking-widest">Log</span>
+                      </button>
+                      <input type="file" ref={importFileRef} onChange={handleImport} accept=".json" className="hidden" />
+                    </div>
                   </div>
                 </div>
               )}
