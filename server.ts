@@ -204,6 +204,30 @@ async function startServer() {
     }
   });
 
+  app.get("/api/diagnostics/webhook-check", async (req, res) => {
+    try {
+      const token = req.query.token as string;
+      if (!token) return res.status(400).json({ error: "Token required" });
+      const response = await fetch(`https://api.telegram.org/bot${token}/getWebhookInfo`);
+      const data = await response.json();
+      res.json(data);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/diagnostics/bot-me", async (req, res) => {
+    try {
+      const token = req.query.token as string;
+      if (!token) return res.status(400).json({ error: "Token required" });
+      const response = await fetch(`https://api.telegram.org/bot${token}/getMe`);
+      const data = await response.json();
+      res.json(data);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.post("/api/webhook/:token", async (req, res) => {
     try {
       const token = req.params.token.trim();
@@ -266,13 +290,15 @@ async function startServer() {
         const isMemberNow = ['member', 'administrator', 'creator', 'restricted'].includes(newStatus);
         const wasMemberBefore = ['member', 'administrator', 'creator', 'restricted'].includes(oldStatus);
 
+        // Broad join detection for 'Hidden' groups
+        // If they were NOT a member (left/kicked) and now they are ONE of (member/restricted/admin)
         if (isMemberNow && !wasMemberBefore) {
-          console.log(`[JoinDetected] Hidden Member Join: ${mu.new_chat_member.user.id}`);
+          console.log(`[JoinDetected] [ChatMember] User: ${mu.new_chat_member.user.id} in ${mu.chat.id}`);
           rawJoinsToAdd.push({
             userId: mu.new_chat_member.user.id,
-            userName: mu.new_chat_member.user.first_name + (mu.new_chat_member.user.last_name ? ` ${mu.new_chat_member.user.last_name}` : ''),
+            userName: (mu.new_chat_member.user.first_name || 'User') + (mu.new_chat_member.user.last_name ? ` ${mu.new_chat_member.user.last_name}` : ''),
             chatId: mu.chat.id,
-            chatTitle: mu.chat.title,
+            chatTitle: mu.chat.title || 'Untitled Group',
             timestamp: mu.date ? mu.date * 1000 : Date.now(),
             is_bot: mu.new_chat_member.user.is_bot
           });

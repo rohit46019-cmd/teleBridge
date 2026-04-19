@@ -252,27 +252,39 @@ const App: React.FC = () => {
 
   const [diagnostics, setDiagnostics] = useState<any[]>([]);
   const [isClearingLogs, setIsClearingLogs] = useState(false);
+  const [webhookInfo, setWebhookInfo] = useState<any>(null);
+  const [isCheckingWebhook, setIsCheckingWebhook] = useState(false);
 
   useEffect(() => {
     let interval: any;
     if (activeTab === 'logs') {
-      const fetchLogs = async () => {
+      const fetchData = async () => {
         try {
+          // Fetch logs
           const res = await fetch('/api/diagnostics');
           if (res.ok) {
             const data = await res.json();
             setDiagnostics(data);
           }
+
+          // Fetch Webhook Info
+          if (token && !isLocked) {
+             const wbRes = await fetch(`/api/diagnostics/webhook-check?token=${token}`);
+             if (wbRes.ok) {
+               const wbData = await wbRes.json();
+               if (wbData.ok) setWebhookInfo(wbData.result);
+             }
+          }
         } catch (e) {
-          console.error("Failed to fetch logs:", e);
+          console.error("Failed to fetch diagnostics:", e);
         }
       };
       
-      fetchLogs();
-      interval = setInterval(fetchLogs, 3000);
+      fetchData();
+      interval = setInterval(fetchData, 3000);
     }
     return () => clearInterval(interval);
-  }, [activeTab]);
+  }, [activeTab, token, isLocked]);
 
   const handleClearLogs = async () => {
     setIsClearingLogs(true);
@@ -2035,56 +2047,144 @@ const App: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="flex-1 min-h-0 bg-slate-950 rounded-[2rem] border border-slate-800 overflow-hidden flex flex-col relative group">
-                  <div className="absolute inset-0 bg-gradient-to-b from-blue-500/5 to-transparent pointer-events-none" />
-                  
-                  {diagnostics.length === 0 ? (
-                    <div className="flex-1 flex flex-col items-center justify-center text-slate-600 p-8 text-center">
-                      <Icons.Terminal size={48} className="mb-4 opacity-10" />
-                      <p className="text-sm font-black uppercase tracking-widest opacity-40">No signals detected</p>
-                      <p className="text-[10px] font-bold opacity-30 mt-2">Waiting for Telegram webhook data...</p>
-                    </div>
-                  ) : (
-                    <div className="flex-1 overflow-y-auto p-6 space-y-4 font-mono custom-scrollbar">
-                      {diagnostics.map((log, i) => (
-                        <div key={i} className="animate-in fade-in slide-in-from-bottom-2 duration-500">
-                          <div className="flex items-start gap-4 p-4 bg-white/5 hover:bg-white/10 rounded-2xl transition-all border border-white/5 group/row hover:border-white/10">
-                            <div className="flex flex-col items-center gap-2 shrink-0 pt-1">
-                              <span className="text-[9px] font-black text-slate-500 tabular-nums">
-                                {new Date(log.time).toLocaleTimeString([], { hour12: false })}
-                              </span>
-                              <div className={`w-1 h-8 rounded-full ${
-                                log.type === 'message' ? 'bg-blue-500/40' :
-                                log.type === 'chat_member' ? 'bg-emerald-500/40' :
-                                log.type === 'join_request' ? 'bg-amber-500/40' :
-                                'bg-purple-500/40'
-                              }`} />
-                            </div>
-                            
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-3 mb-2">
-                                <span className={`text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest ${
-                                  log.type === 'message' ? 'bg-blue-500 text-white' :
-                                  log.type === 'chat_member' ? 'bg-emerald-500 text-white' :
-                                  log.type === 'join_request' ? 'bg-amber-500 text-white' :
-                                  log.type === 'my_chat_member' ? 'bg-purple-500 text-white' :
-                                  'bg-slate-500 text-white'
-                                }`}>
-                                  {log.type}
+                <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-6">
+                  <div className="flex-1 min-h-0 bg-slate-950 rounded-[2rem] border border-slate-800 overflow-hidden flex flex-col relative group">
+                    <div className="absolute inset-0 bg-gradient-to-b from-blue-500/5 to-transparent pointer-events-none" />
+                    
+                    {diagnostics.length === 0 ? (
+                      <div className="flex-1 flex flex-col items-center justify-center text-slate-600 p-8 text-center">
+                        <Icons.Terminal size={48} className="mb-4 opacity-10" />
+                        <p className="text-sm font-black uppercase tracking-widest opacity-40">No signals detected</p>
+                        <p className="text-[10px] font-bold opacity-30 mt-2">Waiting for Telegram webhook data...</p>
+                      </div>
+                    ) : (
+                      <div className="flex-1 overflow-y-auto p-6 space-y-4 font-mono custom-scrollbar">
+                        {diagnostics.map((log, i) => (
+                          <div key={i} className="animate-in fade-in slide-in-from-bottom-2 duration-500">
+                            <div className="flex items-start gap-4 p-4 bg-white/5 hover:bg-white/10 rounded-2xl transition-all border border-white/5 group/row hover:border-white/10">
+                              <div className="flex flex-col items-center gap-2 shrink-0 pt-1">
+                                <span className="text-[9px] font-black text-slate-500 tabular-nums">
+                                  {new Date(log.time).toLocaleTimeString([], { hour12: false })}
                                 </span>
-                                <span className="text-[9px] font-black text-slate-600 uppercase tracking-tighter truncate">
-                                  {log.payload?.message?.from?.first_name || log.payload?.chat_join_request?.from?.first_name || log.payload?.chat_member?.new_chat_member?.user?.first_name || 'System Event'}
-                                </span>
+                                <div className={`w-1 h-8 rounded-full ${
+                                  log.type === 'message' ? 'bg-blue-500/40' :
+                                  log.type === 'chat_member' ? 'bg-emerald-500/40' :
+                                  log.type === 'join_request' ? 'bg-amber-500/40' :
+                                  log.type === 'system_log' ? 'bg-indigo-500/40' :
+                                  log.type === 'system_error' ? 'bg-rose-500/40' :
+                                  'bg-purple-500/40'
+                                }`} />
                               </div>
-                              <pre className="text-[11px] text-slate-300 overflow-x-auto custom-scrollbar-horizontal whitespace-pre-wrap break-all leading-relaxed bg-black/40 p-4 rounded-xl border border-white/5 shadow-inner">
-                                {JSON.stringify(log.payload, null, 2)}
-                              </pre>
+                              
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-3 mb-2">
+                                  <span className={`text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest ${
+                                    log.type === 'message' ? 'bg-blue-500 text-white' :
+                                    log.type === 'chat_member' ? 'bg-emerald-500 text-white' :
+                                    log.type === 'join_request' ? 'bg-amber-500 text-white' :
+                                    log.type === 'my_chat_member' ? 'bg-purple-500 text-white' :
+                                    log.type === 'system_log' ? 'bg-indigo-500 text-white' :
+                                    log.type === 'system_error' ? 'bg-rose-500 text-white' :
+                                    'bg-slate-500 text-white'
+                                  }`}>
+                                    {log.type}
+                                  </span>
+                                  <span className="text-[9px] font-black text-slate-600 uppercase tracking-tighter truncate">
+                                    {log.payload?.message?.from?.first_name || log.payload?.chat_join_request?.from?.first_name || log.payload?.chat_member?.new_chat_member?.user?.first_name || 'System Event'}
+                                  </span>
+                                </div>
+                                <pre className="text-[11px] text-slate-300 overflow-x-auto custom-scrollbar-horizontal whitespace-pre-wrap break-all leading-relaxed bg-black/40 p-4 rounded-xl border border-white/5 shadow-inner">
+                                  {JSON.stringify(log.payload, null, 2)}
+                                </pre>
+                              </div>
                             </div>
                           </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="w-full lg:w-80 flex flex-col gap-4">
+                     <div className="bg-slate-50 dark:bg-slate-800/50 rounded-3xl p-6 border border-slate-200 dark:border-slate-800">
+                        <div className="flex items-center gap-3 mb-4">
+                           <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-500">
+                              <Icons.ShieldCheck size={16} />
+                           </div>
+                           <h3 className="text-xs font-black uppercase tracking-widest text-slate-900 dark:text-white">Webhook Health</h3>
                         </div>
-                      ))}
-                    </div>
-                  )}
+
+                        {webhookInfo ? (
+                          <div className="space-y-4">
+                             <div className="space-y-1">
+                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Active URL</p>
+                                <p className="text-[10px] font-mono break-all text-blue-600 dark:text-blue-400 bg-white dark:bg-black/20 p-2 rounded-lg border border-slate-200 dark:border-slate-800">
+                                   {webhookInfo.url || 'None Set'}
+                                </p>
+                             </div>
+                             
+                             <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Pending</p>
+                                   <p className={`text-lg font-black ${webhookInfo.pending_update_count > 0 ? 'text-amber-500' : 'text-emerald-500'}`}>
+                                      {webhookInfo.pending_update_count}
+                                   </p>
+                                </div>
+                                <div>
+                                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Max Conn</p>
+                                   <p className="text-lg font-black text-slate-900 dark:text-white">
+                                      {webhookInfo.max_connections || '-'}
+                                   </p>
+                                </div>
+                             </div>
+
+                             {webhookInfo.last_error_message && (
+                               <div className="p-3 bg-rose-500/10 border border-border-rose-500/20 rounded-xl">
+                                  <p className="text-[8px] font-black text-rose-500 uppercase tracking-widest mb-1">Last Error</p>
+                                  <p className="text-[10px] font-bold text-rose-600 leading-tight">
+                                     {webhookInfo.last_error_message}
+                                  </p>
+                                  <p className="text-[8px] font-medium text-rose-400 mt-1 tabular-nums">
+                                     {new Date(webhookInfo.last_error_date * 1000).toLocaleString()}
+                                  </p>
+                               </div>
+                             )}
+
+                             <div className="p-3 bg-blue-500/5 rounded-xl border border-blue-500/10">
+                                <p className="text-[9px] font-black text-blue-600 uppercase tracking-widest mb-1">Allowed Updates</p>
+                                <div className="flex flex-wrap gap-1">
+                                   {(webhookInfo.allowed_updates || []).map((u: string) => (
+                                     <span key={u} className="text-[8px] font-bold bg-white dark:bg-black/20 px-1.5 py-0.5 rounded border border-blue-500/10">{u}</span>
+                                   ))}
+                                </div>
+                             </div>
+
+                             <button 
+                                onClick={handleSetWebhook}
+                                className="w-full py-2 bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl shadow-lg shadow-indigo-600/20 hover:scale-[1.02] transition-transform"
+                             >
+                                Force Update Webhook
+                             </button>
+                          </div>
+                        ) : (
+                          <div className="text-center py-8">
+                             <div className="w-8 h-8 rounded-full border-2 border-slate-300 border-t-blue-500 animate-spin mx-auto mb-3" />
+                             <p className="text-[10px] font-bold text-slate-500">Checking Telegram Status...</p>
+                          </div>
+                        )}
+                     </div>
+
+                     <div className="bg-amber-500/10 border border-amber-500/20 rounded-3xl p-6">
+                        <div className="flex items-center gap-3 mb-3 text-amber-600">
+                           <Icons.AlertCircle size={18} />
+                           <h3 className="text-xs font-black uppercase tracking-widest">Deep Debug Tip</h3>
+                        </div>
+                        <p className="text-[10px] font-bold text-amber-700/80 leading-relaxed italic">
+                           "Hidden Member" groups mein bot blind ho jata hai jab tak wo admin na ho.
+                           <br/><br/>
+                           Agar logs mein <b>JOIN_REQUEST</b> ya <b>CHAT_MEMBER</b> signals nahi aa rahe, to check karein ki bot admin hai ya nahi.
+                        </p>
+                     </div>
+                  </div>
                 </div>
                 
                 <div className="mt-4 flex items-center justify-between px-2 shrink-0">
