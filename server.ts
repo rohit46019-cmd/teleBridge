@@ -172,6 +172,11 @@ async function startServer() {
     res.json(webhookLogs);
   });
 
+  app.delete("/api/diagnostics", (req, res) => {
+    webhookLogs.length = 0;
+    res.json({ success: true });
+  });
+
   app.get("/api/diagnostics/webhook-info/:token", async (req, res) => {
     try {
       const response = await fetch(`https://api.telegram.org/bot${req.params.token}/getWebhookInfo`);

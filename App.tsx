@@ -165,7 +165,7 @@ const DEFAULT_GROUPS: TelegramGroup[] = [
   { "id": "-1003839638841", "name": "Bhutesh sir math parmar ssc", "memberCount": 4, "description": "Auto Discovered Hub", "category": "Telegram", "image": "https://picsum.photos/seed/-1003839638841/100", "lastInteraction": 1775504050623 }
 ];
 
-const TABS = ['dashboard', 'groups', 'analysis', 'settings'];
+const TABS = ['dashboard', 'groups', 'analysis', 'logs', 'settings'];
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState(() => {
@@ -249,6 +249,45 @@ const App: React.FC = () => {
       return [];
     }
   });
+
+  const [diagnostics, setDiagnostics] = useState<any[]>([]);
+  const [isClearingLogs, setIsClearingLogs] = useState(false);
+
+  useEffect(() => {
+    let interval: any;
+    if (activeTab === 'logs') {
+      const fetchLogs = async () => {
+        try {
+          const res = await fetch('/api/diagnostics');
+          if (res.ok) {
+            const data = await res.json();
+            setDiagnostics(data);
+          }
+        } catch (e) {
+          console.error("Failed to fetch logs:", e);
+        }
+      };
+      
+      fetchLogs();
+      interval = setInterval(fetchLogs, 3000);
+    }
+    return () => clearInterval(interval);
+  }, [activeTab]);
+
+  const handleClearLogs = async () => {
+    setIsClearingLogs(true);
+    try {
+      const res = await fetch('/api/diagnostics', { method: 'DELETE' });
+      if (res.ok) {
+        setDiagnostics([]);
+        showNotification("Logs cleared successfully", "success");
+      }
+    } catch (e) {
+      showNotification("Failed to clear logs", "alert");
+    } finally {
+      setIsClearingLogs(false);
+    }
+  };
   const [isAddingGroup, setIsAddingGroup] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [isProcessingWebhook, setIsProcessingWebhook] = useState(false);
@@ -1942,6 +1981,101 @@ const App: React.FC = () => {
             </div>
           )}
 
+          {activeTab === 'logs' && (
+            <div className={`space-y-6 ${animationClass}`}>
+              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2.5rem] p-6 shadow-xl flex flex-col h-[75vh]">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4 shrink-0">
+                  <div className="flex items-center gap-3">
+                    <button 
+                      onClick={() => setActiveTab('settings')}
+                      className="w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all mr-2"
+                      title="Back to Settings"
+                    >
+                      <Icons.X size={18} strokeWidth={3} />
+                    </button>
+                    <div className="w-10 h-10 bg-amber-500 rounded-xl flex items-center justify-center shadow-lg shadow-amber-500/20">
+                      <Icons.Terminal className="text-white" size={20} strokeWidth={2.5} />
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-black tracking-tight text-slate-900 dark:text-white">Real-time Bot Logs</h2>
+                      <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Live webhook monitoring</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <button 
+                      onClick={handleClearLogs}
+                      disabled={isClearingLogs || diagnostics.length === 0}
+                      className="flex-1 sm:flex-none px-4 py-2 bg-rose-500/10 text-rose-500 text-[10px] font-black uppercase rounded-xl border border-rose-500/20 hover:bg-rose-500 hover:text-white transition-all disabled:opacity-50"
+                    >
+                      {isClearingLogs ? 'Clearing...' : 'Clear All Logs'}
+                    </button>
+                    <div className="px-3 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center gap-2">
+                       <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                       <span className="text-[8px] font-black text-emerald-600 uppercase tracking-widest">Live Polling</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex-1 min-h-0 bg-slate-950 rounded-[2rem] border border-slate-800 overflow-hidden flex flex-col relative group">
+                  <div className="absolute inset-0 bg-gradient-to-b from-blue-500/5 to-transparent pointer-events-none" />
+                  
+                  {diagnostics.length === 0 ? (
+                    <div className="flex-1 flex flex-col items-center justify-center text-slate-600 p-8 text-center">
+                      <Icons.Terminal size={48} className="mb-4 opacity-10" />
+                      <p className="text-sm font-black uppercase tracking-widest opacity-40">No signals detected</p>
+                      <p className="text-[10px] font-bold opacity-30 mt-2">Waiting for Telegram webhook data...</p>
+                    </div>
+                  ) : (
+                    <div className="flex-1 overflow-y-auto p-6 space-y-4 font-mono custom-scrollbar">
+                      {diagnostics.map((log, i) => (
+                        <div key={i} className="animate-in fade-in slide-in-from-bottom-2 duration-500">
+                          <div className="flex items-start gap-4 p-4 bg-white/5 hover:bg-white/10 rounded-2xl transition-all border border-white/5 group/row hover:border-white/10">
+                            <div className="flex flex-col items-center gap-2 shrink-0 pt-1">
+                              <span className="text-[9px] font-black text-slate-500 tabular-nums">
+                                {new Date(log.time).toLocaleTimeString([], { hour12: false })}
+                              </span>
+                              <div className={`w-1 h-8 rounded-full ${
+                                log.type === 'message' ? 'bg-blue-500/40' :
+                                log.type === 'chat_member' ? 'bg-emerald-500/40' :
+                                log.type === 'join_request' ? 'bg-amber-500/40' :
+                                'bg-purple-500/40'
+                              }`} />
+                            </div>
+                            
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-3 mb-2">
+                                <span className={`text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest ${
+                                  log.type === 'message' ? 'bg-blue-500 text-white' :
+                                  log.type === 'chat_member' ? 'bg-emerald-500 text-white' :
+                                  log.type === 'join_request' ? 'bg-amber-500 text-white' :
+                                  log.type === 'my_chat_member' ? 'bg-purple-500 text-white' :
+                                  'bg-slate-500 text-white'
+                                }`}>
+                                  {log.type}
+                                </span>
+                                <span className="text-[9px] font-black text-slate-600 uppercase tracking-tighter truncate">
+                                  {log.payload?.message?.from?.first_name || log.payload?.chat_join_request?.from?.first_name || log.payload?.chat_member?.new_chat_member?.user?.first_name || 'System Event'}
+                                </span>
+                              </div>
+                              <pre className="text-[11px] text-slate-300 overflow-x-auto custom-scrollbar-horizontal whitespace-pre-wrap break-all leading-relaxed bg-black/40 p-4 rounded-xl border border-white/5 shadow-inner">
+                                {JSON.stringify(log.payload, null, 2)}
+                              </pre>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                
+                <div className="mt-4 flex items-center justify-between px-2 shrink-0">
+                   <p className="text-[10px] font-bold text-slate-500">Showing last 50 events</p>
+                   <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">Auto-refresh Active</p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {activeTab === 'settings' && (
             <div className={`max-w-xl space-y-6 ${animationClass}`}>
               <div className="flex bg-slate-100 dark:bg-slate-800 p-1.5 rounded-[1.5rem] border border-slate-200 dark:border-slate-700 shadow-inner">
@@ -2334,17 +2468,17 @@ const App: React.FC = () => {
                       </button>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3 mt-3">
-                      <button onClick={() => importFileRef.current?.click()} className="flex flex-col items-center justify-center gap-2 p-5 bg-emerald-600 text-white rounded-2xl shadow-lg active:scale-95 transition-all w-full col-span-1">
-                        <Icons.UploadCloud size={20} />
-                        <span className="text-[10px] font-black uppercase tracking-widest">Import</span>
-                      </button>
-                      <button onClick={() => window.open('/api/diagnostics', '_blank')} className="flex flex-col items-center justify-center gap-2 p-5 bg-amber-600 text-white rounded-2xl shadow-lg active:scale-95 transition-all w-full col-span-1">
-                        <Icons.Activity size={20} />
-                        <span className="text-[10px] font-black uppercase tracking-widest">Log</span>
-                      </button>
-                      <input type="file" ref={importFileRef} onChange={handleImport} accept=".json" className="hidden" />
-                    </div>
+                      <div className="grid grid-cols-2 gap-3 mt-3">
+                        <button onClick={() => importFileRef.current?.click()} className="flex flex-col items-center justify-center gap-2 p-5 bg-emerald-600 text-white rounded-2xl shadow-lg active:scale-95 transition-all w-full col-span-1">
+                          <Icons.UploadCloud size={20} />
+                          <span className="text-[10px] font-black uppercase tracking-widest">Import</span>
+                        </button>
+                        <button onClick={() => setActiveTab('logs')} className="flex flex-col items-center justify-center gap-2 p-5 bg-amber-600 text-white rounded-2xl shadow-lg active:scale-95 transition-all w-full col-span-1">
+                          <Icons.Terminal size={20} />
+                          <span className="text-[10px] font-black uppercase tracking-widest">Log</span>
+                        </button>
+                        <input type="file" ref={importFileRef} onChange={handleImport} accept=".json" className="hidden" />
+                      </div>
                   </div>
                 </div>
               )}
