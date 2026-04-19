@@ -299,7 +299,6 @@ async function startServer() {
              });
 
              if (!existing) {
-               // Only proceed if we haven't tracked this exact join in the last 60s
                await (JoinEvent as any).create({
                  userId: ev.userId,
                  userName: ev.userName,
@@ -325,10 +324,10 @@ async function startServer() {
                      if (data.ok) {
                        setTimeout(() => {
                          fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${ev.chatId}&message_id=${data.result.message_id}`).catch(() => {});
-                       }, 60000); // 1 MINUTE
+                       }, 70000); // 70 SECONDS
                      }
                    }).catch(() => {});
-                 }, 5000); // 5 SECONDS
+                 }, 10000); // 10 SECONDS
                }
              }
           }
