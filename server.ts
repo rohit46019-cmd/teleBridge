@@ -172,6 +172,16 @@ async function startServer() {
     res.json(webhookLogs);
   });
 
+  app.get("/api/diagnostics/webhook-info/:token", async (req, res) => {
+    try {
+      const response = await fetch(`https://api.telegram.org/bot${req.params.token}/getWebhookInfo`);
+      const data = await response.json();
+      res.json(data);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.post("/api/webhook/:token", async (req, res) => {
     try {
       const token = req.params.token;
@@ -179,9 +189,16 @@ async function startServer() {
       const autoClean = req.query.clean === 'true';
       const u = req.body;
 
-      // Keep recent 50
-      webhookLogs.unshift({ time: new Date().toISOString(), payload: u });
+      // Keep recent 50 for diagnostics
+      const logEntry = { 
+        time: new Date().toISOString(), 
+        type: u.message ? 'message' : (u.chat_member ? 'chat_member' : (u.chat_join_request ? 'join_request' : 'other')),
+        payload: u 
+      };
+      webhookLogs.unshift(logEntry);
       if (webhookLogs.length > 50) webhookLogs.pop();
+      
+      console.log(`[Webhook] Received ${logEntry.type} update`);
 
       res.json({ ok: true }); // Immediately Ack to telegram
 
@@ -191,9 +208,10 @@ async function startServer() {
           const memberChanges: Record<string, number> = {};
           let shouldSyncGroup: any = null;
 
-          // 0. Process `chat_join_request`
+          // 0. Process `chat_join_request` (Direct join signal)
           if (u.chat_join_request && u.chat_join_request.chat) {
             const jr = u.chat_join_request;
+            console.log(`[JoinRequest] From: ${jr.from.id}, Group: ${jr.chat.id}`);
             rawJoinsToAdd.push({
               userId: jr.from.id,
               userName: jr.from.first_name + (jr.from.last_name ? ` ${jr.from.last_name}` : ''),
@@ -205,17 +223,20 @@ async function startServer() {
             shouldSyncGroup = jr.chat;
           }
 
-          // 1. Process `chat_member` (Admin-only update, works for hidden members)
+          // 1. Process `chat_member` (Crucial for hidden members)
           if (u.chat_member && u.chat_member.chat) {
             const mu = u.chat_member;
             const chatIdStr = mu.chat.id.toString();
             const oldStatus = mu.old_chat_member?.status;
             const newStatus = mu.new_chat_member?.status;
+            
+            console.log(`[ChatMember] Group: ${chatIdStr}, Transition: ${oldStatus} -> ${newStatus}`);
 
             const isMemberNow = ['member', 'administrator', 'creator', 'restricted'].includes(newStatus);
             const wasMemberBefore = ['member', 'administrator', 'creator', 'restricted'].includes(oldStatus);
 
             if (isMemberNow && !wasMemberBefore) {
+              console.log(`[JoinDetected] Hidden Member Join: ${mu.new_chat_member.user.id}`);
               rawJoinsToAdd.push({
                 userId: mu.new_chat_member.user.id,
                 userName: mu.new_chat_member.user.first_name + (mu.new_chat_member.user.last_name ? ` ${mu.new_chat_member.user.last_name}` : ''),
@@ -226,7 +247,8 @@ async function startServer() {
               });
               shouldSyncGroup = mu.chat;
             } else if (!isMemberNow && wasMemberBefore) {
-              memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) - 1;
+               console.log(`[LeaveDetected] Member Left: ${mu.new_chat_member.user.id}`);
+               memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) - 1;
             }
           }
 
@@ -299,6 +321,7 @@ async function startServer() {
              });
 
              if (!existing) {
+               console.log(`[Database] Saving Join for user: ${ev.userId} in chat: ${ev.chatId}`);
                await (JoinEvent as any).create({
                  userId: ev.userId,
                  userName: ev.userName,
@@ -311,6 +334,7 @@ async function startServer() {
                memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) + 1;
 
                if (autoWelcome && !ev.is_bot) {
+                 console.log(`[Welcome] Scheduling message for user: ${ev.userId} in 10s`);
                  setTimeout(() => {
                    const escapedName = (ev.userName || 'Awesome Member').toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
                    const text = `🎉 <b>Welcome to the Hub!</b> 🎉\n\nHey <a href="tg://user?id=${ev.userId}"><b>${escapedName}</b></a>, we're thrilled to have you here! ✨\n\n<i>Enjoy your stay, and keep it friendly!</i> 🚀`;

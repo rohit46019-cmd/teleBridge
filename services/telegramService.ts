@@ -156,6 +156,13 @@ export async function setWebhook(token: string, url: string): Promise<boolean> {
   return true;
 }
 
+export async function getWebhookInfo(token: string): Promise<any> {
+  const response = await fetchWithTimeout(`${BASE_URL}${token}/getWebhookInfo`);
+  const data = await response.json();
+  if (!data.ok) throw new Error(data.description || 'Failed to get webhook info');
+  return data.result;
+}
+
 export async function deleteWebhook(token: string): Promise<boolean> {
   const response = await fetchWithTimeout(`${BASE_URL}${token}/deleteWebhook`);
   const data = await response.json();
