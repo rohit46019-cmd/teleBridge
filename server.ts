@@ -41,11 +41,19 @@ const inviteLinkSchema = new mongoose.Schema({
   createdAt: Number
 });
 
+const webhookLogSchema = new mongoose.Schema({
+  time: String,
+  type: String,
+  payload: mongoose.Schema.Types.Mixed,
+  createdAt: { type: Date, default: Date.now, expires: 86400 } // Auto-delete after 24h
+});
+
 // Define Models
 const JoinEvent = mongoose.models.JoinEvent || mongoose.model("JoinEvent", joinEventSchema);
 const Group = mongoose.models.Group || mongoose.model("Group", groupSchema);
 const Broadcast = mongoose.models.Broadcast || mongoose.model("Broadcast", broadcastSchema);
 const InviteLink = mongoose.models.InviteLink || mongoose.model("InviteLink", inviteLinkSchema);
+const WebhookLog = mongoose.models.WebhookLog || mongoose.model("WebhookLog", webhookLogSchema);
 
 // Global Error Handlers to prevent server crashes
 process.on('unhandledRejection', (reason, promise) => {
@@ -168,13 +176,22 @@ async function startServer() {
     });
   });
 
-  app.get("/api/diagnostics", (req, res) => {
-    res.json(webhookLogs);
+  app.get("/api/diagnostics", async (req, res) => {
+    try {
+      const logs = await WebhookLog.find().sort({ createdAt: -1 }).limit(50);
+      res.json(logs);
+    } catch (e) {
+      res.status(500).json({ error: "Failed to fetch logs" });
+    }
   });
 
-  app.delete("/api/diagnostics", (req, res) => {
-    webhookLogs.length = 0;
-    res.json({ success: true });
+  app.delete("/api/diagnostics", async (req, res) => {
+    try {
+      await WebhookLog.deleteMany({});
+      res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ error: "Failed to clear logs" });
+    }
   });
 
   app.get("/api/diagnostics/webhook-info/:token", async (req, res) => {
@@ -194,203 +211,212 @@ async function startServer() {
       const autoClean = req.query.clean === 'true';
       const u = req.body;
 
-      // Keep recent 50 for diagnostics
+      const type = u.message ? 'message' : (u.chat_member ? 'chat_member' : (u.chat_join_request ? 'join_request' : (u.my_chat_member ? 'my_chat_member' : 'other')));
+      
+      // Save to MongoDB for persistent diagnostics
       const logEntry = { 
         time: new Date().toISOString(), 
-        type: u.message ? 'message' : (u.chat_member ? 'chat_member' : (u.chat_join_request ? 'join_request' : (u.my_chat_member ? 'my_chat_member' : 'other'))),
+        type: type,
         payload: u 
       };
-      webhookLogs.unshift(logEntry);
-      if (webhookLogs.length > 50) webhookLogs.pop();
       
-      console.log(`[Webhook] [${token.slice(-4)}] Received ${logEntry.type} update`);
+      await WebhookLog.create(logEntry).catch(e => console.error("Log save error:", e));
+      
+      console.log(`[Webhook] [${token.slice(-4)}] Received ${type} update`);
 
-      res.json({ ok: true }); // Immediately Ack to telegram
+      // Process logic
+      const rawJoinsToAdd: any[] = [];
+      const memberChanges: Record<string, number> = {};
+      let shouldSyncGroup: any = null;
 
-      (async () => {
-        try {
-          const rawJoinsToAdd: any[] = [];
-          const memberChanges: Record<string, number> = {};
-          let shouldSyncGroup: any = null;
-
-          // -1. Process `my_chat_member` (Bot discovery)
-          if (u.my_chat_member && u.my_chat_member.chat) {
-            const myMu = u.my_chat_member;
-            const newStatus = myMu.new_chat_member?.status;
-            console.log(`[BotStatus] Group: ${myMu.chat.id}, NewStatus: ${newStatus}`);
-            if (['member', 'administrator'].includes(newStatus)) {
-              shouldSyncGroup = myMu.chat;
-            }
-          }
-
-          // 0. Process `chat_join_request` (Direct join signal)
-          if (u.chat_join_request && u.chat_join_request.chat) {
-            const jr = u.chat_join_request;
-            console.log(`[JoinRequest] From: ${jr.from.id}, Group: ${jr.chat.id}`);
-            rawJoinsToAdd.push({
-              userId: jr.from.id,
-              userName: jr.from.first_name + (jr.from.last_name ? ` ${jr.from.last_name}` : ''),
-              chatId: jr.chat.id,
-              chatTitle: jr.chat.title,
-              timestamp: jr.date ? jr.date * 1000 : Date.now(),
-              is_bot: jr.from.is_bot
-            });
-            shouldSyncGroup = jr.chat;
-          }
-
-          // 1. Process `chat_member` (Crucial for hidden members)
-          if (u.chat_member && u.chat_member.chat) {
-            const mu = u.chat_member;
-            const chatIdStr = mu.chat.id.toString();
-            const oldStatus = mu.old_chat_member?.status;
-            const newStatus = mu.new_chat_member?.status;
-            
-            console.log(`[ChatMember] Group: ${chatIdStr}, Transition: ${oldStatus} -> ${newStatus}`);
-
-            const isMemberNow = ['member', 'administrator', 'creator', 'restricted'].includes(newStatus);
-            const wasMemberBefore = ['member', 'administrator', 'creator', 'restricted'].includes(oldStatus);
-
-            if (isMemberNow && !wasMemberBefore) {
-              console.log(`[JoinDetected] Hidden Member Join: ${mu.new_chat_member.user.id}`);
-              rawJoinsToAdd.push({
-                userId: mu.new_chat_member.user.id,
-                userName: mu.new_chat_member.user.first_name + (mu.new_chat_member.user.last_name ? ` ${mu.new_chat_member.user.last_name}` : ''),
-                chatId: mu.chat.id,
-                chatTitle: mu.chat.title,
-                timestamp: mu.date ? mu.date * 1000 : Date.now(),
-                is_bot: mu.new_chat_member.user.is_bot
-              });
-              shouldSyncGroup = mu.chat;
-            } else if (!isMemberNow && wasMemberBefore) {
-               console.log(`[LeaveDetected] Member Left: ${mu.new_chat_member.user.id}`);
-               memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) - 1;
-            }
-          }
-
-          // 2. Process `message` (Works for visible members, handles deletions)
-          if (u.message && u.message.new_chat_members) {
-            const chatId = u.message.chat.id;
-            const chatTitle = u.message.chat.title;
-            const chatIdStr = chatId.toString();
-
-            if (autoClean) {
-               fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${chatId}&message_id=${u.message.message_id}`).catch(() => {});
-            }
-
-            u.message.new_chat_members.forEach((newUser: any) => {
-              rawJoinsToAdd.push({
-                userId: newUser.id,
-                userName: newUser.first_name + (newUser.last_name ? ` ${newUser.last_name}` : ''),
-                chatId: chatId,
-                chatTitle: chatTitle,
-                timestamp: u.message.date ? u.message.date * 1000 : Date.now(),
-                is_bot: newUser.is_bot
-              });
-            });
-            shouldSyncGroup = u.message.chat;
-          }
-
-          if (u.message && u.message.left_chat_member) {
-            const chatIdStr = u.message.chat.id.toString();
-            memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) - 1;
-            if (autoClean) {
-               fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${u.message.chat.id}&message_id=${u.message.message_id}`).catch(() => {});
-            }
-          }
-
-          if (u.message && u.message.new_chat_title) {
-            const chatIdStr = u.message.chat.id.toString();
-            await (Group as any).findOneAndUpdate({ id: chatIdStr }, { name: u.message.new_chat_title }, { upsert: false });
-          }
-          
-          if (shouldSyncGroup && (shouldSyncGroup.type === 'group' || shouldSyncGroup.type === 'supergroup')) {
-             const gid = shouldSyncGroup.id.toString();
-             const groupExists = await (Group as any).findOne({ id: gid });
-             if (!groupExists) {
-               console.log(`[Sync] Discovering new group: ${gid} (${shouldSyncGroup.title})`);
-               await (Group as any).create({
-                 id: gid,
-                 name: shouldSyncGroup.title || 'Unknown',
-                 memberCount: 0,
-                 description: shouldSyncGroup.description || 'Auto Discovered',
-                 category: 'Telegram',
-                 image: `https://picsum.photos/seed/${gid}/200`,
-                 lastInteraction: Date.now(),
-                 interactionCount: 1,
-                 createdAt: Date.now()
-               });
-             } else {
-               await (Group as any).findOneAndUpdate({ id: gid }, { 
-                 $set: { lastInteraction: Date.now(), name: shouldSyncGroup.title || groupExists.name }, 
-                 $inc: { interactionCount: 1 }
-               });
-             }
-          }
-
-          // 3. Deduplicate joins mathematically!
-          for (const ev of rawJoinsToAdd) {
-             const cutoffLower = ev.timestamp - 120000; // Deduplicate within 2 mins
-             const cutoffUpper = ev.timestamp + 120000;
-             const existing = await (JoinEvent as any).findOne({
-               userId: ev.userId,
-               chatId: ev.chatId,
-               timestamp: { $gt: cutoffLower, $lt: cutoffUpper }
-             });
-
-             if (!existing) {
-               console.log(`[Database] Saving Join for user: ${ev.userId} in chat: ${ev.chatId}`);
-               await (JoinEvent as any).create({
-                 userId: ev.userId,
-                 userName: ev.userName,
-                 chatId: ev.chatId,
-                 chatTitle: ev.chatTitle,
-                 timestamp: ev.timestamp
-               });
-
-               const chatIdStr = ev.chatId.toString();
-               memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) + 1;
-
-               if (autoWelcome && !ev.is_bot) {
-                 console.log(`[Welcome] Scheduling message for user: ${ev.userId} in 10s`);
-                 setTimeout(() => {
-                   const escapedName = (ev.userName || 'Awesome Member').toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-                   const text = `🎉 <b>Welcome to the Hub!</b> 🎉\n\nHey <a href="tg://user?id=${ev.userId}"><b>${escapedName}</b></a>, we're thrilled to have you here! ✨\n\n<i>Enjoy your stay, and keep it friendly!</i> 🚀`;
-                   
-                   console.log(`[Welcome] Sending message to ${ev.userId} in chat ${ev.chatId}`);
-                   fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-                     method: 'POST',
-                     headers: { 'Content-Type': 'application/json' },
-                     body: JSON.stringify({ chat_id: ev.chatId, text, parse_mode: 'HTML' })
-                   })
-                   .then((res: any) => res.json())
-                   .then((data: any) => {
-                     if (data.ok) {
-                       console.log(`[Welcome] Success for ${ev.userId}`);
-                       setTimeout(() => {
-                         fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${ev.chatId}&message_id=${data.result.message_id}`).catch(() => {});
-                       }, 70000); // 70 SECONDS
-                     } else {
-                       console.error(`[Welcome] Failed for ${ev.userId}: ${data.description}`);
-                     }
-                   })
-                   .catch(err => console.error(`[Welcome] Error:`, err));
-                 }, 10000); // 10 SECONDS
-               }
-             }
-          }
-
-          for (const [chatIdStr, diff] of Object.entries(memberChanges)) {
-             if (diff !== 0) {
-               await (Group as any).findOneAndUpdate({ id: chatIdStr }, { $inc: { memberCount: diff } });
-             }
-          }
-        } catch (e) {
-          console.error("Error processing webhook update:", e);
+      // -1. Process `my_chat_member` (Bot discovery)
+      if (u.my_chat_member && u.my_chat_member.chat) {
+        const myMu = u.my_chat_member;
+        const newStatus = myMu.new_chat_member?.status;
+        console.log(`[BotStatus] Group: ${myMu.chat.id}, NewStatus: ${newStatus}`);
+        if (['member', 'administrator'].includes(newStatus)) {
+          shouldSyncGroup = myMu.chat;
         }
-      })();
+      }
+
+      // 0. Process `chat_join_request` (Direct join signal)
+      if (u.chat_join_request && u.chat_join_request.chat) {
+        const jr = u.chat_join_request;
+        console.log(`[JoinRequest] From: ${jr.from.id}, Group: ${jr.chat.id}`);
+        rawJoinsToAdd.push({
+          userId: jr.from.id,
+          userName: jr.from.first_name + (jr.from.last_name ? ` ${jr.from.last_name}` : ''),
+          chatId: jr.chat.id,
+          chatTitle: jr.chat.title,
+          timestamp: jr.date ? jr.date * 1000 : Date.now(),
+          is_bot: jr.from.is_bot
+        });
+        shouldSyncGroup = jr.chat;
+      }
+
+      // 1. Process `chat_member` (Crucial for hidden members)
+      if (u.chat_member && u.chat_member.chat) {
+        const mu = u.chat_member;
+        const chatIdStr = mu.chat.id.toString();
+        const oldStatus = mu.old_chat_member?.status;
+        const newStatus = mu.new_chat_member?.status;
+        
+        console.log(`[ChatMember] Group: ${chatIdStr}, Transition: ${oldStatus} -> ${newStatus}`);
+
+        const isMemberNow = ['member', 'administrator', 'creator', 'restricted'].includes(newStatus);
+        const wasMemberBefore = ['member', 'administrator', 'creator', 'restricted'].includes(oldStatus);
+
+        if (isMemberNow && !wasMemberBefore) {
+          console.log(`[JoinDetected] Hidden Member Join: ${mu.new_chat_member.user.id}`);
+          rawJoinsToAdd.push({
+            userId: mu.new_chat_member.user.id,
+            userName: mu.new_chat_member.user.first_name + (mu.new_chat_member.user.last_name ? ` ${mu.new_chat_member.user.last_name}` : ''),
+            chatId: mu.chat.id,
+            chatTitle: mu.chat.title,
+            timestamp: mu.date ? mu.date * 1000 : Date.now(),
+            is_bot: mu.new_chat_member.user.is_bot
+          });
+          shouldSyncGroup = mu.chat;
+        } else if (!isMemberNow && wasMemberBefore) {
+           console.log(`[LeaveDetected] Member Left: ${mu.new_chat_member.user.id}`);
+           memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) - 1;
+        }
+      }
+
+      // 2. Process `message` (Works for visible members, handles deletions)
+      if (u.message && u.message.new_chat_members) {
+        const chatId = u.message.chat.id;
+        const chatTitle = u.message.chat.title;
+        const chatIdStr = chatId.toString();
+
+        if (autoClean) {
+           fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${chatId}&message_id=${u.message.message_id}`).catch(() => {});
+        }
+
+        u.message.new_chat_members.forEach((newUser: any) => {
+          rawJoinsToAdd.push({
+            userId: newUser.id,
+            userName: newUser.first_name + (newUser.last_name ? ` ${newUser.last_name}` : ''),
+            chatId: chatId,
+            chatTitle: chatTitle,
+            timestamp: u.message.date ? u.message.date * 1000 : Date.now(),
+            is_bot: newUser.is_bot
+          });
+        });
+        shouldSyncGroup = u.message.chat;
+      }
+
+      if (u.message && u.message.left_chat_member) {
+        const chatIdStr = u.message.chat.id.toString();
+        memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) - 1;
+        if (autoClean) {
+           fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${u.message.chat.id}&message_id=${u.message.message_id}`).catch(() => {});
+        }
+      }
+
+      if (u.message && u.message.new_chat_title) {
+        const chatIdStr = u.message.chat.id.toString();
+        await (Group as any).findOneAndUpdate({ id: chatIdStr }, { name: u.message.new_chat_title }, { upsert: false });
+      }
+      
+      if (shouldSyncGroup && (shouldSyncGroup.type === 'group' || shouldSyncGroup.type === 'supergroup')) {
+         const gid = shouldSyncGroup.id.toString();
+         const groupExists = await (Group as any).findOne({ id: gid });
+         if (!groupExists) {
+           console.log(`[Sync] Discovering new group: ${gid} (${shouldSyncGroup.title})`);
+           await (Group as any).create({
+             id: gid,
+             name: shouldSyncGroup.title || 'Unknown',
+             memberCount: 0,
+             description: shouldSyncGroup.description || 'Auto Discovered',
+             category: 'Telegram',
+             image: `https://picsum.photos/seed/${gid}/200`,
+             lastInteraction: Date.now(),
+             interactionCount: 1,
+             createdAt: Date.now()
+           });
+         } else {
+           await (Group as any).findOneAndUpdate({ id: gid }, { 
+             $set: { lastInteraction: Date.now(), name: shouldSyncGroup.title || groupExists.name }, 
+             $inc: { interactionCount: 1 }
+           });
+         }
+      }
+
+      // 3. Deduplicate joins mathematically!
+      for (const ev of rawJoinsToAdd) {
+         const cutoffLower = ev.timestamp - 120000; // Deduplicate within 2 mins
+         const cutoffUpper = ev.timestamp + 120000;
+         const existing = await (JoinEvent as any).findOne({
+           userId: ev.userId,
+           chatId: ev.chatId,
+           timestamp: { $gt: cutoffLower, $lt: cutoffUpper }
+         });
+
+         if (!existing) {
+           console.log(`[Database] Saving Join for user: ${ev.userId} in chat: ${ev.chatId}`);
+           await (JoinEvent as any).create({
+             userId: ev.userId,
+             userName: ev.userName,
+             chatId: ev.chatId,
+             chatTitle: ev.chatTitle,
+             timestamp: ev.timestamp
+           });
+
+           const chatIdStr = ev.chatId.toString();
+           memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) + 1;
+
+           if (autoWelcome && !ev.is_bot) {
+             console.log(`[Welcome] Scheduling message for user: ${ev.userId} in 10s`);
+             // We use a detached approach for the 10s delay to let the response finish
+             // but Vercel might kill it. However, we've done the DB work already.
+             setTimeout(() => {
+               const escapedName = (ev.userName || 'Awesome Member').toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+               const text = `🎉 <b>Welcome to the Hub!</b> 🎉\n\nHey <a href="tg://user?id=${ev.userId}"><b>${escapedName}</b></a>, we're thrilled to have you here! ✨\n\n<i>Enjoy your stay, and keep it friendly!</i> 🚀`;
+               
+               console.log(`[Welcome] Sending message to ${ev.userId} in chat ${ev.chatId}`);
+               fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+                 method: 'POST',
+                 headers: { 'Content-Type': 'application/json' },
+                 body: JSON.stringify({ chat_id: ev.chatId, text, parse_mode: 'HTML' })
+               })
+               .then((res: any) => res.json())
+               .then(async (data: any) => {
+                 if (data.ok) {
+                   console.log(`[Welcome] Success for ${ev.userId}`);
+                   await WebhookLog.create({
+                     time: new Date().toISOString(),
+                     type: 'system_log',
+                     payload: { status: 'success', message: `Welcome message sent to ${ev.userName}`, chatId: ev.chatId }
+                   }).catch(() => {});
+                   
+                   setTimeout(() => {
+                     fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${ev.chatId}&message_id=${data.result.message_id}`).catch(() => {});
+                   }, 70000); // 70 SECONDS
+                 } else {
+                   console.error(`[Welcome] Failed for ${ev.userId}: ${data.description}`);
+                   await WebhookLog.create({
+                     time: new Date().toISOString(),
+                     type: 'system_error',
+                     payload: { status: 'failed', error: data.description, context: `Welcome message for ${ev.userName}`, chatId: ev.chatId }
+                   }).catch(() => {});
+                 }
+               })
+               .catch(err => console.error(`[Welcome] Error:`, err));
+             }, 10000); // 10 SECONDS
+           }
+         }
+      }
+
+      for (const [chatIdStr, diff] of Object.entries(memberChanges)) {
+         if (diff !== 0) {
+           await (Group as any).findOneAndUpdate({ id: chatIdStr }, { $inc: { memberCount: diff } });
+         }
+      }
+
+      res.json({ ok: true });
     } catch (err) {
       console.error("Webhook route error:", err);
-      // Ensure we don't bleed errors and timeout to TG
       res.status(500).json({ error: "Webhook failure" });
     }
   });

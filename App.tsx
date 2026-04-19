@@ -1500,6 +1500,10 @@ const App: React.FC = () => {
       await setWebhook(token, webhookUrl);
       setWebhookActive(true);
       showNotification("Webhook set! 24/7 background mode is now ACTIVE.", "success");
+      // Advise logs check
+      setTimeout(() => {
+        showNotification("Check 'Logs' in settings to see real-time signals.", "info");
+      }, 2000);
     } catch (err: any) {
       showNotification(`Failed to set webhook: ${err.message}`, "alert");
     } finally {
@@ -1847,6 +1851,15 @@ const App: React.FC = () => {
 
               {auditSubTab === 'audit' ? (
                 <>
+                  <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-3xl flex items-center gap-4 mb-4">
+                     <Icons.AlertCircle className="text-amber-500 shrink-0" size={20} />
+                     <div className="flex-1">
+                       <p className="text-xs font-black text-amber-700 dark:text-amber-400 uppercase tracking-widest">Hidden Member Tracking</p>
+                       <p className="text-[10px] font-bold text-slate-600 dark:text-slate-400 mt-0.5 leading-relaxed italic">
+                         Agar aapne participants hide kiye hain, to bot ka <b>ADMIN</b> hona zaroori hai. Admin permission se hi hidden joins track hote hain.
+                       </p>
+                     </div>
+                  </div>
                   <div className="flex flex-col md:flex-row gap-4">
                      <div className="flex-1 bg-indigo-600 p-6 rounded-[2.5rem] border-b-4 border-indigo-900 shadow-xl text-white relative overflow-hidden active:scale-95 transition-transform">
                         <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-1 opacity-80">Total Joined ({selectedDate})</p>
@@ -2001,7 +2014,13 @@ const App: React.FC = () => {
                       <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Live webhook monitoring</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                    {!webhookActive && (
+                      <div className="px-3 py-2 bg-rose-500/10 border border-rose-500/20 rounded-xl flex items-center gap-2 mr-auto sm:mr-0">
+                        <Icons.AlertTriangle className="text-rose-500" size={14} />
+                        <span className="text-[8px] font-black text-rose-600 uppercase tracking-widest leading-none">Webhook Inactive - Start Background Mode first</span>
+                      </div>
+                    )}
                     <button 
                       onClick={handleClearLogs}
                       disabled={isClearingLogs || diagnostics.length === 0}
@@ -2011,7 +2030,7 @@ const App: React.FC = () => {
                     </button>
                     <div className="px-3 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center gap-2">
                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                       <span className="text-[8px] font-black text-emerald-600 uppercase tracking-widest">Live Polling</span>
+                       <span className="text-[8px] font-black text-emerald-600 uppercase tracking-widest">Polling DB</span>
                     </div>
                   </div>
                 </div>
