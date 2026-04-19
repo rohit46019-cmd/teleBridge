@@ -267,125 +267,190 @@ app.delete("/api/broadcast/:id", async (req, res) => {
 // Webhook Handler for 24/7 Join/Leave Cleanup & Welcome
 app.post("/api/webhook/:token", async (req, res) => {
   try {
-    const { token } = req.params
-    const autoWelcome = req.query.welcome === 'true'
-    // Also extracting auto clean query param if passed, defaulting to true to be safe
-    const autoClean = req.query.clean !== 'false'
-    const update = req.body
+    const token = req.params.token;
+    const autoWelcome = req.query.welcome === 'true';
+    const autoClean = req.query.clean === 'true';
+    const u = req.body;
 
-    const activeTasks: Promise<any>[] = [];
+    // Immediately ACK to Telegram if we want, but on Vercel we MUST wait if we have async work.
+    // However, if we take too long (>10s), Telegram will retry.
+    // We'll process as much as possible then respond.
 
-    // Handle service messages (join/leave)
-    if (update.message) {
-      const { message_id, chat, new_chat_members, left_chat_member } = update.message
-      
-      // Update Group registry
-      if (chat && (chat.type === 'group' || chat.type === 'supergroup')) {
-        activeTasks.push(
-          (Group as any).findOneAndUpdate(
-            { id: chat.id.toString() }, 
-            { 
-               id: chat.id.toString(), 
-               name: chat.title || 'Unknown Group',
-               $setOnInsert: { 
-                 category: 'Telegram',
-                 image: `https://picsum.photos/seed/${chat.id}/200`,
-                 lastInteraction: Date.now(),
-                 interactionCount: 0
-               }
-            }, 
-            { upsert: true }
-          ).exec().catch(() => {})
-        );
-      }
+    const processUpdate = async () => {
+      try {
+        const rawJoinsToAdd: any[] = [];
+        const memberChanges: Record<string, number> = {};
+        let shouldSyncGroup: any = null;
 
-      if ((new_chat_members || left_chat_member) && autoClean) {
-        console.log(`[Webhook] Service message detected in ${chat.id}. Deleting...`)
-        
-        // Asynchronously delete the service message
-        activeTasks.push(
-          fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${chat.id}&message_id=${message_id}`)
-            .catch(err => console.error(`[Webhook] Delete failed:`, err))
-        );
-      }
-
-      // Auto Welcome and DB Save
-      if (new_chat_members) {
-        
-        // Log joins to database
-        const eventsToSave: any[] = [];
-        new_chat_members.forEach((member: any) => {
-          eventsToSave.push({
-            userId: member.id,
-            userName: member.first_name + (member.last_name ? ` ${member.last_name}` : ''),
-            chatId: chat.id,
-            chatTitle: chat.title || 'Unknown Group',
-            timestamp: update.message.date ? update.message.date * 1000 : Date.now()
+        // 0. Process `chat_join_request`
+        if (u.chat_join_request && u.chat_join_request.chat) {
+          const jr = u.chat_join_request;
+          rawJoinsToAdd.push({
+            userId: jr.from.id,
+            userName: jr.from.first_name + (jr.from.last_name ? ` ${jr.from.last_name}` : ''),
+            chatId: jr.chat.id,
+            chatTitle: jr.chat.title,
+            timestamp: jr.date ? jr.date * 1000 : Date.now(),
+            is_bot: jr.from.is_bot
           });
-        });
-
-        if (eventsToSave.length > 0) {
-          activeTasks.push(
-            Promise.all(eventsToSave.map(ev => 
-               (JoinEvent as any).findOneAndUpdate({ userId: ev.userId, timestamp: ev.timestamp }, ev, { upsert: true })
-            )).catch(err => console.error("Webhook DB Save Error:", err))
-          );
+          shouldSyncGroup = jr.chat;
         }
 
-        // Auto Welcome logic
-        if (autoWelcome) {
-          activeTasks.push(
-            (async () => {
-               const sentMessages: number[] = [];
-               
-               // First send all welcome messages
-               for (const member of new_chat_members) {
-                 if (member.is_bot) continue;
-                 
-                 const userName = member.first_name || 'Member';
-                 const text = `Welcome <a href="tg://user?id=${member.id}">${userName}</a> to the group! 🎉`;
-                 
-                 try {
-                   const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-                     method: 'POST',
-                     headers: { 'Content-Type': 'application/json' },
-                     body: JSON.stringify({ chat_id: chat.id, text, parse_mode: 'HTML' })
-                   });
-                   const data = await res.json();
-                   if (data.ok && data.result) {
-                     sentMessages.push(data.result.message_id);
-                   }
-                 } catch (err) {
-                   console.error(`[Webhook] Welcome message send error:`, err);
-                 }
-               }
-               
-               // If any were sent, hold the Vercel execution for 15 seconds, then delete them
-               if (sentMessages.length > 0) {
-                 await new Promise(resolve => setTimeout(resolve, 15000));
-                 
-                 for (const msgId of sentMessages) {
-                   try {
-                     await fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${chat.id}&message_id=${msgId}`);
-                   } catch (err) {
-                     console.error(`[Webhook] Welcome delete error:`, err);
-                   }
-                 }
-               }
-            })()
-          );
+        // Handle my_chat_member (Bot's own status changed)
+        if (u.my_chat_member && u.my_chat_member.chat) {
+          const myMu = u.my_chat_member;
+          const newStatus = myMu.new_chat_member?.status;
+          if (['member', 'administrator', 'creator', 'restricted'].includes(newStatus)) {
+            shouldSyncGroup = myMu.chat;
+          }
         }
+
+        // 1. Process `chat_member` (Admin-only update, works for hidden members)
+        if (u.chat_member && u.chat_member.chat) {
+          const mu = u.chat_member;
+          const chatIdStr = mu.chat.id.toString();
+          const oldStatus = mu.old_chat_member?.status;
+          const newStatus = mu.new_chat_member?.status;
+
+          const isMemberNow = ['member', 'administrator', 'creator', 'restricted'].includes(newStatus);
+          const wasMemberBefore = ['member', 'administrator', 'creator', 'restricted'].includes(oldStatus);
+
+          if (isMemberNow && !wasMemberBefore) {
+            rawJoinsToAdd.push({
+              userId: mu.new_chat_member.user.id,
+              userName: mu.new_chat_member.user.first_name + (mu.new_chat_member.user.last_name ? ` ${mu.new_chat_member.user.last_name}` : ''),
+              chatId: mu.chat.id,
+              chatTitle: mu.chat.title,
+              timestamp: mu.date ? mu.date * 1000 : Date.now(),
+              is_bot: mu.new_chat_member.user.is_bot
+            });
+            shouldSyncGroup = mu.chat;
+          } else if (!isMemberNow && wasMemberBefore) {
+            memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) - 1;
+            shouldSyncGroup = mu.chat;
+          }
+        }
+
+        // 2. Process `message` / `channel_post` (Works for visible members)
+        const msg = u.message || u.channel_post;
+        if (msg && msg.chat) {
+          const chatId = msg.chat.id;
+          const chatTitle = msg.chat.title;
+          const chatIdStr = chatId.toString();
+          shouldSyncGroup = msg.chat;
+
+          if (msg.new_chat_members) {
+            if (autoClean) {
+               fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${chatId}&message_id=${msg.message_id}`).catch(() => {});
+            }
+
+            msg.new_chat_members.forEach((newUser: any) => {
+              rawJoinsToAdd.push({
+                userId: newUser.id,
+                userName: newUser.first_name + (newUser.last_name ? ` ${newUser.last_name}` : ''),
+                chatId: chatId,
+                chatTitle: chatTitle,
+                timestamp: msg.date ? msg.date * 1000 : Date.now(),
+                is_bot: newUser.is_bot
+              });
+            });
+          }
+
+          if (msg.left_chat_member) {
+            memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) - 1;
+            if (autoClean) {
+               fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${msg.chat.id}&message_id=${msg.message_id}`).catch(() => {});
+            }
+          }
+
+          if (msg.new_chat_title) {
+            await (Group as any).findOneAndUpdate({ id: chatIdStr }, { name: msg.new_chat_title }, { upsert: false });
+          }
+        }
+        
+        if (shouldSyncGroup && (['group', 'supergroup', 'channel'].includes(shouldSyncGroup.type))) {
+           const chatIdStr = shouldSyncGroup.id.toString();
+           const groupExists = await (Group as any).findOne({ id: chatIdStr });
+           if (!groupExists) {
+             let memberCount = 0;
+             try {
+               const countRes = await fetch(`https://api.telegram.org/bot${token}/getChatMemberCount?chat_id=${chatIdStr}`);
+               const countData: any = await countRes.json();
+               if (countData.ok) memberCount = countData.result;
+             } catch (e) {}
+
+             await (Group as any).create({
+               id: chatIdStr,
+               name: shouldSyncGroup.title || 'Unknown',
+               memberCount: memberCount,
+               description: shouldSyncGroup.description || 'Auto Discovered Hub',
+               category: 'Telegram',
+               image: `https://picsum.photos/seed/${chatIdStr}/200`,
+               lastInteraction: Date.now(),
+               interactionCount: 1,
+               createdAt: Date.now()
+             });
+           } else {
+             await (Group as any).findOneAndUpdate({ id: chatIdStr }, { 
+               $set: { lastInteraction: Date.now() }, 
+               $inc: { interactionCount: 1 }
+             });
+           }
+        }
+
+        // 3. Deduplicate joins mathematically!
+        for (const ev of rawJoinsToAdd) {
+           const cutoffLower = ev.timestamp - 120000;
+           const cutoffUpper = ev.timestamp + 120000;
+           const existing = await (JoinEvent as any).findOne({
+             userId: ev.userId,
+             chatId: ev.chatId,
+             timestamp: { $gt: cutoffLower, $lt: cutoffUpper }
+           });
+
+           if (!existing) {
+             await (JoinEvent as any).create({
+               userId: ev.userId,
+               userName: ev.userName,
+               chatId: ev.chatId,
+               chatTitle: ev.chatTitle,
+               timestamp: ev.timestamp
+             });
+
+             const chatIdStr = ev.chatId.toString();
+             memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) + 1;
+
+             if (autoWelcome && !ev.is_bot) {
+                const escapedName = (ev.userName || 'Awesome Member').toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+                const text = `🎉 <b>Welcome to the Hub!</b> 🎉\n\nHey <a href="tg://user?id=${ev.userId}"><b>${escapedName}</b></a>, we're thrilled to have you here! ✨\n\n<i>Enjoy your stay, and keep it friendly!</i> 🚀`;
+                
+                // We don't delay delete on Vercel because the lambda will exit.
+                // Or if we wait, it consumes duration. We'll at least send the welcome.
+                await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ chat_id: ev.chatId, text, parse_mode: 'HTML' })
+                }).catch(() => {});
+             }
+           }
+        }
+
+        for (const [chatIdStr, diff] of Object.entries(memberChanges)) {
+           if (diff !== 0) {
+             await (Group as any).findOneAndUpdate({ id: chatIdStr }, { $inc: { memberCount: diff } });
+           }
+        }
+      } catch (e) {
+        console.error("Error processing webhook update:", e);
       }
-    }
+    };
 
-    // Await core tasks before responding, so Vercel doesn't kill the lambda
-    await Promise.allSettled(activeTasks);
-
-    res.status(200).send("OK")
-  } catch (error) {
-    console.error("[Webhook] Error:", error)
-    res.status(200).send("OK") // Always return 200 to Telegram
+    await processUpdate();
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Webhook route error:", err);
+    res.status(200).json({ ok: true }); // Always 200 for TG
   }
-})
+});
 
 export default app
