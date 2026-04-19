@@ -184,7 +184,7 @@ async function startServer() {
 
   app.post("/api/webhook/:token", async (req, res) => {
     try {
-      const token = req.params.token;
+      const token = req.params.token.trim();
       const autoWelcome = req.query.welcome === 'true';
       const autoClean = req.query.clean === 'true';
       const u = req.body;
@@ -192,13 +192,13 @@ async function startServer() {
       // Keep recent 50 for diagnostics
       const logEntry = { 
         time: new Date().toISOString(), 
-        type: u.message ? 'message' : (u.chat_member ? 'chat_member' : (u.chat_join_request ? 'join_request' : 'other')),
+        type: u.message ? 'message' : (u.chat_member ? 'chat_member' : (u.chat_join_request ? 'join_request' : (u.my_chat_member ? 'my_chat_member' : 'other'))),
         payload: u 
       };
       webhookLogs.unshift(logEntry);
       if (webhookLogs.length > 50) webhookLogs.pop();
       
-      console.log(`[Webhook] Received ${logEntry.type} update`);
+      console.log(`[Webhook] [${token.slice(-4)}] Received ${logEntry.type} update`);
 
       res.json({ ok: true }); // Immediately Ack to telegram
 
@@ -207,6 +207,16 @@ async function startServer() {
           const rawJoinsToAdd: any[] = [];
           const memberChanges: Record<string, number> = {};
           let shouldSyncGroup: any = null;
+
+          // -1. Process `my_chat_member` (Bot discovery)
+          if (u.my_chat_member && u.my_chat_member.chat) {
+            const myMu = u.my_chat_member;
+            const newStatus = myMu.new_chat_member?.status;
+            console.log(`[BotStatus] Group: ${myMu.chat.id}, NewStatus: ${newStatus}`);
+            if (['member', 'administrator'].includes(newStatus)) {
+              shouldSyncGroup = myMu.chat;
+            }
+          }
 
           // 0. Process `chat_join_request` (Direct join signal)
           if (u.chat_join_request && u.chat_join_request.chat) {
@@ -289,22 +299,24 @@ async function startServer() {
           }
           
           if (shouldSyncGroup && (shouldSyncGroup.type === 'group' || shouldSyncGroup.type === 'supergroup')) {
-             const groupExists = await (Group as any).findOne({ id: shouldSyncGroup.id.toString() });
+             const gid = shouldSyncGroup.id.toString();
+             const groupExists = await (Group as any).findOne({ id: gid });
              if (!groupExists) {
+               console.log(`[Sync] Discovering new group: ${gid} (${shouldSyncGroup.title})`);
                await (Group as any).create({
-                 id: shouldSyncGroup.id.toString(),
+                 id: gid,
                  name: shouldSyncGroup.title || 'Unknown',
                  memberCount: 0,
-                 description: shouldSyncGroup.description || 'Auto Discovered Hub',
+                 description: shouldSyncGroup.description || 'Auto Discovered',
                  category: 'Telegram',
-                 image: `https://picsum.photos/seed/${shouldSyncGroup.id}/200`,
+                 image: `https://picsum.photos/seed/${gid}/200`,
                  lastInteraction: Date.now(),
                  interactionCount: 1,
                  createdAt: Date.now()
                });
              } else {
-               await (Group as any).findOneAndUpdate({ id: shouldSyncGroup.id.toString() }, { 
-                 $set: { lastInteraction: Date.now() }, 
+               await (Group as any).findOneAndUpdate({ id: gid }, { 
+                 $set: { lastInteraction: Date.now(), name: shouldSyncGroup.title || groupExists.name }, 
                  $inc: { interactionCount: 1 }
                });
              }
@@ -338,6 +350,8 @@ async function startServer() {
                  setTimeout(() => {
                    const escapedName = (ev.userName || 'Awesome Member').toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
                    const text = `🎉 <b>Welcome to the Hub!</b> 🎉\n\nHey <a href="tg://user?id=${ev.userId}"><b>${escapedName}</b></a>, we're thrilled to have you here! ✨\n\n<i>Enjoy your stay, and keep it friendly!</i> 🚀`;
+                   
+                   console.log(`[Welcome] Sending message to ${ev.userId} in chat ${ev.chatId}`);
                    fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
                      method: 'POST',
                      headers: { 'Content-Type': 'application/json' },
@@ -346,11 +360,15 @@ async function startServer() {
                    .then((res: any) => res.json())
                    .then((data: any) => {
                      if (data.ok) {
+                       console.log(`[Welcome] Success for ${ev.userId}`);
                        setTimeout(() => {
                          fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${ev.chatId}&message_id=${data.result.message_id}`).catch(() => {});
                        }, 70000); // 70 SECONDS
+                     } else {
+                       console.error(`[Welcome] Failed for ${ev.userId}: ${data.description}`);
                      }
-                   }).catch(() => {});
+                   })
+                   .catch(err => console.error(`[Welcome] Error:`, err));
                  }, 10000); // 10 SECONDS
                }
              }
