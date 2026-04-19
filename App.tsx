@@ -1107,17 +1107,12 @@ const App: React.FC = () => {
           }
         }
 
-        if (msg && msg.new_chat_members) {
-          const chatId = msg.chat.id;
-          const chatTitle = msg.chat.title;
-          const chatIdStr = chatId.toString();
-
-          // Auto-clean join messages if enabled
-          if (autoCleanServiceMessages) {
-            deleteMessage(currentToken, chatId, msg.message_id).catch(() => {});
-          }
-          
-          msg.new_chat_members.forEach((newUser: any) => {
+          if (msg && msg.new_chat_members) {
+            const chatId = msg.chat.id;
+            const chatTitle = msg.chat.title;
+            const chatIdStr = chatId.toString();
+            
+            msg.new_chat_members.forEach((newUser: any) => {
             newJoins.push({
               userId: newUser.id,
               userName: newUser.first_name + (newUser.last_name ? ` ${newUser.last_name}` : ''),
@@ -1133,11 +1128,6 @@ const App: React.FC = () => {
           const chatIdStr = msg.chat.id.toString();
           const chatId = msg.chat.id;
           memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) - 1;
-
-          // Auto-clean leave messages if enabled
-          if (autoCleanServiceMessages) {
-            deleteMessage(currentToken, chatId, msg.message_id).catch(() => {});
-          }
         }
 
         if (msg && msg.new_chat_title) {
@@ -1186,7 +1176,7 @@ const App: React.FC = () => {
                    if (data.ok) {
                      setTimeout(() => {
                         deleteMessage(currentToken, ev.chatId, data.result.message_id).catch(() => {});
-                     }, 60000); // 1 MINUTE
+                      }, 90000); // 90 SECONDS
                    }
                  }).catch(() => {});
                }, 5000); // 5 SECONDS delay

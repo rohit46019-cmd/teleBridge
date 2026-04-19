@@ -249,10 +249,6 @@ async function startServer() {
             shouldSyncGroup = msg.chat;
 
             if (msg.new_chat_members) {
-              if (autoClean) {
-                 fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${chatId}&message_id=${msg.message_id}`).catch(() => {});
-              }
-
               msg.new_chat_members.forEach((newUser: any) => {
                 rawJoinsToAdd.push({
                   userId: newUser.id,
@@ -267,9 +263,6 @@ async function startServer() {
 
             if (msg.left_chat_member) {
               memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) - 1;
-              if (autoClean) {
-                 fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${msg.chat.id}&message_id=${msg.message_id}`).catch(() => {});
-              }
             }
 
             if (msg.new_chat_title) {
@@ -346,7 +339,7 @@ async function startServer() {
                      if (data.ok) {
                        setTimeout(() => {
                          fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${ev.chatId}&message_id=${data.result.message_id}`).catch(() => {});
-                       }, 60000); // 1 MINUTE
+                       }, 90000); // 90 SECONDS
                      }
                    }).catch(() => {});
                  }, 5000); // 5 SECONDS

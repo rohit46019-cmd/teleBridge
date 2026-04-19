@@ -340,10 +340,6 @@ app.post("/api/webhook/:token", async (req, res) => {
           shouldSyncGroup = msg.chat;
 
           if (msg.new_chat_members) {
-            if (autoClean) {
-               fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${chatId}&message_id=${msg.message_id}`).catch(() => {});
-            }
-
             msg.new_chat_members.forEach((newUser: any) => {
               rawJoinsToAdd.push({
                 userId: newUser.id,
@@ -358,9 +354,6 @@ app.post("/api/webhook/:token", async (req, res) => {
 
           if (msg.left_chat_member) {
             memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) - 1;
-            if (autoClean) {
-               fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${msg.chat.id}&message_id=${msg.message_id}`).catch(() => {});
-            }
           }
 
           if (msg.new_chat_title) {
@@ -421,16 +414,31 @@ app.post("/api/webhook/:token", async (req, res) => {
              memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) + 1;
 
              if (autoWelcome && !ev.is_bot) {
-                const escapedName = (ev.userName || 'Awesome Member').toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-                const text = `🎉 <b>Welcome to the Hub!</b> 🎉\n\nHey <a href="tg://user?id=${ev.userId}"><b>${escapedName}</b></a>, we're thrilled to have you here! ✨\n\n<i>Enjoy your stay, and keep it friendly!</i> 🚀`;
+                // Background welcome handler for Vercel
+                const handleWelcome = async () => {
+                  try {
+                    await new Promise(r => setTimeout(r, 5000)); // 5 SECONDS DELAY
+                    const escapedName = (ev.userName || 'Awesome Member').toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+                    const text = `🎉 <b>Welcome to the Hub!</b> 🎉\n\nHey <a href="tg://user?id=${ev.userId}"><b>${escapedName}</b></a>, we're thrilled to have you here! ✨\n\n<i>Enjoy your stay, and keep it friendly!</i> 🚀`;
+                    
+                    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ chat_id: ev.chatId, text, parse_mode: 'HTML' })
+                    });
+                    const data: any = await res.json();
+                    
+                    if (data.ok && data.result) {
+                      await new Promise(r => setTimeout(r, 90000)); // 90 SECONDS DELAY
+                      await fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${ev.chatId}&message_id=${data.result.message_id}`).catch(() => {});
+                    }
+                  } catch (e) {}
+                };
                 
-                // We don't delay delete on Vercel because the lambda will exit.
-                // Or if we wait, it consumes duration. We'll at least send the welcome.
-                await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ chat_id: ev.chatId, text, parse_mode: 'HTML' })
-                }).catch(() => {});
+                // IMPORTANT: In Vercel serverless, we MUST await this 
+                // or the function ends and kills the timer.
+                // We increase the maxDuration in vercel.json to compensate.
+                await handleWelcome();
              }
            }
         }
