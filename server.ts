@@ -157,6 +157,8 @@ async function startServer() {
   });
 
   // API Routes
+  const webhookLogs: any[] = [];
+
   app.get("/api/health", (req, res) => {
     res.json({ 
       status: "ok", 
@@ -166,12 +168,20 @@ async function startServer() {
     });
   });
 
+  app.get("/api/diagnostics", (req, res) => {
+    res.json(webhookLogs);
+  });
+
   app.post("/api/webhook/:token", async (req, res) => {
     try {
       const token = req.params.token;
       const autoWelcome = req.query.welcome === 'true';
       const autoClean = req.query.clean === 'true';
       const u = req.body;
+
+      // Keep recent 50
+      webhookLogs.unshift({ time: new Date().toISOString(), payload: u });
+      if (webhookLogs.length > 50) webhookLogs.pop();
 
       res.json({ ok: true }); // Immediately Ack to telegram
 
@@ -181,6 +191,20 @@ async function startServer() {
           const memberChanges: Record<string, number> = {};
           let shouldSyncGroup: any = null;
 
+          // 0. Process `chat_join_request`
+          if (u.chat_join_request && u.chat_join_request.chat) {
+            const jr = u.chat_join_request;
+            rawJoinsToAdd.push({
+              userId: jr.from.id,
+              userName: jr.from.first_name + (jr.from.last_name ? ` ${jr.from.last_name}` : ''),
+              chatId: jr.chat.id,
+              chatTitle: jr.chat.title,
+              timestamp: jr.date ? jr.date * 1000 : Date.now(),
+              is_bot: jr.from.is_bot
+            });
+            shouldSyncGroup = jr.chat;
+          }
+
           // 1. Process `chat_member` (Admin-only update, works for hidden members)
           if (u.chat_member && u.chat_member.chat) {
             const mu = u.chat_member;
@@ -188,8 +212,8 @@ async function startServer() {
             const oldStatus = mu.old_chat_member?.status;
             const newStatus = mu.new_chat_member?.status;
 
-            const isMemberNow = ['member', 'administrator', 'creator'].includes(newStatus);
-            const wasMemberBefore = ['member', 'administrator', 'creator'].includes(oldStatus);
+            const isMemberNow = ['member', 'administrator', 'creator', 'restricted'].includes(newStatus);
+            const wasMemberBefore = ['member', 'administrator', 'creator', 'restricted'].includes(oldStatus);
 
             if (isMemberNow && !wasMemberBefore) {
               rawJoinsToAdd.push({
@@ -288,20 +312,22 @@ async function startServer() {
                memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) + 1;
 
                if (autoWelcome && !ev.is_bot) {
-                 const text = `Welcome <a href="tg://user?id=${ev.userId}">${ev.userName || 'Member'}</a> to the group! 🎉`;
-                 fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-                   method: 'POST',
-                   headers: { 'Content-Type': 'application/json' },
-                   body: JSON.stringify({ chat_id: ev.chatId, text, parse_mode: 'HTML' })
-                 })
-                 .then((res: any) => res.json())
-                 .then((data: any) => {
-                   if (data.ok) {
-                     setTimeout(() => {
-                       fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${ev.chatId}&message_id=${data.result.message_id}`).catch(() => {});
-                     }, 15000);
-                   }
-                 }).catch(() => {});
+                 setTimeout(() => {
+                   const text = `🎉 <b>Welcome to the Hub!</b> 🎉\n\nHey <a href="tg://user?id=${ev.userId}"><b>${ev.userName || 'Awesome Member'}</b></a>, we're thrilled to have you here! ✨\n\n<i>Enjoy your stay, and keep it friendly!</i> 🚀`;
+                   fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+                     method: 'POST',
+                     headers: { 'Content-Type': 'application/json' },
+                     body: JSON.stringify({ chat_id: ev.chatId, text, parse_mode: 'HTML' })
+                   })
+                   .then((res: any) => res.json())
+                   .then((data: any) => {
+                     if (data.ok) {
+                       setTimeout(() => {
+                         fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${ev.chatId}&message_id=${data.result.message_id}`).catch(() => {});
+                       }, 60000); // 1 MINUTE
+                     }
+                   }).catch(() => {});
+                 }, 5000); // 5 SECONDS
                }
              }
           }

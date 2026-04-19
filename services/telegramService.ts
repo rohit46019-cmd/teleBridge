@@ -64,7 +64,7 @@ export async function getRecentUpdates(token: string, offset: number = 0): Promi
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       offset: offset,
-      allowed_updates: ["message", "chat_member", "my_chat_member"]
+      allowed_updates: ["message", "chat_member", "my_chat_member", "chat_join_request"]
     })
   });
   const data = await response.json();
@@ -148,7 +148,7 @@ export async function setWebhook(token: string, url: string): Promise<boolean> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       url: url,
-      allowed_updates: ["message", "chat_member", "my_chat_member"]
+      allowed_updates: ["message", "chat_member", "my_chat_member", "chat_join_request"]
     })
   });
   const data = await response.json();

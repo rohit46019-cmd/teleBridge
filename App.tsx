@@ -1033,6 +1033,18 @@ const App: React.FC = () => {
       updates.forEach(u => {
         maxId = Math.max(maxId, u.update_id);
 
+        if (u.chat_join_request && u.chat_join_request.chat) {
+          const jr = u.chat_join_request;
+          newJoins.push({
+            userId: jr.from.id,
+            userName: jr.from.first_name + (jr.from.last_name ? ` ${jr.from.last_name}` : ''),
+            chatId: jr.chat.id,
+            chatTitle: jr.chat.title,
+            timestamp: jr.date ? jr.date * 1000 : Date.now(),
+            is_bot: jr.from.is_bot
+          });
+        }
+
         if (u.message) {
           const chat = u.message.chat;
           if (chat && (chat.type === 'group' || chat.type === 'supergroup')) {
@@ -1076,8 +1088,8 @@ const App: React.FC = () => {
           const oldStatus = mu.old_chat_member?.status;
           const newStatus = mu.new_chat_member?.status;
 
-          const isMemberNow = ['member', 'administrator', 'creator'].includes(newStatus);
-          const wasMemberBefore = ['member', 'administrator', 'creator'].includes(oldStatus);
+          const isMemberNow = ['member', 'administrator', 'creator', 'restricted'].includes(newStatus);
+          const wasMemberBefore = ['member', 'administrator', 'creator', 'restricted'].includes(oldStatus);
 
           if (isMemberNow && !wasMemberBefore) {
             newJoins.push({
@@ -2171,7 +2183,7 @@ const App: React.FC = () => {
                           <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1 flex items-center justify-between">
                             Group Welcome
                           </h4>
-                          <p className="text-[9px] text-slate-500 font-bold">Tag user & delete after 15s</p>
+                          <p className="text-[9px] text-slate-500 font-bold">5s delay, Tag user & delete after 60s</p>
                         </div>
                         <div className="flex items-center gap-2">
                           <span className={`text-[8px] font-black ${autoWelcome ? 'text-emerald-500' : 'text-slate-400'}`}>
@@ -2320,9 +2332,13 @@ const App: React.FC = () => {
                     </div>
 
                     <div className="grid grid-cols-2 gap-3 mt-3">
-                      <button onClick={() => importFileRef.current?.click()} className="flex flex-col items-center justify-center gap-2 p-5 bg-emerald-600 text-white rounded-2xl shadow-lg active:scale-95 transition-all w-full col-span-2">
+                      <button onClick={() => importFileRef.current?.click()} className="flex flex-col items-center justify-center gap-2 p-5 bg-emerald-600 text-white rounded-2xl shadow-lg active:scale-95 transition-all w-full col-span-1">
                         <Icons.UploadCloud size={20} />
-                        <span className="text-[10px] font-black uppercase tracking-widest">Import Data</span>
+                        <span className="text-[10px] font-black uppercase tracking-widest">Import</span>
+                      </button>
+                      <button onClick={() => window.open('/api/diagnostics', '_blank')} className="flex flex-col items-center justify-center gap-2 p-5 bg-amber-600 text-white rounded-2xl shadow-lg active:scale-95 transition-all w-full col-span-1">
+                        <Icons.Activity size={20} />
+                        <span className="text-[10px] font-black uppercase tracking-widest">Log</span>
                       </button>
                       <input type="file" ref={importFileRef} onChange={handleImport} accept=".json" className="hidden" />
                     </div>
