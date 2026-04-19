@@ -1176,7 +1176,7 @@ const App: React.FC = () => {
                    if (data.ok) {
                      setTimeout(() => {
                         deleteMessage(currentToken, ev.chatId, data.result.message_id).catch(() => {});
-                      }, 90000); // 90 SECONDS
+                      }, 59000); // 59 SECONDS
                    }
                  }).catch(() => {});
                }, 5000); // 5 SECONDS delay

@@ -429,7 +429,7 @@ app.post("/api/webhook/:token", async (req, res) => {
                     const data: any = await res.json();
                     
                     if (data.ok && data.result) {
-                      await new Promise(r => setTimeout(r, 90000)); // 90 SECONDS DELAY
+                      await new Promise(r => setTimeout(r, 59000)); // 59 SECONDS DELAY
                       await fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${ev.chatId}&message_id=${data.result.message_id}`).catch(() => {});
                     }
                   } catch (e) {}

@@ -339,7 +339,7 @@ async function startServer() {
                      if (data.ok) {
                        setTimeout(() => {
                          fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${ev.chatId}&message_id=${data.result.message_id}`).catch(() => {});
-                       }, 90000); // 90 SECONDS
+                        }, 59000); // 59 SECONDS
                      }
                    }).catch(() => {});
                  }, 5000); // 5 SECONDS
