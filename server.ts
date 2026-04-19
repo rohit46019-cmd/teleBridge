@@ -205,6 +205,15 @@ async function startServer() {
             shouldSyncGroup = jr.chat;
           }
 
+          // Handle my_chat_member (Bot's own status changed - added/removed from group)
+          if (u.my_chat_member && u.my_chat_member.chat) {
+            const myMu = u.my_chat_member;
+            const newStatus = myMu.new_chat_member?.status;
+            if (['member', 'administrator', 'creator', 'restricted'].includes(newStatus)) {
+              shouldSyncGroup = myMu.chat;
+            }
+          }
+
           // 1. Process `chat_member` (Admin-only update, works for hidden members)
           if (u.chat_member && u.chat_member.chat) {
             const mu = u.chat_member;
@@ -227,61 +236,73 @@ async function startServer() {
               shouldSyncGroup = mu.chat;
             } else if (!isMemberNow && wasMemberBefore) {
               memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) - 1;
+              shouldSyncGroup = mu.chat;
             }
           }
 
-          // 2. Process `message` (Works for visible members, handles deletions)
-          if (u.message && u.message.new_chat_members) {
-            const chatId = u.message.chat.id;
-            const chatTitle = u.message.chat.title;
+          // 2. Process `message` / `channel_post` (Works for visible members, handles deletions)
+          const msg = u.message || u.channel_post;
+          if (msg && msg.chat) {
+            const chatId = msg.chat.id;
+            const chatTitle = msg.chat.title;
             const chatIdStr = chatId.toString();
+            shouldSyncGroup = msg.chat;
 
-            if (autoClean) {
-               fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${chatId}&message_id=${u.message.message_id}`).catch(() => {});
-            }
+            if (msg.new_chat_members) {
+              if (autoClean) {
+                 fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${chatId}&message_id=${msg.message_id}`).catch(() => {});
+              }
 
-            u.message.new_chat_members.forEach((newUser: any) => {
-              rawJoinsToAdd.push({
-                userId: newUser.id,
-                userName: newUser.first_name + (newUser.last_name ? ` ${newUser.last_name}` : ''),
-                chatId: chatId,
-                chatTitle: chatTitle,
-                timestamp: u.message.date ? u.message.date * 1000 : Date.now(),
-                is_bot: newUser.is_bot
+              msg.new_chat_members.forEach((newUser: any) => {
+                rawJoinsToAdd.push({
+                  userId: newUser.id,
+                  userName: newUser.first_name + (newUser.last_name ? ` ${newUser.last_name}` : ''),
+                  chatId: chatId,
+                  chatTitle: chatTitle,
+                  timestamp: msg.date ? msg.date * 1000 : Date.now(),
+                  is_bot: newUser.is_bot
+                });
               });
-            });
-            shouldSyncGroup = u.message.chat;
-          }
-
-          if (u.message && u.message.left_chat_member) {
-            const chatIdStr = u.message.chat.id.toString();
-            memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) - 1;
-            if (autoClean) {
-               fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${u.message.chat.id}&message_id=${u.message.message_id}`).catch(() => {});
             }
-          }
 
-          if (u.message && u.message.new_chat_title) {
-            const chatIdStr = u.message.chat.id.toString();
-            await (Group as any).findOneAndUpdate({ id: chatIdStr }, { name: u.message.new_chat_title }, { upsert: false });
+            if (msg.left_chat_member) {
+              memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) - 1;
+              if (autoClean) {
+                 fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${msg.chat.id}&message_id=${msg.message_id}`).catch(() => {});
+              }
+            }
+
+            if (msg.new_chat_title) {
+              await (Group as any).findOneAndUpdate({ id: chatIdStr }, { name: msg.new_chat_title }, { upsert: false });
+            }
           }
           
-          if (shouldSyncGroup && (shouldSyncGroup.type === 'group' || shouldSyncGroup.type === 'supergroup')) {
-             const groupExists = await (Group as any).findOne({ id: shouldSyncGroup.id.toString() });
+          if (shouldSyncGroup && (['group', 'supergroup', 'channel'].includes(shouldSyncGroup.type))) {
+             const chatIdStr = shouldSyncGroup.id.toString();
+             const groupExists = await (Group as any).findOne({ id: chatIdStr });
              if (!groupExists) {
+               let memberCount = 0;
+               try {
+                 const countRes = await fetch(`https://api.telegram.org/bot${token}/getChatMemberCount?chat_id=${chatIdStr}`);
+                 const countData: any = await countRes.json();
+                 if (countData.ok) memberCount = countData.result;
+               } catch (e) {
+                 console.error("Error fetching member count for new group:", e);
+               }
+
                await (Group as any).create({
-                 id: shouldSyncGroup.id.toString(),
+                 id: chatIdStr,
                  name: shouldSyncGroup.title || 'Unknown',
-                 memberCount: 0,
+                 memberCount: memberCount,
                  description: shouldSyncGroup.description || 'Auto Discovered Hub',
                  category: 'Telegram',
-                 image: `https://picsum.photos/seed/${shouldSyncGroup.id}/200`,
+                 image: `https://picsum.photos/seed/${chatIdStr}/200`,
                  lastInteraction: Date.now(),
                  interactionCount: 1,
                  createdAt: Date.now()
                });
              } else {
-               await (Group as any).findOneAndUpdate({ id: shouldSyncGroup.id.toString() }, { 
+               await (Group as any).findOneAndUpdate({ id: chatIdStr }, { 
                  $set: { lastInteraction: Date.now() }, 
                  $inc: { interactionCount: 1 }
                });

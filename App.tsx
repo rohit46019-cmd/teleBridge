@@ -1045,9 +1045,10 @@ const App: React.FC = () => {
           });
         }
 
-        if (u.message) {
-          const chat = u.message.chat;
-          if (chat && (chat.type === 'group' || chat.type === 'supergroup')) {
+        const msg = u.message || u.channel_post;
+        if (msg) {
+          const chat = msg.chat;
+          if (chat && (['group', 'supergroup', 'channel'].includes(chat.type))) {
             newDiscoveredGroups.push({
               id: chat.id.toString(),
               name: chat.title || 'Unknown Group',
@@ -1064,7 +1065,7 @@ const App: React.FC = () => {
         if (u.my_chat_member) {
           const myMu = u.my_chat_member;
           const newStatus = myMu.new_chat_member?.status;
-          if (['member', 'administrator'].includes(newStatus)) {
+          if (['member', 'administrator', 'creator', 'restricted'].includes(newStatus)) {
             const chat = myMu.chat;
             if (chat) {
               newDiscoveredGroups.push({
@@ -1106,42 +1107,42 @@ const App: React.FC = () => {
           }
         }
 
-        if (u.message && u.message.new_chat_members) {
-          const chatId = u.message.chat.id;
-          const chatTitle = u.message.chat.title;
+        if (msg && msg.new_chat_members) {
+          const chatId = msg.chat.id;
+          const chatTitle = msg.chat.title;
           const chatIdStr = chatId.toString();
 
           // Auto-clean join messages if enabled
           if (autoCleanServiceMessages) {
-            deleteMessage(currentToken, chatId, u.message.message_id).catch(() => {});
+            deleteMessage(currentToken, chatId, msg.message_id).catch(() => {});
           }
           
-          u.message.new_chat_members.forEach((newUser: any) => {
+          msg.new_chat_members.forEach((newUser: any) => {
             newJoins.push({
               userId: newUser.id,
               userName: newUser.first_name + (newUser.last_name ? ` ${newUser.last_name}` : ''),
               chatId: chatId,
               chatTitle: chatTitle,
-              timestamp: u.message.date ? u.message.date * 1000 : Date.now(),
+              timestamp: msg.date ? msg.date * 1000 : Date.now(),
               is_bot: newUser.is_bot
             });
           });
         }
 
-        if (u.message && u.message.left_chat_member) {
-          const chatIdStr = u.message.chat.id.toString();
-          const chatId = u.message.chat.id;
+        if (msg && msg.left_chat_member) {
+          const chatIdStr = msg.chat.id.toString();
+          const chatId = msg.chat.id;
           memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) - 1;
 
           // Auto-clean leave messages if enabled
           if (autoCleanServiceMessages) {
-            deleteMessage(currentToken, chatId, u.message.message_id).catch(() => {});
+            deleteMessage(currentToken, chatId, msg.message_id).catch(() => {});
           }
         }
 
-        if (u.message && u.message.new_chat_title) {
-          const chatIdStr = u.message.chat.id.toString();
-          titleChanges[chatIdStr] = u.message.new_chat_title;
+        if (msg && msg.new_chat_title) {
+          const chatIdStr = msg.chat.id.toString();
+          titleChanges[chatIdStr] = msg.new_chat_title;
         }
       });
 
@@ -1200,6 +1201,19 @@ const App: React.FC = () => {
         );
 
         if (uniqueNewGroups.length > 0) {
+          // Fetch real member counts for new groups in background
+          uniqueNewGroups.forEach(async (ng) => {
+            try {
+              const count = await getChatMemberCount(currentToken, ng.id);
+              setGroups(prev => prev.map(g => g.id === ng.id ? { ...g, memberCount: count } : g));
+              
+              // Also update in DB if we're synced
+              fetch(`/api/groups/${ng.id}/interaction`, { method: 'POST' }).catch(() => {});
+            } catch (e) {
+              console.warn("Failed to update count for discovered group:", ng.id);
+            }
+          });
+
           // Update local state immediately
           setGroups(prev => {
             const newGroups = [...prev];
