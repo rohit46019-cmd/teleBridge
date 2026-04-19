@@ -1185,10 +1185,10 @@ const App: React.FC = () => {
                    if (data.ok) {
                      setTimeout(() => {
                         deleteMessage(currentToken, ev.chatId, data.result.message_id).catch(() => {});
-                     }, 60000); // 1 MINUTE
+                     }, 70000); // 70 SECONDS
                    }
                  }).catch(() => {});
-               }, 5000); // 5 SECONDS delay
+               }, 10000); // 10 SECONDS delay
              }
           }
         }
@@ -2186,7 +2186,7 @@ const App: React.FC = () => {
                           <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1 flex items-center justify-between">
                             Group Welcome
                           </h4>
-                          <p className="text-[9px] text-slate-500 font-bold">5s delay, Tag user & delete after 60s</p>
+                          <p className="text-[9px] text-slate-500 font-bold">10s delay, Tag user & delete after 70s</p>
                         </div>
                         <div className="flex items-center gap-2">
                           <span className={`text-[8px] font-black ${autoWelcome ? 'text-emerald-500' : 'text-slate-400'}`}>
