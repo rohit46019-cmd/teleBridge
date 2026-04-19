@@ -18,6 +18,7 @@ export interface JoinEvent {
   chatId: number;
   chatTitle: string;
   timestamp: number;
+  is_bot?: boolean;
 }
 
 export interface BannedUser {

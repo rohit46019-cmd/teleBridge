@@ -166,6 +166,162 @@ async function startServer() {
     });
   });
 
+  app.post("/api/webhook/:token", async (req, res) => {
+    try {
+      const token = req.params.token;
+      const autoWelcome = req.query.welcome === 'true';
+      const autoClean = req.query.clean === 'true';
+      const u = req.body;
+
+      res.json({ ok: true }); // Immediately Ack to telegram
+
+      (async () => {
+        try {
+          const rawJoinsToAdd: any[] = [];
+          const memberChanges: Record<string, number> = {};
+          let shouldSyncGroup: any = null;
+
+          // 1. Process `chat_member` (Admin-only update, works for hidden members)
+          if (u.chat_member && u.chat_member.chat) {
+            const mu = u.chat_member;
+            const chatIdStr = mu.chat.id.toString();
+            const oldStatus = mu.old_chat_member?.status;
+            const newStatus = mu.new_chat_member?.status;
+
+            const isMemberNow = ['member', 'administrator', 'creator'].includes(newStatus);
+            const wasMemberBefore = ['member', 'administrator', 'creator'].includes(oldStatus);
+
+            if (isMemberNow && !wasMemberBefore) {
+              rawJoinsToAdd.push({
+                userId: mu.new_chat_member.user.id,
+                userName: mu.new_chat_member.user.first_name + (mu.new_chat_member.user.last_name ? ` ${mu.new_chat_member.user.last_name}` : ''),
+                chatId: mu.chat.id,
+                chatTitle: mu.chat.title,
+                timestamp: mu.date ? mu.date * 1000 : Date.now(),
+                is_bot: mu.new_chat_member.user.is_bot
+              });
+              shouldSyncGroup = mu.chat;
+            } else if (!isMemberNow && wasMemberBefore) {
+              memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) - 1;
+            }
+          }
+
+          // 2. Process `message` (Works for visible members, handles deletions)
+          if (u.message && u.message.new_chat_members) {
+            const chatId = u.message.chat.id;
+            const chatTitle = u.message.chat.title;
+            const chatIdStr = chatId.toString();
+
+            if (autoClean) {
+               fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${chatId}&message_id=${u.message.message_id}`).catch(() => {});
+            }
+
+            u.message.new_chat_members.forEach((newUser: any) => {
+              rawJoinsToAdd.push({
+                userId: newUser.id,
+                userName: newUser.first_name + (newUser.last_name ? ` ${newUser.last_name}` : ''),
+                chatId: chatId,
+                chatTitle: chatTitle,
+                timestamp: u.message.date ? u.message.date * 1000 : Date.now(),
+                is_bot: newUser.is_bot
+              });
+            });
+            shouldSyncGroup = u.message.chat;
+          }
+
+          if (u.message && u.message.left_chat_member) {
+            const chatIdStr = u.message.chat.id.toString();
+            memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) - 1;
+            if (autoClean) {
+               fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${u.message.chat.id}&message_id=${u.message.message_id}`).catch(() => {});
+            }
+          }
+
+          if (u.message && u.message.new_chat_title) {
+            const chatIdStr = u.message.chat.id.toString();
+            await (Group as any).findOneAndUpdate({ id: chatIdStr }, { name: u.message.new_chat_title }, { upsert: false });
+          }
+          
+          if (shouldSyncGroup && (shouldSyncGroup.type === 'group' || shouldSyncGroup.type === 'supergroup')) {
+             const groupExists = await (Group as any).findOne({ id: shouldSyncGroup.id.toString() });
+             if (!groupExists) {
+               await (Group as any).create({
+                 id: shouldSyncGroup.id.toString(),
+                 name: shouldSyncGroup.title || 'Unknown',
+                 memberCount: 0,
+                 description: shouldSyncGroup.description || 'Auto Discovered Hub',
+                 category: 'Telegram',
+                 image: `https://picsum.photos/seed/${shouldSyncGroup.id}/200`,
+                 lastInteraction: Date.now(),
+                 interactionCount: 1,
+                 createdAt: Date.now()
+               });
+             } else {
+               await (Group as any).findOneAndUpdate({ id: shouldSyncGroup.id.toString() }, { 
+                 $set: { lastInteraction: Date.now() }, 
+                 $inc: { interactionCount: 1 }
+               });
+             }
+          }
+
+          // 3. Deduplicate joins mathematically!
+          for (const ev of rawJoinsToAdd) {
+             const cutoffLower = ev.timestamp - 120000; // Deduplicate within 2 mins
+             const cutoffUpper = ev.timestamp + 120000;
+             const existing = await (JoinEvent as any).findOne({
+               userId: ev.userId,
+               chatId: ev.chatId,
+               timestamp: { $gt: cutoffLower, $lt: cutoffUpper }
+             });
+
+             if (!existing) {
+               // Only proceed if we haven't tracked this exact join in the last 60s
+               await (JoinEvent as any).create({
+                 userId: ev.userId,
+                 userName: ev.userName,
+                 chatId: ev.chatId,
+                 chatTitle: ev.chatTitle,
+                 timestamp: ev.timestamp
+               });
+
+               const chatIdStr = ev.chatId.toString();
+               memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) + 1;
+
+               if (autoWelcome && !ev.is_bot) {
+                 const text = `Welcome <a href="tg://user?id=${ev.userId}">${ev.userName || 'Member'}</a> to the group! 🎉`;
+                 fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+                   method: 'POST',
+                   headers: { 'Content-Type': 'application/json' },
+                   body: JSON.stringify({ chat_id: ev.chatId, text, parse_mode: 'HTML' })
+                 })
+                 .then((res: any) => res.json())
+                 .then((data: any) => {
+                   if (data.ok) {
+                     setTimeout(() => {
+                       fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${ev.chatId}&message_id=${data.result.message_id}`).catch(() => {});
+                     }, 15000);
+                   }
+                 }).catch(() => {});
+               }
+             }
+          }
+
+          for (const [chatIdStr, diff] of Object.entries(memberChanges)) {
+             if (diff !== 0) {
+               await (Group as any).findOneAndUpdate({ id: chatIdStr }, { $inc: { memberCount: diff } });
+             }
+          }
+        } catch (e) {
+          console.error("Error processing webhook update:", e);
+        }
+      })();
+    } catch (err) {
+      console.error("Webhook route error:", err);
+      // Ensure we don't bleed errors and timeout to TG
+      res.status(500).json({ error: "Webhook failure" });
+    }
+  });
+
   app.get("/api/groups", async (req, res) => {
     try {
       console.log("Fetching groups from DB...");
@@ -413,14 +569,22 @@ async function startServer() {
   });
 
   // Vite middleware for development
+  let server: any;
   if (process.env.NODE_ENV !== "production") {
     const { createServer: createViteServer } = await import("vite");
+    const { createServer } = await import("http");
+    
+    server = createServer(app);
+    
+    // Wire Vite's HMR websocket into our HTTP server explicitly
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: { middlewareMode: true, hmr: { server } },
       appType: "spa",
     });
+    
     app.use(vite.middlewares);
   } else {
+    server = app;
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
     app.get('*all', (req, res) => {
@@ -428,7 +592,7 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
+  server.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
   return app;

@@ -59,7 +59,14 @@ export async function getChatMemberCount(token: string, chatId: string | number)
 }
 
 export async function getRecentUpdates(token: string, offset: number = 0): Promise<any[]> {
-  const response = await fetchWithTimeout(`${BASE_URL}${token}/getUpdates?offset=${offset}&allowed_updates=["chat_member", "message", "my_chat_member"]`);
+  const response = await fetchWithTimeout(`${BASE_URL}${token}/getUpdates`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      offset: offset,
+      allowed_updates: ["message", "chat_member", "my_chat_member"]
+    })
+  });
   const data = await response.json();
   if (!data.ok) throw new Error(data.description || 'Failed to fetch updates');
   return data.result;
@@ -136,7 +143,14 @@ export async function deleteMessage(token: string, chatId: string | number, mess
 }
 
 export async function setWebhook(token: string, url: string): Promise<boolean> {
-  const response = await fetchWithTimeout(`${BASE_URL}${token}/setWebhook?url=${encodeURIComponent(url)}&allowed_updates=["message", "chat_member"]`);
+  const response = await fetchWithTimeout(`${BASE_URL}${token}/setWebhook`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      url: url,
+      allowed_updates: ["message", "chat_member", "my_chat_member"]
+    })
+  });
   const data = await response.json();
   if (!data.ok) throw new Error(data.description || 'Failed to set webhook');
   return true;

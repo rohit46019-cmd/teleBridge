@@ -565,8 +565,8 @@ const App: React.FC = () => {
         const timeoutId = setTimeout(() => controller.abort(), 15000); 
 
         const [groupsRes, eventsRes] = await Promise.all([
-          fetch('/api/groups', { signal: controller.signal }),
-          fetch('/api/events', { signal: controller.signal })
+          fetch('/api/groups', { signal: controller.signal, headers: { 'Accept': 'application/json' } }),
+          fetch('/api/events', { signal: controller.signal, headers: { 'Accept': 'application/json' } })
         ]);
         
         clearTimeout(timeoutId);
@@ -662,8 +662,8 @@ const App: React.FC = () => {
       if (webhookActive) {
         try {
           const [groupsRes, eventsRes] = await Promise.all([
-            fetch('/api/groups'),
-            fetch('/api/events')
+            fetch('/api/groups', { headers: { 'Accept': 'application/json' } }),
+            fetch('/api/events', { headers: { 'Accept': 'application/json' } })
           ]);
           
           if (groupsRes.ok) {
@@ -1085,9 +1085,10 @@ const App: React.FC = () => {
               userName: mu.new_chat_member.user.first_name + (mu.new_chat_member.user.last_name ? ` ${mu.new_chat_member.user.last_name}` : ''),
               chatId: mu.chat.id,
               chatTitle: mu.chat.title,
-              timestamp: mu.date ? mu.date * 1000 : Date.now()
+              timestamp: mu.date ? mu.date * 1000 : Date.now(),
+              is_bot: mu.new_chat_member.user.is_bot
             });
-            memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) + 1;
+            // Don't auto increment memberChanges here directly, do it globally later if deduped
           } else if (!isMemberNow && wasMemberBefore) {
             memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) - 1;
           }
@@ -1109,29 +1110,10 @@ const App: React.FC = () => {
               userName: newUser.first_name + (newUser.last_name ? ` ${newUser.last_name}` : ''),
               chatId: chatId,
               chatTitle: chatTitle,
-              timestamp: u.message.date ? u.message.date * 1000 : Date.now()
+              timestamp: u.message.date ? u.message.date * 1000 : Date.now(),
+              is_bot: newUser.is_bot
             });
-
-            // Frontend fallback for Auto-welcome if webhook is disabled
-            if (autoWelcome && !webhookActive && !newUser.is_bot) {
-              const userName = newUser.first_name || 'Member';
-              const text = `Welcome <a href="tg://user?id=${newUser.id}">${userName}</a> to the group! 🎉`;
-              fetch(`https://api.telegram.org/bot${currentToken}/sendMessage`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' })
-              })
-              .then(res => res.json())
-              .then(data => {
-                if (data.ok) {
-                  setTimeout(() => {
-                    deleteMessage(currentToken, chatId, data.result.message_id).catch(() => {});
-                  }, 15000);
-                }
-              }).catch(() => {});
-            }
           });
-          memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) + u.message.new_chat_members.length;
         }
 
         if (u.message && u.message.left_chat_member) {
@@ -1154,6 +1136,47 @@ const App: React.FC = () => {
       if (maxId > lastUpdateId) {
         setLastUpdateId(maxId);
         localStorage.setItem('tg_last_update_id', maxId.toString());
+      }
+
+      // Deduplicate New Joins across the same batch before sending exactly once
+      const dedupedJoins = [];
+      const joinKeys = new Set();
+      
+      for (const ev of newJoins) {
+        // Broadly duplicate within 60s
+        const broadKey = `${ev.userId}-${ev.chatId}-${Math.floor(ev.timestamp / 60000)}`;
+        if (!joinKeys.has(broadKey)) {
+          joinKeys.add(broadKey);
+          
+          // Only process strictly if we haven't seen them locally in our historical state to prevent cross-batch dual incrementing
+          const cutoffLower = ev.timestamp - 120000;
+          const cutoffUpper = ev.timestamp + 120000;
+          const existInHistory = joinEvents.some(past => past.userId === ev.userId && past.chatId === ev.chatId && past.timestamp > cutoffLower && past.timestamp < cutoffUpper);
+          
+          if (!existInHistory) {
+             dedupedJoins.push(ev);
+             const cIdStr = ev.chatId.toString();
+             memberChanges[cIdStr] = (memberChanges[cIdStr] || 0) + 1;
+             
+             // Frontend fallback for Auto-welcome if webhook is disabled
+             if (autoWelcome && !webhookActive && !ev.is_bot) {
+               const text = `Welcome <a href="tg://user?id=${ev.userId}">${ev.userName || 'Member'}</a> to the group! 🎉`;
+               fetch(`https://api.telegram.org/bot${currentToken}/sendMessage`, {
+                 method: 'POST',
+                 headers: { 'Content-Type': 'application/json' },
+                 body: JSON.stringify({ chat_id: ev.chatId, text, parse_mode: 'HTML' })
+               })
+               .then(res => res.json())
+               .then(data => {
+                 if (data.ok) {
+                   setTimeout(() => {
+                     deleteMessage(currentToken, ev.chatId, data.result.message_id).catch(() => {});
+                   }, 15000);
+                 }
+               }).catch(() => {});
+             }
+          }
+        }
       }
 
       if (newDiscoveredGroups.length > 0) {
@@ -1184,17 +1207,17 @@ const App: React.FC = () => {
         }
       }
 
-      if (newJoins.length > 0) {
+      if (dedupedJoins.length > 0) {
         // Queue for manual sync
-        setPendingJoins(prev => [...prev, ...newJoins]);
+        setPendingJoins(prev => [...prev, ...dedupedJoins]);
       }
 
-        if (newJoins.length > 0) {
-          setJoinEvents(prev => {
-            const combined = [...newJoins, ...prev];
-            return combined.filter((v, i, a) => a.findIndex(t => t.userId === v.userId && t.timestamp === v.timestamp) === i).slice(0, 10000);
-          });
-        }
+      if (dedupedJoins.length > 0) {
+        setJoinEvents(prev => {
+          const combined = [...dedupedJoins, ...prev];
+          return combined.filter((v, i, a) => a.findIndex(t => t.userId === v.userId && t.timestamp === v.timestamp) === i).slice(0, 10000);
+        });
+      }
 
       if (Object.keys(memberChanges).length > 0 || Object.keys(titleChanges).length > 0) {
         const updatedGroupsToPending: TelegramGroup[] = [];
@@ -1460,7 +1483,7 @@ const App: React.FC = () => {
 
       showNotification("Broadcast successful!", 'success');
       setBroadcastMessage('');
-      const res = await fetch('/api/broadcast');
+      const res = await fetch('/api/broadcast', { headers: { 'Accept': 'application/json' } });
       if (res.ok) {
         setBroadcasts(await res.json().catch(() => []));
       }
@@ -1494,7 +1517,7 @@ const App: React.FC = () => {
       }
 
       showNotification("Broadcast deleted!", 'success');
-      const res = await fetch('/api/broadcast');
+      const res = await fetch('/api/broadcast', { headers: { 'Accept': 'application/json' } });
       if (res.ok) {
         try {
           setBroadcasts(await res.json());
@@ -1528,9 +1551,9 @@ const App: React.FC = () => {
       });
     
     if (filterOption === 'activeToday') {
-      const today = new Date().toLocaleDateString('en-CA');
+      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
       const activeIds = new Set(joinEvents
-        .filter(e => new Date(e.timestamp).toLocaleDateString('en-CA') === today)
+        .filter(e => new Date(e.timestamp).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }) === today)
         .map(e => e.chatId.toString())
       );
       filtered = filtered.filter(g => activeIds.has(g.id));
