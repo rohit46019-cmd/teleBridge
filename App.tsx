@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import Sidebar from './components/Sidebar.tsx';
 import GroupCard from './components/GroupCard.tsx';
 import InviteModal from './components/InviteModal.tsx';
@@ -453,6 +454,10 @@ const App: React.FC = () => {
     }, 300);
     return () => clearTimeout(timer);
   }, [searchQuery]);
+
+  useEffect(() => {
+    localStorage.setItem('activeTab', activeTab);
+  }, [activeTab]);
 
   useEffect(() => {
     localStorage.setItem('tg_auto_clean', autoCleanServiceMessages.toString());
@@ -1610,6 +1615,14 @@ const App: React.FC = () => {
     return 'animate-in slide-in-from-left-8';
   }, [activeTab]);
 
+  const BubbleBackground = () => (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-30">
+      <div className="absolute top-[-10%] left-[-5%] w-24 h-24 bg-white/20 rounded-full blur-xl animate-float-slow"></div>
+      <div className="absolute bottom-[20%] right-[-10%] w-32 h-32 bg-white/10 rounded-full blur-2xl animate-float"></div>
+      <div className="absolute top-[40%] right-[10%] w-16 h-16 bg-white/15 rounded-full blur-lg animate-float-delayed"></div>
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col md:flex-row font-sans transition-all duration-300">
       <Sidebar activeTab={activeTab} onTabChange={handleTabChange} theme={theme} toggleTheme={toggleTheme} />
@@ -1639,52 +1652,79 @@ const App: React.FC = () => {
           {activeTab === 'dashboard' && (
             <div className={`space-y-6 ${animationClass}`}>
                <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-                  <div className="bg-gradient-to-br from-blue-500 to-indigo-600 p-5 rounded-[2rem] border-b-4 border-indigo-800 shadow-[0_15px_30px_rgba(79,70,229,0.4)] transition-all hover:-translate-y-1 relative overflow-hidden">
-                    <div className="absolute -right-4 -top-4 w-24 h-24 bg-white/10 rounded-full blur-xl"></div>
-                    <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-4 backdrop-blur-sm"><Icons.Home size={20} className="text-white" strokeWidth={3} /></div>
+                  <motion.div 
+                    whileHover={{ scale: 1.02, translateY: -4 }}
+                    whileTap={{ scale: 0.98 }}
+                    className="bg-gradient-to-br from-blue-500 to-indigo-600 p-5 rounded-[2rem] border-b-4 border-indigo-800 shadow-[0_15px_30px_rgba(79,70,229,0.4)] transition-all relative overflow-hidden"
+                  >
+                    <BubbleBackground />
+                    <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-4 backdrop-blur-sm relative z-10"><Icons.Home size={20} className="text-white" strokeWidth={3} /></div>
                     <p className="text-[10px] font-black text-blue-100 uppercase tracking-widest mb-1 relative z-10">Batches</p>
                     <p className="text-3xl font-black text-white relative z-10">{groups.length}</p>
-                 </div>
-                 <div className="bg-gradient-to-br from-emerald-400 to-teal-600 p-5 rounded-[2rem] border-b-4 border-teal-800 shadow-[0_15px_30px_rgba(13,148,136,0.4)] transition-all hover:-translate-y-1 relative overflow-hidden">
-                    <div className="absolute -right-4 -top-4 w-24 h-24 bg-white/10 rounded-full blur-xl"></div>
-                    <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-4 backdrop-blur-sm"><Icons.Users size={20} className="text-white" strokeWidth={3} /></div>
+                 </motion.div>
+
+                 <motion.div 
+                    whileHover={{ scale: 1.02, translateY: -4 }}
+                    whileTap={{ scale: 0.98 }}
+                    className="bg-gradient-to-br from-emerald-400 to-teal-600 p-5 rounded-[2rem] border-b-4 border-teal-800 shadow-[0_15px_30px_rgba(13,148,136,0.4)] transition-all relative overflow-hidden"
+                  >
+                    <BubbleBackground />
+                    <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-4 backdrop-blur-sm relative z-10"><Icons.Users size={20} className="text-white" strokeWidth={3} /></div>
                     <p className="text-[10px] font-black text-emerald-100 uppercase tracking-widest mb-1 relative z-10">Total Verified</p>
                     <p className="text-3xl font-black text-white relative z-10">{totalMembers.toLocaleString()}</p>
-                 </div>
-                 <div className="bg-gradient-to-br from-amber-400 to-orange-500 p-5 rounded-[2rem] border-b-4 border-orange-700 shadow-[0_15px_30px_rgba(249,115,22,0.4)] transition-all hover:-translate-y-1 relative overflow-hidden">
-                    <div className="absolute -right-4 -top-4 w-24 h-24 bg-white/10 rounded-full blur-xl"></div>
-                    <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-4 backdrop-blur-sm"><Icons.Activity size={20} className="text-white" strokeWidth={3} /></div>
+                 </motion.div>
+
+                 <motion.div 
+                    whileHover={{ scale: 1.02, translateY: -4 }}
+                    whileTap={{ scale: 0.98 }}
+                    className="bg-gradient-to-br from-amber-400 to-orange-500 p-5 rounded-[2rem] border-b-4 border-orange-700 shadow-[0_15px_30px_rgba(249,115,22,0.4)] transition-all relative overflow-hidden"
+                  >
+                    <BubbleBackground />
+                    <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-4 backdrop-blur-sm relative z-10"><Icons.Activity size={20} className="text-white" strokeWidth={3} /></div>
                     <p className="text-[10px] font-black text-amber-50 uppercase tracking-widest mb-1 relative z-10">Joins Today</p>
                     <p className="text-3xl font-black text-white relative z-10">{joinsTodayCount}</p>
-                  </div>
-                 <div className="bg-gradient-to-br from-fuchsia-500 to-purple-600 p-5 rounded-[2rem] border-b-4 border-purple-800 shadow-[0_15px_30px_rgba(192,38,211,0.4)] transition-all hover:-translate-y-1 relative overflow-hidden">
-                    <div className="absolute -right-4 -top-4 w-24 h-24 bg-white/10 rounded-full blur-xl"></div>
-                    <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-4 backdrop-blur-sm"><Icons.Zap size={20} className="text-white" strokeWidth={3} /></div>
-                    <div className="flex flex-col gap-3">
+                  </motion.div>
+
+                 <motion.div 
+                    whileHover={{ scale: 1.02, translateY: -4 }}
+                    whileTap={{ scale: 0.98 }}
+                    className="bg-gradient-to-br from-fuchsia-500 to-purple-600 p-5 rounded-[2rem] border-b-4 border-purple-800 shadow-[0_15px_30px_rgba(192,38,211,0.4)] transition-all relative overflow-hidden"
+                  >
+                    <BubbleBackground />
+                    <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-4 backdrop-blur-sm relative z-10"><Icons.Zap size={20} className="text-white" strokeWidth={3} /></div>
+                    <div className="flex flex-col gap-3 relative z-10">
                        <div>
-                         <p className="text-[10px] font-black text-purple-100 uppercase tracking-widest mb-1 relative z-10">Bot Status</p>
-                         <p className="text-xl font-black text-white uppercase relative z-10">{botInfo ? 'ACTIVE' : 'OFFLINE'}</p>
+                         <p className="text-[10px] font-black text-purple-100 uppercase tracking-widest mb-1">Bot Status</p>
+                         <p className="text-xl font-black text-white uppercase">{botInfo ? 'ACTIVE' : 'OFFLINE'}</p>
                        </div>
                     </div>
-                 </div>
-                 <div className="bg-gradient-to-br from-rose-500 to-orange-600 p-5 rounded-[2rem] border-b-4 border-rose-800 shadow-[0_15px_30px_rgba(244,63,94,0.4)] transition-all hover:-translate-y-1 relative overflow-hidden">
-                    <div className="absolute -right-4 -top-4 w-24 h-24 bg-white/10 rounded-full blur-xl"></div>
-                    <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-4 backdrop-blur-sm"><Icons.TrendingUp size={20} className="text-white" strokeWidth={3} /></div>
+                 </motion.div>
+
+                 <motion.div 
+                    whileHover={{ scale: 1.02, translateY: -4 }}
+                    whileTap={{ scale: 0.98 }}
+                    className="bg-gradient-to-br from-rose-500 to-orange-600 p-5 rounded-[2rem] border-b-4 border-rose-800 shadow-[0_15px_30px_rgba(244,63,94,0.4)] transition-all relative overflow-hidden"
+                  >
+                    <BubbleBackground />
+                    <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-4 backdrop-blur-sm relative z-10"><Icons.TrendingUp size={20} className="text-white" strokeWidth={3} /></div>
                     <p className="text-[10px] font-black text-rose-100 uppercase tracking-widest mb-1 relative z-10">Today's Revenue</p>
-                    <p className="text-3xl font-black text-white relative z-10">₹{(joinsTodayCount * joinRate).toLocaleString()}</p>
-                    <p className="text-[8px] font-bold text-rose-100/60 uppercase mt-1">Rate: ₹{joinRate}/join</p>
-                 </div>
-                 <button 
-                   onClick={() => setActiveTab('settings')}
-                   className="bg-gradient-to-br from-cyan-500 to-blue-600 p-5 rounded-[2rem] border-b-4 border-blue-800 shadow-[0_15px_30px_rgba(6,182,212,0.4)] transition-all hover:-translate-y-1 relative overflow-hidden text-left group"
-                 >
-                    <div className="absolute -right-4 -top-4 w-24 h-24 bg-white/10 rounded-full blur-xl group-hover:scale-110 transition-transform"></div>
-                    <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-4 backdrop-blur-sm"><Icons.BarChart3 size={20} className="text-white" strokeWidth={3} /></div>
+                    <p className="text-3xl font-black text-white relative z-10 text-shadow-sm">₹{(joinsTodayCount * joinRate).toLocaleString()}</p>
+                    <p className="text-[8px] font-bold text-rose-100/60 uppercase mt-1 relative z-10">Rate: ₹{joinRate}/join</p>
+                 </motion.div>
+
+                 <motion.button 
+                    whileHover={{ scale: 1.02, translateY: -4 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => setActiveTab('settings')}
+                    className="bg-gradient-to-br from-cyan-500 to-blue-600 p-5 rounded-[2rem] border-b-4 border-blue-800 shadow-[0_15px_30px_rgba(6,182,212,0.4)] transition-all relative overflow-hidden text-left group"
+                  >
+                    <BubbleBackground />
+                    <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-4 backdrop-blur-sm relative z-10"><Icons.BarChart3 size={20} className="text-white" strokeWidth={3} /></div>
                     <p className="text-[10px] font-black text-cyan-50 uppercase tracking-widest mb-1 relative z-10">Analytics</p>
                     <p className="text-xl font-black text-white relative z-10 flex items-center gap-2">
                       VIEW GROWTH <Icons.ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
                     </p>
-                 </button>
+                 </motion.button>
               </div>
               <div className="relative rounded-[2.5rem] border border-white/10 p-8 shadow-2xl overflow-hidden bg-gradient-to-br from-violet-600 via-fuchsia-600 to-orange-500 text-white transform transition-all duration-300 hover:scale-[1.01] hover:shadow-fuchsia-500/20">
                  <div className="absolute top-0 right-0 w-64 h-64 bg-white/20 rounded-full blur-3xl -mr-16 -mt-16 mix-blend-overlay pointer-events-none"></div>
