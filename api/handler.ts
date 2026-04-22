@@ -3,7 +3,7 @@ import mongoose from "mongoose"
 import cors from "cors"
 import path from "path"
 
-const MONGODB_URI = (process.env.MONGODB_URI || "mongodb+srv://rohit46019_db_user:m5j51NXjSGxEzSrs@cluster0.b3gft5l.mongodb.net/?appName=Cluster0").replace(/^['"]|['"]$/g, '')
+const MONGODB_URI = (process.env.MONGODB_URI || "mongodb+srv://rohit46019_db_user:m5j51NXjSGxEzSrs@cluster0.b3gft5l.mongodb.net/telebridge_pro?appName=Cluster0").replace(/^['"]|['"]$/g, '')
 
 // Define Schemas
 const joinEventSchema = new mongoose.Schema({
@@ -12,10 +12,10 @@ const joinEventSchema = new mongoose.Schema({
   chatId: Number,
   chatTitle: String,
   timestamp: Number
-})
+}, { timestamps: true })
 
 const groupSchema = new mongoose.Schema({
-  id: String,
+  id: { type: String, unique: true },
   name: String,
   memberCount: Number,
   description: String,
@@ -23,8 +23,8 @@ const groupSchema = new mongoose.Schema({
   image: String,
   lastInteraction: Number,
   interactionCount: { type: Number, default: 0 },
-  pinned: Boolean
-})
+  pinned: { type: Boolean, default: false }
+}, { timestamps: true })
 
 const broadcastSchema = new mongoose.Schema({
   message: String,
@@ -33,13 +33,13 @@ const broadcastSchema = new mongoose.Schema({
     chatId: String,
     messageId: Number
   }]
-})
+}, { timestamps: true })
 
 const inviteLinkSchema = new mongoose.Schema({
   groupId: String,
   link: String,
-  createdAt: Number
-})
+  createdAt: { type: Number, default: Date.now }
+}, { timestamps: true })
 
 // Define Models
 const JoinEvent = mongoose.models.JoinEvent || mongoose.model("JoinEvent", joinEventSchema)
@@ -48,21 +48,44 @@ const Broadcast = mongoose.models.Broadcast || mongoose.model("Broadcast", broad
 const InviteLink = mongoose.models.InviteLink || mongoose.model("InviteLink", inviteLinkSchema)
 
 let cachedConnection: typeof mongoose | null = null
+let isConnecting = false
 
 async function connectDB() {
-  if (cachedConnection && mongoose.connection.readyState === 1) {
-    return cachedConnection
+  if (mongoose.connection.readyState === 1) {
+    return mongoose.connection
   }
 
+  if (isConnecting) {
+    return new Promise((resolve, reject) => {
+      const check = setInterval(() => {
+        if (mongoose.connection.readyState === 1) {
+          clearInterval(check);
+          resolve(mongoose.connection);
+        }
+      }, 500);
+      setTimeout(() => {
+        clearInterval(check);
+        reject(new Error("Database connection timeout"));
+      }, 15000);
+    });
+  }
+
+  isConnecting = true
   try {
+    console.log("Connecting to MongoDB Atlas on Vercel...")
     const conn = await mongoose.connect(MONGODB_URI, {
-      serverSelectionTimeoutMS: 10000,
+      serverSelectionTimeoutMS: 15000,
+      connectTimeoutMS: 20000,
+      socketTimeoutMS: 45000,
+      dbName: 'telebridge_pro'
     })
-    cachedConnection = conn
+    console.log("Connected to MongoDB successfully")
     return conn
   } catch (error: any) {
     console.error("MongoDB connection error:", error.message)
     throw error
+  } finally {
+    isConnecting = false
   }
 }
 
@@ -70,13 +93,26 @@ const app = express()
 app.use(cors())
 app.use(express.json())
 
-// DB connection middleware
+// DB connection middleware with Vercel diagnostics
 app.use(async (req, res, next) => {
   try {
     await connectDB()
     next()
   } catch (err: any) {
-    res.status(503).json({ error: "Database connection failed", details: err.message })
+    console.error("Vercel DB Connection Failure:", err.message);
+    const isIpError = err.message.includes("IP not whitelisted") || 
+                      err.message.includes("is not allowed to access from this IP") ||
+                      err.message.includes("Could not connect to any servers");
+
+    res.status(503).json({ 
+      error: "Database Connection Failed", 
+      message: "Unable to connect to MongoDB from Vercel.",
+      details: err.message,
+      diagnosis: isIpError ? "IP_RESTRICTION" : "UNKNOWN_ERROR",
+      advice: isIpError ? 
+        "IMPORTANT: You MUST allow '0.0.0.0/0' (Allow access from anywhere) in your MongoDB Atlas Network Access settings." : 
+        "Check your MONGODB_URI in Vercel environment variables."
+    })
   }
 })
 
