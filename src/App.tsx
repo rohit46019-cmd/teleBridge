@@ -1759,10 +1759,14 @@ const App: React.FC = () => {
                       <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm"><Icons.TrendingUp size={20} className="text-white" strokeWidth={3} /></div>
                       <button 
                         onClick={() => setHideRevenue(!hideRevenue)}
-                        className="p-2 hover:bg-white/10 rounded-full transition-colors"
+                        className="p-2.5 bg-white/20 hover:bg-white/30 rounded-2xl transition-all shadow-lg flex items-center justify-center backdrop-blur-md border border-white/30"
                         title={hideRevenue ? "Show Revenue" : "Hide Revenue"}
                       >
-                        {hideRevenue ? <Icons.EyeOff size={16} className="text-white/70" /> : <Icons.Eye size={16} className="text-white/70" />}
+                        {hideRevenue ? (
+                          <Icons.EyeOff size={20} className="text-white" />
+                        ) : (
+                          <Icons.Eye size={20} className="text-white" />
+                        )}
                       </button>
                     </div>
                     <p className="text-[10px] font-black text-rose-100 uppercase tracking-widest mb-1 relative z-10">Today's Revenue</p>
@@ -2187,7 +2191,16 @@ const App: React.FC = () => {
                     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2.5rem] p-6 shadow-xl">
                       <div className="flex items-center justify-between mb-4">
                         <div>
-                          <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">Revenue Analysis</h3>
+                          <div className="flex items-center gap-3">
+                            <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">Revenue Analysis</h3>
+                            <button 
+                              onClick={() => setHideRevenue(!hideRevenue)}
+                              className="p-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-all"
+                              title={hideRevenue ? "Show Revenue" : "Hide Revenue"}
+                            >
+                              {hideRevenue ? <Icons.EyeOff size={14} className="text-slate-500" /> : <Icons.Eye size={14} className="text-slate-500" />}
+                            </button>
+                          </div>
                           <p className="text-[10px] font-bold text-slate-500 uppercase mt-0.5">
                             {analyticsRange === 'CUSTOM' ? 'Custom Period' : `Last ${revenueDays} Days`}
                           </p>
@@ -2206,7 +2219,7 @@ const App: React.FC = () => {
                           </div>
                         )}
                       </div>
-                      <div className="h-[100px] w-full -ml-4">
+                      <div className={`h-[100px] w-full -ml-4 transition-all duration-500 ${hideRevenue ? 'blur-lg opacity-40 select-none pointer-events-none' : ''}`}>
                         <ResponsiveContainer width="100%" height="100%">
                           <AreaChart data={revenueAnalysis.data} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
                             <defs>
@@ -2222,7 +2235,9 @@ const App: React.FC = () => {
                                   return (
                                     <div className="bg-slate-900 text-white p-2 rounded-lg text-[10px] font-black border border-white/10 shadow-2xl">
                                       <p className="opacity-60">{new Date(payload[0].payload.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</p>
-                                      <p className="text-indigo-400 text-xs">₹{payload[0].value?.toLocaleString()}</p>
+                                      <p className="text-indigo-400 text-xs">
+                                        {hideRevenue ? "₹****" : `₹${payload[0].value?.toLocaleString()}`}
+                                      </p>
                                     </div>
                                   );
                                 }
@@ -2247,12 +2262,16 @@ const App: React.FC = () => {
                       <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-5 rounded-[2rem] text-white shadow-lg">
                         <p className="text-[8px] font-black uppercase tracking-[0.2em] opacity-70 mb-1">Highest Income</p>
                         <p className="text-xs font-black truncate">{revenueAnalysis.highest ? new Date(revenueAnalysis.highest.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : 'N/A'}</p>
-                        <p className="text-lg font-black mt-1">₹{revenueAnalysis.highest?.revenue.toLocaleString() || 0}</p>
+                        <p className={`text-lg font-black mt-1 transition-all ${hideRevenue ? 'blur-sm select-none' : ''}`}>
+                          {hideRevenue ? "₹88,888" : `₹${revenueAnalysis.highest?.revenue.toLocaleString() || 0}`}
+                        </p>
                       </div>
                       <div className="bg-white dark:bg-slate-800 p-5 rounded-[2rem] border border-slate-200 dark:border-slate-700 shadow-lg">
                         <p className="text-[8px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">Lowest Income</p>
                         <p className="text-xs font-black text-slate-900 dark:text-white truncate">{revenueAnalysis.lowest ? new Date(revenueAnalysis.lowest.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : 'N/A'}</p>
-                        <p className="text-lg font-black text-slate-900 dark:text-white mt-1">₹{revenueAnalysis.lowest?.revenue.toLocaleString() || 0}</p>
+                        <p className={`text-lg font-black text-slate-900 dark:text-white mt-1 transition-all ${hideRevenue ? 'blur-sm select-none' : ''}`}>
+                          {hideRevenue ? "₹88,888" : `₹${revenueAnalysis.lowest?.revenue.toLocaleString() || 0}`}
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -2303,6 +2322,26 @@ const App: React.FC = () => {
                             className={`w-10 h-5 rounded-full transition-all relative ${autoWelcome ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'}`}
                           >
                             <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${autoWelcome ? 'left-6' : 'left-1'}`} />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-800">
+                        <div>
+                          <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">
+                            Privacy Mode
+                          </h4>
+                          <p className="text-[9px] text-slate-500 font-bold">Hide income & sensitive stats</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[8px] font-black ${hideRevenue ? 'text-blue-500' : 'text-slate-400'}`}>
+                            {hideRevenue ? 'ACTIVE' : 'OFF'}
+                          </span>
+                          <button 
+                            onClick={() => setHideRevenue(!hideRevenue)}
+                            className={`w-10 h-5 rounded-full transition-all relative ${hideRevenue ? 'bg-blue-500' : 'bg-slate-300 dark:bg-slate-700'}`}
+                          >
+                            <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${hideRevenue ? 'left-6' : 'left-1'}`} />
                           </button>
                         </div>
                       </div>
