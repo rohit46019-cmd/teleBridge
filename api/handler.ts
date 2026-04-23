@@ -124,6 +124,9 @@ app.use(express.json())
 
 // DB connection middleware with Vercel diagnostics
 app.use(async (req, res, next) => {
+  // Only require DB for actual API logic, excluding health check.
+  if (!req.path.startsWith('/api') || req.path === '/api/health') return next();
+
   try {
     await connectDB()
     next()
@@ -484,6 +487,13 @@ app.post("/api/webhook/:token", async (req, res) => {
           const chatTitle = msg.chat.title;
           const chatIdStr = chatId.toString();
           shouldSyncGroup = msg.chat;
+
+          // Auto-Cleanup logic for System Messages
+          if (autoClean && (msg.new_chat_members || msg.left_chat_member || msg.new_chat_title || msg.new_chat_photo || msg.delete_chat_photo)) {
+            await fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${chatId}&message_id=${msg.message_id}`, {
+              signal: AbortSignal.timeout(5000)
+            }).catch(() => {});
+          }
 
           if (msg.new_chat_members) {
             msg.new_chat_members.forEach((newUser: any) => {
