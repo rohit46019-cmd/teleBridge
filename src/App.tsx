@@ -195,6 +195,9 @@ const App: React.FC = () => {
   const [autoWelcome, setAutoWelcome] = useState(() => {
     return localStorage.getItem('tg_auto_welcome') === 'true';
   });
+  const [hideRevenue, setHideRevenue] = useState(() => {
+    return localStorage.getItem('hideRevenue') === 'true';
+  });
   const [bannedUsers, setBannedUsers] = useState<BannedUser[]>(() => {
     const saved = localStorage.getItem('tg_banned_users');
     try {
@@ -460,6 +463,10 @@ const App: React.FC = () => {
   }, [activeTab]);
 
   useEffect(() => {
+    localStorage.setItem('hideRevenue', hideRevenue.toString());
+  }, [hideRevenue]);
+
+  useEffect(() => {
     localStorage.setItem('tg_auto_clean', autoCleanServiceMessages.toString());
   }, [autoCleanServiceMessages]);
 
@@ -569,12 +576,28 @@ const App: React.FC = () => {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 15000); 
 
-        const [groupsRes, eventsRes] = await Promise.all([
+        const [groupsRes, eventsRes, botRes] = await Promise.all([
           fetch('/api/groups', { signal: controller.signal, headers: { 'Accept': 'application/json' } }),
-          fetch('/api/events', { signal: controller.signal, headers: { 'Accept': 'application/json' } })
+          fetch('/api/events', { signal: controller.signal, headers: { 'Accept': 'application/json' } }),
+          fetch('/api/bot', { signal: controller.signal, headers: { 'Accept': 'application/json' } })
         ]);
         
         clearTimeout(timeoutId);
+
+        // Process Bot Info if available
+        if (botRes.ok) {
+          const botData = await botRes.json();
+          if (botData.token) {
+            setToken(botData.token);
+            setBotInfo({
+              id: 0,
+              is_bot: true,
+              first_name: botData.name || 'Bot',
+              username: botData.username || ''
+            });
+            localStorage.setItem('tg_bot_token', botData.token);
+          }
+        }
 
         if (!groupsRes.ok) {
           const errorData = await groupsRes.json().catch(() => ({}));
@@ -951,6 +974,18 @@ const App: React.FC = () => {
       setBotInfo(info);
       setToken(testToken);
       localStorage.setItem('tg_bot_token', testToken);
+      
+      // Save bot info to Database for server-side persistence and cron sync
+      await fetch('/api/bot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token: testToken,
+          name: info.first_name,
+          username: info.username
+        })
+      }).catch(e => console.error("Failed to save bot info to DB:", e));
+
       discoverGroupsAndJoins(testToken);
     } catch (err: any) {
       setBotInfo(null);
@@ -1438,13 +1473,27 @@ const App: React.FC = () => {
     reader.onload = (event) => {
       try {
         const data = JSON.parse(event.target?.result as string);
-        if (data.joinEvents) setJoinEvents(data.joinEvents);
-        if (data.groups) setGroups(data.groups);
+        if (data.joinEvents) {
+          setJoinEvents(data.joinEvents);
+          setPendingJoins(prev => {
+            const combined = [...prev, ...data.joinEvents];
+            return combined.filter((v, i, a) => 
+              a.findIndex(t => t.userId === v.userId && t.timestamp === v.timestamp) === i
+            );
+          });
+        }
+        if (data.groups) {
+          setGroups(data.groups);
+          setPendingGroups(prev => {
+            const combined = [...prev, ...data.groups];
+            return combined.filter((v, i, a) => a.findIndex(t => t.id === v.id) === i);
+          });
+        }
         if (data.token) {
           setToken(data.token);
           handleVerify(data.token);
         }
-        showNotification('Data imported!', 'success');
+        showNotification('Data imported! Click Sync to update Database.', 'success');
       } catch (err) { showNotification('Import failed.', 'alert'); }
     };
     reader.readAsText(file);
@@ -1706,9 +1755,22 @@ const App: React.FC = () => {
                     className="bg-gradient-to-br from-rose-500 to-orange-600 p-5 rounded-[2rem] border-b-4 border-rose-800 shadow-[0_15px_30px_rgba(244,63,94,0.4)] transition-all relative overflow-hidden"
                   >
                     <BubbleBackground />
-                    <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-4 backdrop-blur-sm relative z-10"><Icons.TrendingUp size={20} className="text-white" strokeWidth={3} /></div>
+                    <div className="flex justify-between items-start mb-4 relative z-10">
+                      <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm"><Icons.TrendingUp size={20} className="text-white" strokeWidth={3} /></div>
+                      <button 
+                        onClick={() => setHideRevenue(!hideRevenue)}
+                        className="p-2 hover:bg-white/10 rounded-full transition-colors"
+                        title={hideRevenue ? "Show Revenue" : "Hide Revenue"}
+                      >
+                        {hideRevenue ? <Icons.EyeOff size={16} className="text-white/70" /> : <Icons.Eye size={16} className="text-white/70" />}
+                      </button>
+                    </div>
                     <p className="text-[10px] font-black text-rose-100 uppercase tracking-widest mb-1 relative z-10">Today's Revenue</p>
-                    <p className="text-3xl font-black text-white relative z-10 text-shadow-sm">₹{(joinsTodayCount * joinRate).toLocaleString()}</p>
+                    {hideRevenue ? (
+                      <p className="text-3xl font-black text-white relative z-10 text-shadow-sm blur-md select-none">₹8,888,888</p>
+                    ) : (
+                      <p className="text-3xl font-black text-white relative z-10 text-shadow-sm">₹{(joinsTodayCount * joinRate).toLocaleString()}</p>
+                    )}
                     <p className="text-[8px] font-bold text-rose-100/60 uppercase mt-1 relative z-10">Rate: ₹{joinRate}/join</p>
                  </motion.div>
 

@@ -41,11 +41,36 @@ const inviteLinkSchema = new mongoose.Schema({
   createdAt: { type: Number, default: Date.now }
 }, { timestamps: true })
 
+const botSchema = new mongoose.Schema({
+  token: String,
+  name: String,
+  username: String,
+  lastSync: Number
+}, { timestamps: true })
+
 // Define Models
 const JoinEvent = mongoose.models.JoinEvent || mongoose.model("JoinEvent", joinEventSchema)
 const Group = mongoose.models.Group || mongoose.model("Group", groupSchema)
 const Broadcast = mongoose.models.Broadcast || mongoose.model("Broadcast", broadcastSchema)
 const InviteLink = mongoose.models.InviteLink || mongoose.model("InviteLink", inviteLinkSchema)
+const Bot = mongoose.models.Bot || mongoose.model("Bot", botSchema)
+
+async function seedData() {
+  try {
+    const groupCount = await Group.countDocuments();
+    if (groupCount > 0) return;
+
+    console.log("Database empty on Vercel, seeding default groups...");
+    const defaultGroups = [
+      { "id": "-1003698762401", "name": "GK & GS Brahmastra 4.0 Batch", "memberCount": 5, "description": "Synced Hub", "category": "Telegram", "image": "https://picsum.photos/seed/-1003698762401/200", "lastInteraction": 1774102797184, "interactionCount": 0, "pinned": false },
+      { "id": "-1003040206839", "name": "ɢᴀɢᴀɴ ᴘʀᴀᴛᴀᴘ", "memberCount": 19, "description": "Synced Hub", "category": "Telegram", "image": "https://picsum.photos/seed/-1003040206839/200", "lastInteraction": 1774101136444, "interactionCount": 0, "pinned": false }
+    ];
+    await Group.insertMany(defaultGroups as any[]);
+    console.log("Seeding successful");
+  } catch (e) {
+    console.error("Seeding failed on Vercel:", e);
+  }
+}
 
 let cachedConnection: typeof mongoose | null = null
 let isConnecting = false
@@ -80,6 +105,10 @@ async function connectDB() {
       dbName: 'telebridge_pro'
     })
     console.log("Connected to MongoDB successfully")
+    
+    // Seed data if needed
+    await seedData();
+    
     return conn
   } catch (error: any) {
     console.error("MongoDB connection error:", error.message)
@@ -142,46 +171,57 @@ app.get("/api/events", async (req, res) => {
 app.post("/api/groups", async (req, res) => {
   try {
     const group = req.body
-    await (Group as any).findOneAndUpdate({ id: group.id }, group, { upsert: true })
-    res.json({ success: true })
-  } catch (error) {
-    res.status(500).json({ error: "Failed to save group" })
+    if (!group.id) return res.status(400).json({ error: "Group ID is required" });
+    const result = await (Group as any).findOneAndUpdate({ id: group.id.toString() }, group, { upsert: true, new: true })
+    res.json({ success: true, group: result })
+  } catch (error: any) {
+    console.error(`[API] Group save error for ${req.body?.id}:`, error.message);
+    res.status(500).json({ error: "Failed to save group", details: error.message })
   }
 })
 
 app.put("/api/groups/bulk-update", async (req, res) => {
   try {
     const updates = req.body
+    if (!Array.isArray(updates)) return res.status(400).json({ error: "Updates must be an array" });
+    console.log(`[API] Bulk updating ${updates.length} groups`);
     for (const g of updates) {
-      await (Group as any).findOneAndUpdate({ id: g.id }, g, { upsert: true })
+      if (g.id) {
+        await (Group as any).findOneAndUpdate({ id: g.id.toString() }, g, { upsert: true })
+      }
     }
     res.json({ success: true })
-  } catch (error) {
-    res.status(500).json({ error: "Failed to update groups" })
+  } catch (error: any) {
+    console.error("[API] Bulk update error:", error.message);
+    res.status(500).json({ error: "Failed to update groups", details: error.message })
   }
 })
 
 app.put("/api/groups/:id/interaction", async (req, res) => {
   try {
-    await (Group as any).findOneAndUpdate({ id: req.params.id }, { 
+    await (Group as any).findOneAndUpdate({ id: req.params.id.toString() }, { 
       lastInteraction: Date.now(),
       $inc: { interactionCount: 1 }
     })
     res.json({ success: true })
-  } catch (error) {
-    res.status(500).json({ error: "Failed to update interaction" })
+  } catch (error: any) {
+    console.error(`[API] Interaction update error for ${req.params.id}:`, error.message);
+    res.status(500).json({ error: "Failed to update interaction", details: error.message })
   }
 })
 
 app.post("/api/events", async (req, res) => {
   try {
     const events = req.body
+    if (!Array.isArray(events)) return res.status(400).json({ error: "Events must be an array" });
+    console.log(`[API] Saving ${events.length} events`);
     for (const ev of events) {
       await (JoinEvent as any).findOneAndUpdate({ userId: ev.userId, timestamp: ev.timestamp }, ev, { upsert: true })
     }
     res.json({ success: true })
-  } catch (error) {
-    res.status(500).json({ error: "Failed to save events" })
+  } catch (error: any) {
+    console.error("[API] Events save error:", error.message);
+    res.status(500).json({ error: "Failed to save events", details: error.message })
   }
 })
 
@@ -234,7 +274,7 @@ app.post("/api/broadcast", async (req, res) => {
 
     const broadcastRecord = await (Broadcast as any).create({ message, timestamp, sentTo: [] })
 
-    // Vercel background execution (Fire and forget style)
+    // Vercel background execution
     const sendBatch = async () => {
       const sendPromises = groups.map(async (group) => {
         try {
@@ -250,14 +290,14 @@ app.post("/api/broadcast", async (req, res) => {
       const results = await Promise.all(sendPromises)
       const sentTo = results.filter((r: any) => r.success).map((r: any) => ({ chatId: r.chatId, messageId: r.messageId }))
       await (Broadcast as any).findByIdAndUpdate(broadcastRecord._id, { sentTo })
+      return sentTo.length;
     }
 
-    // On Vercel, this might finish after the response if lucky, or get killed.
-    // However, we must respond to the client.
-    await sendBatch()
+    const sentCount = await sendBatch()
     
-    res.json({ success: true, message: "Broadcast processed" })
+    res.json({ success: true, sentCount, totalCount: groups.length, message: "Broadcast processed" })
   } catch (error: any) {
+    console.error("[API] Broadcast error:", error.message);
     res.status(500).json({ error: "Failed to broadcast message", details: error.message })
   }
 })
@@ -297,6 +337,76 @@ app.delete("/api/broadcast/:id", async (req, res) => {
     res.json({ success: true })
   } catch (error) {
     res.status(500).json({ error: "Failed to delete broadcast" })
+  }
+})
+
+// Bot Management
+app.get("/api/bot", async (req, res) => {
+  try {
+    const bot = await (Bot as any).findOne()
+    res.json(bot || {})
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch bot settings" })
+  }
+})
+
+app.post("/api/bot", async (req, res) => {
+  try {
+    const { token, name, username } = req.body
+    if (!token) return res.status(400).json({ error: "Bot token is required" })
+    const bot = await (Bot as any).findOneAndUpdate({}, { token, name, username }, { upsert: true, new: true })
+    res.json({ success: true, bot })
+  } catch (error) {
+    res.status(500).json({ error: "Failed to save bot settings" })
+  }
+})
+
+// Cron Job Sync (Every 24h)
+app.get("/api/cron/sync", async (req, res) => {
+  try {
+    // Basic auth check if needed (Vercel cron sends a specific header)
+    // if (req.headers['x-vercel-cron'] !== 'true') return res.status(401).end();
+
+    const bot = await (Bot as any).findOne()
+    if (!bot || !bot.token) return res.status(404).json({ error: "No bot token found for sync" })
+
+    const groups = await Group.find()
+    console.log(`[Sync] Starting daily sync for ${groups.length} groups`)
+
+    const syncResults = await Promise.allSettled(groups.map(async (group) => {
+      try {
+        const response = await fetch(`https://api.telegram.org/bot${bot.token}/getChat?chat_id=${group.id}`)
+        const data: any = await response.json()
+        if (data.ok) {
+          const chat = data.result;
+          const countRes = await fetch(`https://api.telegram.org/bot${bot.token}/getChatMemberCount?chat_id=${group.id}`)
+          const countData: any = await countRes.json()
+          
+          const updates: any = { 
+            memberCount: countData.ok ? countData.result : group.memberCount,
+            lastInteraction: Date.now()
+          };
+          
+          if (chat.title) updates.name = chat.title;
+          if (chat.description) updates.description = chat.description;
+
+          await (Group as any).findOneAndUpdate({ id: group.id }, updates)
+          return { id: group.id, success: true }
+        }
+      } catch (err) {}
+      return { id: group.id, success: false }
+    }))
+
+    await (Bot as any).updateOne({}, { lastSync: Date.now() })
+    
+    res.json({ 
+      success: true, 
+      processed: syncResults.length, 
+      timestamp: new Date().toISOString() 
+    })
+  } catch (error: any) {
+    console.error("[Sync] Cron error:", error.message)
+    res.status(500).json({ error: "Sync failed", details: error.message })
   }
 })
 
