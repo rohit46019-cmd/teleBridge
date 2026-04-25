@@ -3,6 +3,11 @@ import mongoose from "mongoose";
 import cors from "cors";
 import path from "path";
 
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 const MONGODB_URI = (process.env.MONGODB_URI || "mongodb+srv://rohit46019_db_user:m5j51NXjSGxEzSrs@cluster0.b3gft5l.mongodb.net/telebridge_pro?appName=Cluster0").replace(/^['"]|['"]$/g, '');
 
 // Define Schemas
@@ -41,11 +46,23 @@ const inviteLinkSchema = new mongoose.Schema({
   createdAt: { type: Number, default: Date.now }
 }, { timestamps: true });
 
+const botSchema = new mongoose.Schema({
+  token: String,
+  name: String,
+  username: String,
+  lastSync: Number,
+  joinRate: { type: Number, default: 87 },
+  autoClean: { type: Boolean, default: false },
+  autoWelcome: { type: Boolean, default: false },
+  webhookActive: { type: Boolean, default: false }
+}, { timestamps: true });
+
 // Define Models
 const JoinEvent = mongoose.models.JoinEvent || mongoose.model("JoinEvent", joinEventSchema);
 const Group = mongoose.models.Group || mongoose.model("Group", groupSchema);
 const Broadcast = mongoose.models.Broadcast || mongoose.model("Broadcast", broadcastSchema);
 const InviteLink = mongoose.models.InviteLink || mongoose.model("InviteLink", inviteLinkSchema);
+const Bot = mongoose.models.Bot || mongoose.model("Bot", botSchema);
 
 // Global Error Handlers to prevent server crashes
 process.on('unhandledRejection', (reason, promise) => {
@@ -155,7 +172,8 @@ async function startServer() {
   const PORT = 3000;
 
   app.use(cors());
-  app.use(express.json());
+  app.use(express.json({ limit: '50mb' }));
+  app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
   // DB connection middleware with better diagnostic info
   app.use(async (req, res, next) => {
@@ -644,6 +662,45 @@ async function startServer() {
     }
   });
 
+  // Bot Management
+  app.get("/api/bot", async (req, res) => {
+    try {
+      const bot = await (Bot as any).findOne();
+      res.json(bot || {});
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch bot settings" });
+    }
+  });
+
+  app.post("/api/bot", async (req, res) => {
+    try {
+      const { token, name, username, joinRate, autoClean, autoWelcome, webhookActive } = req.body;
+      
+      const updateData: any = {};
+      if (token !== undefined) updateData.token = token;
+      if (name !== undefined) updateData.name = name;
+      if (username !== undefined) updateData.username = username;
+      if (joinRate !== undefined) updateData.joinRate = joinRate;
+      if (autoClean !== undefined) updateData.autoClean = autoClean;
+      if (autoWelcome !== undefined) updateData.autoWelcome = autoWelcome;
+      if (webhookActive !== undefined) updateData.webhookActive = webhookActive;
+
+      const bot = await (Bot as any).findOneAndUpdate({}, updateData, { upsert: true, new: true });
+      res.json({ success: true, bot });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to save bot settings" });
+    }
+  });
+
+  // Global Error Handler for API routes (catches Payload Too Large, etc.)
+  app.use((err: any, req: any, res: any, next: any) => {
+    if (req.path.startsWith('/api')) {
+      console.error("API Error middleware caught:", err);
+      return res.status(err.status || 500).json({ error: err.message || "Internal Server Error", details: err.toString() });
+    }
+    next(err);
+  });
+
   // Vite middleware for development
   let server: any;
   if (process.env.NODE_ENV !== "production") {
@@ -661,9 +718,23 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     server = app;
-    const distPath = path.join(process.cwd(), 'dist');
+    const distPath = path.resolve(__dirname, 'dist');
     app.use(express.static(distPath));
-    app.get('*all', (req, res) => {
+    
+    // SPA Fallback: Only serve index.html for non-asset, non-API routes
+    app.get('*all', (req, res, next) => {
+      // 1. Skip API routes (let them 404 or be handled by handlers)
+      if (req.path.startsWith('/api')) {
+        return next();
+      }
+      
+      // 2. Skip missing assets (don't serve HTML as JS/CSS/Images)
+      const hasExtension = req.path.includes('.') && !req.path.endsWith('.html');
+      if (hasExtension) {
+        return res.status(404).send('Asset not found');
+      }
+      
+      // 3. Otherwise, serve the SPA index
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }

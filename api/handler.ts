@@ -45,7 +45,11 @@ const botSchema = new mongoose.Schema({
   token: String,
   name: String,
   username: String,
-  lastSync: Number
+  lastSync: Number,
+  joinRate: { type: Number, default: 87 },
+  autoClean: { type: Boolean, default: false },
+  autoWelcome: { type: Boolean, default: false },
+  webhookActive: { type: Boolean, default: false }
 }, { timestamps: true })
 
 // Define Models
@@ -120,7 +124,8 @@ async function connectDB() {
 
 const app = express()
 app.use(cors())
-app.use(express.json())
+app.use(express.json({ limit: '50mb' }))
+app.use(express.urlencoded({ limit: '50mb', extended: true }))
 
 // DB connection middleware with Vercel diagnostics
 app.use(async (req, res, next) => {
@@ -355,9 +360,24 @@ app.get("/api/bot", async (req, res) => {
 
 app.post("/api/bot", async (req, res) => {
   try {
-    const { token, name, username } = req.body
-    if (!token) return res.status(400).json({ error: "Bot token is required" })
-    const bot = await (Bot as any).findOneAndUpdate({}, { token, name, username }, { upsert: true, new: true })
+    const { token, name, username, joinRate, autoClean, autoWelcome, webhookActive } = req.body;
+    
+    // Create an object with the fields present in the request body to allow partial updates
+    const updateData: any = {};
+    if (token !== undefined) updateData.token = token;
+    if (name !== undefined) updateData.name = name;
+    if (username !== undefined) updateData.username = username;
+    if (joinRate !== undefined) updateData.joinRate = joinRate;
+    if (autoClean !== undefined) updateData.autoClean = autoClean;
+    if (autoWelcome !== undefined) updateData.autoWelcome = autoWelcome;
+    if (webhookActive !== undefined) updateData.webhookActive = webhookActive;
+
+    if (!updateData.token) {
+      // Find the first document to update if token is not sent, or we require token always?
+      // Since it's a singleton (updating {}), it's fine.
+    }
+    
+    const bot = await (Bot as any).findOneAndUpdate({}, updateData, { upsert: true, new: true })
     res.json({ success: true, bot })
   } catch (error) {
     res.status(500).json({ error: "Failed to save bot settings" })
@@ -615,6 +635,15 @@ app.post("/api/webhook/:token", async (req, res) => {
     console.error("Webhook route error:", err);
     res.status(200).json({ ok: true }); // Always 200 for TG
   }
+});
+
+// Global Error Handler for API routes (catches Payload Too Large, etc.)
+app.use((err: any, req: any, res: any, next: any) => {
+  if (req.path.startsWith('/api')) {
+    console.error("API Error middleware caught:", err);
+    return res.status(err.status || 500).json({ error: err.message || "Internal Server Error", details: err.toString() });
+  }
+  next(err);
 });
 
 export default app

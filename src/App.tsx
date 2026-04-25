@@ -284,6 +284,79 @@ const App: React.FC = () => {
   const [joinRate, setJoinRate] = useState(() => {
     return Number(localStorage.getItem('tg_join_rate')) || 87;
   });
+  const [selectedRevenueMonth, setSelectedRevenueMonth] = useState(() => new Date().toISOString().slice(0, 7)); // "YYYY-MM"
+
+  const earningStats = useMemo(() => {
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+
+    const lastMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+    const lastMonthYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+
+    const sevenDaysAgo = new Date(now);
+    sevenDaysAgo.setDate(now.getDate() - 7);
+    sevenDaysAgo.setHours(0, 0, 0, 0);
+
+    let total = 0;
+    let thisMonth = 0;
+    let lastMonthCount = 0; // count of same days last month
+    let lastMonthTotal = 0; // total of whole last month
+    let last7Days = 0;
+
+    const currentDayOfMonth = now.getDate();
+
+    joinEvents.forEach(event => {
+      total++;
+      const d = new Date(event.timestamp);
+      
+      const evtMonth = d.getMonth();
+      const evtYear = d.getFullYear();
+
+      if (evtMonth === currentMonth && evtYear === currentYear) {
+        thisMonth++;
+      }
+      if (evtMonth === lastMonth && evtYear === lastMonthYear) {
+        lastMonthTotal++;
+        if (d.getDate() <= currentDayOfMonth) {
+          lastMonthCount++;
+        }
+      }
+      if (d >= sevenDaysAgo) {
+        last7Days++;
+      }
+    });
+
+    const getTrend = (curr: number, prev: number) => {
+      if (prev === 0) return curr > 0 ? 100 : 0;
+      return Math.round(((curr - prev) / prev) * 100);
+    };
+
+    return {
+      total: total * joinRate,
+      thisMonth: thisMonth * joinRate,
+      lastMonth: lastMonthTotal * joinRate,
+      lastMonthSamePeriod: lastMonthCount * joinRate,
+      last7Days: last7Days * joinRate,
+      monthTrend: getTrend(thisMonth, lastMonthCount)
+    };
+  }, [joinEvents, joinRate]);
+
+  const selectedMonthRevenue = useMemo(() => {
+    if (!selectedRevenueMonth || !joinEvents.length) return 0;
+    const [yearStr, monthStr] = selectedRevenueMonth.split('-');
+    const year = parseInt(yearStr);
+    const month = parseInt(monthStr) - 1;
+
+    let count = 0;
+    joinEvents.forEach(event => {
+      const d = new Date(event.timestamp);
+      if (d.getFullYear() === year && d.getMonth() === month) {
+        count++;
+      }
+    });
+    return count * joinRate;
+  }, [joinEvents, joinRate, selectedRevenueMonth]);
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
@@ -519,6 +592,22 @@ const App: React.FC = () => {
     localStorage.setItem('tg_join_rate', joinRate.toString());
   }, [joinRate]);
 
+  useEffect(() => {
+    if (token && token !== DEFAULT_TOKEN) {
+      fetch('/api/bot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token,
+          joinRate,
+          autoClean: autoCleanServiceMessages,
+          autoWelcome,
+          webhookActive
+        })
+      }).catch(e => console.error("Failed to sync bot settings:", e));
+    }
+  }, [joinRate, autoCleanServiceMessages, autoWelcome, webhookActive, token]);
+
   const handleShareApp = () => {
     const url = window.location.href;
     if (navigator.share) {
@@ -596,6 +685,11 @@ const App: React.FC = () => {
               username: botData.username || ''
             });
             localStorage.setItem('tg_bot_token', botData.token);
+            
+            if (botData.joinRate !== undefined) setJoinRate(botData.joinRate);
+            if (botData.autoClean !== undefined) setAutoCleanServiceMessages(botData.autoClean);
+            if (botData.autoWelcome !== undefined) setAutoWelcome(botData.autoWelcome);
+            if (botData.webhookActive !== undefined) setWebhookActive(botData.webhookActive);
           }
         }
 
@@ -2259,6 +2353,62 @@ const App: React.FC = () => {
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
+                      <div className="col-span-2 bg-gradient-to-br from-indigo-900 via-slate-900 to-black p-6 rounded-[2rem] text-white shadow-xl relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-48 h-48 bg-indigo-500/20 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none"></div>
+                        <div className="relative z-10 flex flex-col gap-6">
+                           <div className="flex justify-between items-start">
+                             <div>
+                               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-300 opacity-80 mb-1">Total Earning</p>
+                               <p className={`text-4xl font-black mt-1 transition-all ${hideRevenue ? 'blur-md select-none' : ''}`}>
+                                 {hideRevenue ? "₹8,88,888" : `₹${earningStats.total.toLocaleString()}`}
+                               </p>
+                             </div>
+                             <div className="bg-white/5 rounded-2xl p-4 text-right backdrop-blur-md border border-white/5">
+                                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-200 opacity-80 mb-1">Last 7 Days</p>
+                                <p className={`text-xl font-black mt-1 text-emerald-400 transition-all ${hideRevenue ? 'blur-sm select-none' : ''}`}>
+                                  {hideRevenue ? "₹88,888" : `₹${earningStats.last7Days.toLocaleString()}`}
+                                </p>
+                             </div>
+                           </div>
+
+                           <div className="grid grid-cols-2 gap-4 pt-4 border-t border-white/10">
+                              <div>
+                                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-300 opacity-80 mb-1">This Month</p>
+                                <div className="flex items-center gap-3">
+                                  <p className={`text-2xl font-black transition-all ${hideRevenue ? 'blur-sm select-none' : ''}`}>
+                                    {hideRevenue ? "₹88,888" : `₹${earningStats.thisMonth.toLocaleString()}`}
+                                  </p>
+                                  {!hideRevenue && (
+                                    <span className={`text-[10px] font-bold px-2 py-1 rounded-full whitespace-nowrap ${earningStats.monthTrend >= 0 ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'}`}>
+                                      {earningStats.monthTrend >= 0 ? '↑' : '↓'} {Math.abs(earningStats.monthTrend)}%
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-[9px] text-indigo-200 mt-2 opacity-60 font-medium">
+                                  vs {hideRevenue ? "₹88,888" : `₹${earningStats.lastMonth.toLocaleString()}`} last month
+                                </p>
+                              </div>
+
+                              <div className="flex flex-col justify-end items-end">
+                                <div className="bg-black/40 p-3 rounded-2xl border border-white/10 w-full text-right h-full flex flex-col justify-between">
+                                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-300 opacity-80 mb-2">Month Explorer</p>
+                                  <div className="flex flex-col items-end gap-2 mt-auto">
+                                    <input 
+                                      type="month" 
+                                      value={selectedRevenueMonth}
+                                      onChange={(e) => setSelectedRevenueMonth(e.target.value)}
+                                      className="[color-scheme:dark] bg-white/5 hover:bg-white/10 focus:bg-white/20 text-white text-xs font-bold border border-white/10 rounded-xl px-2.5 py-1.5 outline-none transition-all w-full max-w-[140px] text-right cursor-pointer"
+                                    />
+                                    <p className={`text-xl font-black text-blue-400 transition-all ${hideRevenue ? 'blur-sm select-none' : ''}`}>
+                                      {hideRevenue ? "₹88,888" : `₹${selectedMonthRevenue.toLocaleString()}`}
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                           </div>
+                        </div>
+                      </div>
+
                       <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-5 rounded-[2rem] text-white shadow-lg">
                         <p className="text-[8px] font-black uppercase tracking-[0.2em] opacity-70 mb-1">Highest Income</p>
                         <p className="text-xs font-black truncate">{revenueAnalysis.highest ? new Date(revenueAnalysis.highest.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : 'N/A'}</p>
