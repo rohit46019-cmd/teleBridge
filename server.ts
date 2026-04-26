@@ -453,7 +453,7 @@ async function startServer() {
   app.post("/api/groups", async (req, res) => {
     try {
       const group = req.body;
-      const { _id, ...groupData } = group;
+      const { _id, __v, ...groupData } = group;
       await (Group as any).findOneAndUpdate({ id: group.id }, groupData, { upsert: true });
       res.json({ success: true });
     } catch (error) {
@@ -467,7 +467,7 @@ async function startServer() {
       console.log(`[BulkUpdate] Received ${updates.length} group updates`);
       for (const g of updates) {
         console.log(`[BulkUpdate] Updating group ${g.id}, pinned: ${g.pinned}`);
-        const { _id, ...groupData } = g;
+        const { _id, __v, ...groupData } = g;
         await (Group as any).findOneAndUpdate({ id: g.id }, groupData, { upsert: true });
       }
       res.json({ success: true });
@@ -493,7 +493,7 @@ async function startServer() {
     try {
       const events = req.body;
       for (const ev of events) {
-        const { _id, ...eventData } = ev;
+        const { _id, __v, ...eventData } = ev;
         await (JoinEvent as any).findOneAndUpdate({ userId: ev.userId, timestamp: ev.timestamp }, eventData, { upsert: true });
       }
       res.json({ success: true });

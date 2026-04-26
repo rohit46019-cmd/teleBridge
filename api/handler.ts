@@ -181,7 +181,7 @@ app.post("/api/groups", async (req, res) => {
   try {
     const group = req.body
     if (!group.id) return res.status(400).json({ error: "Group ID is required" });
-    const { _id, ...groupData } = group;
+    const { _id, __v, ...groupData } = group;
     const result = await (Group as any).findOneAndUpdate({ id: group.id.toString() }, groupData, { upsert: true, new: true })
     res.json({ success: true, group: result })
   } catch (error: any) {
@@ -197,7 +197,7 @@ app.put("/api/groups/bulk-update", async (req, res) => {
     console.log(`[API] Bulk updating ${updates.length} groups`);
     for (const g of updates) {
       if (g.id) {
-        const { _id, ...groupData } = g;
+        const { _id, __v, ...groupData } = g;
         await (Group as any).findOneAndUpdate({ id: g.id.toString() }, groupData, { upsert: true })
       }
     }
@@ -227,7 +227,7 @@ app.post("/api/events", async (req, res) => {
     if (!Array.isArray(events)) return res.status(400).json({ error: "Events must be an array" });
     console.log(`[API] Saving ${events.length} events`);
     for (const ev of events) {
-      const { _id, ...evData } = ev;
+      const { _id, __v, ...evData } = ev;
       await (JoinEvent as any).findOneAndUpdate({ userId: ev.userId, timestamp: ev.timestamp }, evData, { upsert: true })
     }
     res.json({ success: true })
