@@ -917,12 +917,13 @@ const App: React.FC = () => {
     const syncPending = async () => {
       if (pendingJoins.length > 0) {
         try {
+          const chunk = pendingJoins.slice(0, 50);
           const res = await fetch('/api/events', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(pendingJoins)
+            body: JSON.stringify(chunk)
           });
-          if (res.ok) setPendingJoins([]);
+          if (res.ok) setPendingJoins(prev => prev.slice(50));
         } catch (e) {
           console.warn("Retrying joins sync later...");
         }
@@ -930,12 +931,13 @@ const App: React.FC = () => {
 
       if (pendingGroups.length > 0) {
         try {
+          const chunk = pendingGroups.slice(0, 50);
           const res = await fetch('/api/groups/bulk-update', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(pendingGroups)
+            body: JSON.stringify(chunk)
           });
-          if (res.ok) setPendingGroups([]);
+          if (res.ok) setPendingGroups(prev => prev.slice(50));
         } catch (e) {
           console.warn("Retrying groups sync later...");
         }
@@ -975,22 +977,36 @@ const App: React.FC = () => {
     try {
       // Sync Groups
       if (pendingGroups.length > 0) {
-        const res = await fetch('/api/groups/bulk-update', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(pendingGroups)
-        });
-        if (!res.ok) throw new Error("Groups sync failed");
+        for (let i = 0; i < pendingGroups.length; i += 50) {
+          const chunk = pendingGroups.slice(i, i + 50);
+          const res = await fetch('/api/groups/bulk-update', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(chunk)
+          });
+          if (!res.ok) {
+             const errorData = await res.json().catch(() => ({}));
+             const defaultMsg = res.status === 413 ? "Payload too large. Syncing too much data." : "Groups sync failed";
+             throw new Error(errorData.details || errorData.error || defaultMsg);
+          }
+        }
       }
 
       // Sync Joins
       if (pendingJoins.length > 0) {
-        const res = await fetch('/api/events', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(pendingJoins)
-        });
-        if (!res.ok) throw new Error("Joins sync failed");
+        for (let i = 0; i < pendingJoins.length; i += 50) {
+          const chunk = pendingJoins.slice(i, i + 50);
+          const res = await fetch('/api/events', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(chunk)
+          });
+          if (!res.ok) {
+             const errorData = await res.json().catch(() => ({}));
+             const defaultMsg = res.status === 413 ? "Payload too large. Syncing too much data." : "Joins sync failed";
+             throw new Error(errorData.details || errorData.error || defaultMsg);
+          }
+        }
       }
 
       setPendingGroups([]);

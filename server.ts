@@ -356,6 +356,8 @@ async function startServer() {
           }
 
           // 3. Deduplicate joins mathematically!
+          const welcomeMessagesToDelete: {chatId: string, messageId: string}[] = [];
+
           for (const ev of rawJoinsToAdd) {
              const cutoffLower = ev.timestamp - 120000; // Deduplicate within 2 mins
              const cutoffUpper = ev.timestamp + 120000;
@@ -379,25 +381,33 @@ async function startServer() {
                memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) + 1;
 
                if (autoWelcome && !ev.is_bot) {
-                 setTimeout(() => {
-                   const escapedName = (ev.userName || 'Awesome Member').toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-                   const text = `🎉 <b>Welcome to the Hub!</b> 🎉\n\nHey <a href="tg://user?id=${ev.userId}"><b>${escapedName}</b></a>, we're thrilled to have you here! ✨\n\n<i>Enjoy your stay, and keep it friendly!</i> 🚀`;
-                   fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-                     method: 'POST',
-                     headers: { 'Content-Type': 'application/json' },
-                     body: JSON.stringify({ chat_id: ev.chatId, text, parse_mode: 'HTML' })
-                   })
-                   .then((res: any) => res.json())
-                   .then((data: any) => {
-                     if (data.ok) {
-                       setTimeout(() => {
-                         fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${ev.chatId}&message_id=${data.result.message_id}`).catch(() => {});
-                        }, 59000); // 59 SECONDS
-                     }
-                   }).catch(() => {});
-                 }, 5000); // 5 SECONDS
+                  try {
+                    const escapedName = (ev.userName || 'Awesome Member').toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+                    const text = `🎉 <b>Welcome to the Hub!</b> 🎉\n\nHey <a href="tg://user?id=${ev.userId}"><b>${escapedName}</b></a>, we're thrilled to have you here! ✨\n\n<i>Enjoy your stay, and keep it friendly!</i> 🚀`;
+                    
+                    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ chat_id: ev.chatId, text, parse_mode: 'HTML' })
+                    });
+                    const data: any = await res.json();
+                    
+                    if (data.ok && data.result) {
+                      welcomeMessagesToDelete.push({ chatId: ev.chatId, messageId: data.result.message_id });
+                    }
+                  } catch (e) {}
                }
              }
+          }
+
+          // In standard express we can safely leave promises hanging, but 
+          // let's mirror Vercel standard timeouts here too
+          if (welcomeMessagesToDelete.length > 0) {
+             setTimeout(() => {
+               welcomeMessagesToDelete.forEach(msg => {
+                 fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${msg.chatId}&message_id=${msg.messageId}`).catch(() => {});
+               });
+             }, 12000); // Delete after 12 seconds
           }
 
           for (const [chatIdStr, diff] of Object.entries(memberChanges)) {
@@ -440,7 +450,8 @@ async function startServer() {
   app.post("/api/groups", async (req, res) => {
     try {
       const group = req.body;
-      await (Group as any).findOneAndUpdate({ id: group.id }, group, { upsert: true });
+      const { _id, ...groupData } = group;
+      await (Group as any).findOneAndUpdate({ id: group.id }, groupData, { upsert: true });
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to save group" });
@@ -453,11 +464,13 @@ async function startServer() {
       console.log(`[BulkUpdate] Received ${updates.length} group updates`);
       for (const g of updates) {
         console.log(`[BulkUpdate] Updating group ${g.id}, pinned: ${g.pinned}`);
-        await (Group as any).findOneAndUpdate({ id: g.id }, g, { upsert: true });
+        const { _id, ...groupData } = g;
+        await (Group as any).findOneAndUpdate({ id: g.id }, groupData, { upsert: true });
       }
       res.json({ success: true });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to update groups" });
+    } catch (error: any) {
+      console.error("[BulkUpdate] Global Error:", error);
+      res.status(500).json({ error: "Failed to update groups", details: error.message || error.toString() });
     }
   });
 
@@ -477,7 +490,8 @@ async function startServer() {
     try {
       const events = req.body;
       for (const ev of events) {
-        await (JoinEvent as any).findOneAndUpdate({ userId: ev.userId, timestamp: ev.timestamp }, ev, { upsert: true });
+        const { _id, ...eventData } = ev;
+        await (JoinEvent as any).findOneAndUpdate({ userId: ev.userId, timestamp: ev.timestamp }, eventData, { upsert: true });
       }
       res.json({ success: true });
     } catch (error) {

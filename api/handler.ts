@@ -180,7 +180,8 @@ app.post("/api/groups", async (req, res) => {
   try {
     const group = req.body
     if (!group.id) return res.status(400).json({ error: "Group ID is required" });
-    const result = await (Group as any).findOneAndUpdate({ id: group.id.toString() }, group, { upsert: true, new: true })
+    const { _id, ...groupData } = group;
+    const result = await (Group as any).findOneAndUpdate({ id: group.id.toString() }, groupData, { upsert: true, new: true })
     res.json({ success: true, group: result })
   } catch (error: any) {
     console.error(`[API] Group save error for ${req.body?.id}:`, error.message);
@@ -195,7 +196,8 @@ app.put("/api/groups/bulk-update", async (req, res) => {
     console.log(`[API] Bulk updating ${updates.length} groups`);
     for (const g of updates) {
       if (g.id) {
-        await (Group as any).findOneAndUpdate({ id: g.id.toString() }, g, { upsert: true })
+        const { _id, ...groupData } = g;
+        await (Group as any).findOneAndUpdate({ id: g.id.toString() }, groupData, { upsert: true })
       }
     }
     res.json({ success: true })
@@ -224,7 +226,8 @@ app.post("/api/events", async (req, res) => {
     if (!Array.isArray(events)) return res.status(400).json({ error: "Events must be an array" });
     console.log(`[API] Saving ${events.length} events`);
     for (const ev of events) {
-      await (JoinEvent as any).findOneAndUpdate({ userId: ev.userId, timestamp: ev.timestamp }, ev, { upsert: true })
+      const { _id, ...evData } = ev;
+      await (JoinEvent as any).findOneAndUpdate({ userId: ev.userId, timestamp: ev.timestamp }, evData, { upsert: true })
     }
     res.json({ success: true })
   } catch (error: any) {
@@ -568,6 +571,8 @@ app.post("/api/webhook/:token", async (req, res) => {
         }
 
         // 3. Deduplicate joins mathematically!
+        const welcomeMessagesToDelete: {chatId: string, messageId: string}[] = [];
+
         for (const ev of rawJoinsToAdd) {
            const cutoffLower = ev.timestamp - 120000;
            const cutoffUpper = ev.timestamp + 120000;
@@ -590,33 +595,31 @@ app.post("/api/webhook/:token", async (req, res) => {
              memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) + 1;
 
              if (autoWelcome && !ev.is_bot) {
-                // Background welcome handler for Vercel
-                const handleWelcome = async () => {
-                  try {
-                    await new Promise(r => setTimeout(r, 5000)); // 5 SECONDS DELAY
-                    const escapedName = (ev.userName || 'Awesome Member').toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-                    const text = `🎉 <b>Welcome to the Hub!</b> 🎉\n\nHey <a href="tg://user?id=${ev.userId}"><b>${escapedName}</b></a>, we're thrilled to have you here! ✨\n\n<i>Enjoy your stay, and keep it friendly!</i> 🚀`;
-                    
-                    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ chat_id: ev.chatId, text, parse_mode: 'HTML' })
-                    });
-                    const data: any = await res.json();
-                    
-                    if (data.ok && data.result) {
-                      await new Promise(r => setTimeout(r, 59000)); // 59 SECONDS DELAY
-                      await fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${ev.chatId}&message_id=${data.result.message_id}`).catch(() => {});
-                    }
-                  } catch (e) {}
-                };
-                
-                // IMPORTANT: In Vercel serverless, we MUST await this 
-                // or the function ends and kills the timer.
-                // We increase the maxDuration in vercel.json to compensate.
-                await handleWelcome();
+                 try {
+                   const escapedName = (ev.userName || 'Awesome Member').toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+                   const text = `🎉 <b>Welcome to the Hub!</b> 🎉\n\nHey <a href="tg://user?id=${ev.userId}"><b>${escapedName}</b></a>, we're thrilled to have you here! ✨\n\n<i>Enjoy your stay, and keep it friendly!</i> 🚀`;
+                   
+                   const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+                     method: 'POST',
+                     headers: { 'Content-Type': 'application/json' },
+                     body: JSON.stringify({ chat_id: ev.chatId, text, parse_mode: 'HTML' })
+                   });
+                   const data: any = await res.json();
+                   
+                   if (data.ok && data.result) {
+                     welcomeMessagesToDelete.push({ chatId: ev.chatId, messageId: data.result.message_id });
+                   }
+                 } catch (e) {}
              }
            }
+        }
+
+        // Wait a short duration, then delete welcome messages to keep under Vercel lambda limits
+        if (welcomeMessagesToDelete.length > 0) {
+           await new Promise(r => setTimeout(r, 12000)); // 12 seconds
+           await Promise.allSettled(welcomeMessagesToDelete.map(msg => 
+             fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${msg.chatId}&message_id=${msg.messageId}`).catch(() => {})
+           ));
         }
 
         for (const [chatIdStr, diff] of Object.entries(memberChanges)) {
