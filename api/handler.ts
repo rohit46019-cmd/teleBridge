@@ -11,7 +11,8 @@ const joinEventSchema = new mongoose.Schema({
   userName: String,
   chatId: Number,
   chatTitle: String,
-  timestamp: Number
+  timestamp: Number,
+  inviteLink: String
 }, { timestamps: true })
 
 const groupSchema = new mongoose.Schema({
@@ -169,7 +170,7 @@ app.get("/api/groups", async (req, res) => {
 
 app.get("/api/events", async (req, res) => {
   try {
-    const events = await JoinEvent.find().sort({ timestamp: -1 }).limit(1000)
+    const events = await JoinEvent.find().sort({ timestamp: -1 }).limit(10000)
     res.json(events)
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch events" })
@@ -463,7 +464,8 @@ app.post("/api/webhook/:token", async (req, res) => {
             chatId: jr.chat.id,
             chatTitle: jr.chat.title,
             timestamp: jr.date ? jr.date * 1000 : Date.now(),
-            is_bot: jr.from.is_bot
+            is_bot: jr.from.is_bot,
+            inviteLink: jr.invite_link?.invite_link
           });
           shouldSyncGroup = jr.chat;
         }
@@ -494,7 +496,8 @@ app.post("/api/webhook/:token", async (req, res) => {
               chatId: mu.chat.id,
               chatTitle: mu.chat.title,
               timestamp: mu.date ? mu.date * 1000 : Date.now(),
-              is_bot: mu.new_chat_member.user.is_bot
+              is_bot: mu.new_chat_member.user.is_bot,
+              inviteLink: mu.invite_link?.invite_link
             });
             shouldSyncGroup = mu.chat;
           } else if (!isMemberNow && wasMemberBefore) {

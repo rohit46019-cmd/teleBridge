@@ -16,7 +16,8 @@ const joinEventSchema = new mongoose.Schema({
   userName: String,
   chatId: Number,
   chatTitle: String,
-  timestamp: Number
+  timestamp: Number,
+  inviteLink: String
 }, { timestamps: true });
 
 const groupSchema = new mongoose.Schema({
@@ -246,7 +247,8 @@ async function startServer() {
               chatId: jr.chat.id,
               chatTitle: jr.chat.title,
               timestamp: jr.date ? jr.date * 1000 : Date.now(),
-              is_bot: jr.from.is_bot
+              is_bot: jr.from.is_bot,
+              inviteLink: jr.invite_link?.invite_link
             });
             shouldSyncGroup = jr.chat;
           }
@@ -277,7 +279,8 @@ async function startServer() {
                 chatId: mu.chat.id,
                 chatTitle: mu.chat.title,
                 timestamp: mu.date ? mu.date * 1000 : Date.now(),
-                is_bot: mu.new_chat_member.user.is_bot
+                is_bot: mu.new_chat_member.user.is_bot,
+                inviteLink: mu.invite_link?.invite_link
               });
               shouldSyncGroup = mu.chat;
             } else if (!isMemberNow && wasMemberBefore) {
