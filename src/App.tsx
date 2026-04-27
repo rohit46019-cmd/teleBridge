@@ -4,6 +4,7 @@ import Sidebar from './components/Sidebar.tsx';
 import GroupCard from './components/GroupCard.tsx';
 import InviteModal from './components/InviteModal.tsx';
 import ConfirmationModal from './components/ConfirmationModal.tsx';
+import LogsPage from './components/LogsPage.tsx';
 import { Icons } from './constants.tsx';
 import { TelegramGroup, JoinEvent, BannedUser } from './types.ts';
 import { verifyBotToken, getChatDetails, TelegramBotInfo, getChatMemberCount, getRecentUpdates, kickChatMember, banMember, unbanMember, deleteMessage, setWebhook, deleteWebhook } from './services/telegramService.ts';
@@ -905,21 +906,6 @@ const App: React.FC = () => {
     root.classList.toggle('light', theme === 'light');
     localStorage.setItem('theme', theme);
   }, [theme]);
-
-  useEffect(() => {
-    let interval: any;
-    if (showLogsModal) {
-      const fetchLogs = () => {
-        fetch('/api/diagnostics')
-          .then(res => res.json())
-          .then(data => setSystemLogs(Array.isArray(data) ? data : []))
-          .catch(() => {});
-      };
-      fetchLogs();
-      interval = setInterval(fetchLogs, 3000);
-    }
-    return () => clearInterval(interval);
-  }, [showLogsModal]);
 
   useEffect(() => {
     localStorage.setItem('tg_token_locked', isLocked.toString());
@@ -2717,55 +2703,7 @@ const App: React.FC = () => {
         </div>
       </main>
 
-      {showLogsModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 pb-20 sm:pb-6 overflow-hidden">
-          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity opacity-100" onClick={() => setShowLogsModal(false)} />
-          <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2rem] w-full max-w-4xl max-h-[85vh] flex flex-col overflow-hidden shadow-2xl relative z-10 animate-in zoom-in-95 duration-200">
-            <div className="p-5 border-b border-slate-100 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 flex justify-between items-center backdrop-blur-md sticky top-0">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center">
-                  <Icons.Activity size={20} />
-                </div>
-                <div>
-                  <h3 className="text-xl font-black uppercase tracking-tight text-slate-800 dark:text-slate-100">Live System Logs</h3>
-                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">Real-time webhook and error tracking</p>
-                </div>
-              </div>
-              <button 
-                onClick={() => setShowLogsModal(false)}
-                className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-              >
-                <Icons.X size={18} />
-              </button>
-            </div>
-            <div className="flex-1 overflow-auto p-4 custom-scrollbar bg-slate-950 font-mono text-xs">
-              <div className="space-y-4">
-                {systemLogs.length === 0 ? (
-                  <div className="text-center p-10 text-slate-500 font-bold uppercase tracking-widest text-[10px]">No logs captured yet (Waiting for webhooks)</div>
-                ) : (
-                  systemLogs.map((log, idx) => (
-                    <div key={idx} className={`p-4 rounded-xl border ${log.type === 'error' ? 'bg-rose-950/30 border-rose-900/50 text-rose-300' : 'bg-slate-900 border-slate-800 text-slate-300'}`}>
-                       <div className="flex justify-between items-start mb-2 opacity-60 text-[10px]">
-                         <span>{new Date(log.createdAt || log.time).toLocaleString()}</span>
-                         <span className="uppercase font-black">{log.type}</span>
-                       </div>
-                       <p className="font-bold mb-2 text-[11px] text-white break-words">{log.message}</p>
-                       {log.payload && (
-                         <pre className="mt-2 p-3 bg-black/40 rounded-lg overflow-x-auto text-[9px] text-slate-400">
-                           {JSON.stringify(log.payload, null, 2)}
-                         </pre>
-                       )}
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-            <div className="p-3 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-[10px] font-bold text-slate-500 text-center uppercase tracking-widest">
-              Showing up to 100 recent events
-            </div>
-          </div>
-        </div>
-      )}
+      {showLogsModal && <LogsPage onClose={() => setShowLogsModal(false)} />}
 
       {selectedGroup && (
         <InviteModal group={selectedGroup} onClose={() => setSelectedGroup(null)} botToken={token} onInteraction={() => handleGroupInteraction(selectedGroup.id)} />

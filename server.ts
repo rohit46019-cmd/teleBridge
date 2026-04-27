@@ -267,17 +267,31 @@ async function startServer() {
 
       (async () => {
         try {
-          // Cleanup expired welcome messages first (Background task)
+          // Cleanup expired welcome messages first
           try {
             const expiredMessages = await (WelcomeMessage as any).find({ deleteAt: { $lte: Date.now() } });
             if (expiredMessages.length > 0) {
               const idsToDelete = expiredMessages.map((d: any) => d._id);
-              await Promise.allSettled(expiredMessages.map((msg: any) => 
-                 fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${msg.chatId}&message_id=${msg.messageId}`)
-              ));
+              await Promise.allSettled(expiredMessages.map(async (msg: any) => {
+                 try {
+                   await fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${msg.chatId}&message_id=${msg.messageId}`);
+                   await SystemLog.create({
+                     time: new Date().toISOString(),
+                     message: `Welcome message deleted in group ${msg.chatId}`,
+                     type: "info"
+                   });
+                 } catch (e) {}
+              }));
               await (WelcomeMessage as any).deleteMany({ _id: { $in: idsToDelete } });
             }
-          } catch (cleanupError) {}
+          } catch (cleanupError) {
+             await SystemLog.create({
+               time: new Date().toISOString(),
+               message: "Failed to cleanup expired welcome messages. Please make sure the bot has 'Delete Messages' permission.",
+               payload: cleanupError,
+               type: "error"
+             }).catch(() => {});
+          }
 
           const rawJoinsToAdd: any[] = [];
           const memberChanges: Record<string, number> = {};
@@ -328,9 +342,11 @@ async function startServer() {
                 inviteLink: mu.invite_link?.invite_link
               });
               shouldSyncGroup = mu.chat;
+              SystemLog.create({ time: new Date().toISOString(), message: `User ${mu.new_chat_member.user.first_name} joined group ${mu.chat.title || mu.chat.id}`, type: "info" }).catch(() => {});
             } else if (!isMemberNow && wasMemberBefore) {
               memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) - 1;
               shouldSyncGroup = mu.chat;
+              SystemLog.create({ time: new Date().toISOString(), message: `User ${mu.new_chat_member.user.first_name} left group ${mu.chat.title || mu.chat.id}`, type: "info" }).catch(() => {});
             }
           }
 
@@ -346,6 +362,8 @@ async function startServer() {
             if (autoClean && (msg.new_chat_members || msg.left_chat_member || msg.new_chat_title || msg.new_chat_photo || msg.delete_chat_photo)) {
               await fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${chatId}&message_id=${msg.message_id}`, {
                 signal: AbortSignal.timeout(5000)
+              }).then(() => {
+                SystemLog.create({ time: new Date().toISOString(), message: `Cleaned up system message in group ${chatIdStr}`, type: "info" }).catch(() => {});
               }).catch(() => {});
             }
 
@@ -359,11 +377,13 @@ async function startServer() {
                   timestamp: msg.date ? msg.date * 1000 : Date.now(),
                   is_bot: newUser.is_bot
                 });
+                SystemLog.create({ time: new Date().toISOString(), message: `User ${newUser.first_name} joined group ${chatTitle || chatIdStr}`, type: "info" }).catch(() => {});
               });
             }
 
             if (msg.left_chat_member) {
               memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) - 1;
+              SystemLog.create({ time: new Date().toISOString(), message: `User ${msg.left_chat_member.first_name} left group ${chatTitle || chatIdStr}`, type: "info" }).catch(() => {});
             }
 
             if (msg.new_chat_title) {
@@ -383,6 +403,8 @@ async function startServer() {
                } catch (e) {
                  console.error("Error fetching member count for new group:", e);
                }
+
+               SystemLog.create({ time: new Date().toISOString(), message: `Auto-discovered new group: ${shouldSyncGroup.title || chatIdStr}`, type: "info" }).catch(() => {});
 
                await (Group as any).create({
                  id: chatIdStr,
