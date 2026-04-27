@@ -237,6 +237,21 @@ async function startServer() {
     }
   });
 
+  app.post("/api/diagnostics", async (req, res) => {
+    try {
+      const { message, type, payload } = req.body;
+      const log = await SystemLog.create({
+        time: new Date().toISOString(),
+        message: message || "Frontend Event",
+        payload: payload || null,
+        type: type === 'alert' ? 'error' : (type || 'info')
+      });
+      res.json({ success: true, log });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to save log" });
+    }
+  });
+
   app.post("/api/webhook/:token", async (req, res) => {
     try {
       const token = req.params.token;
@@ -582,6 +597,7 @@ async function startServer() {
       res.json({ success: true });
     } catch (error: any) {
       console.error("[BulkUpdate] Global Error:", error);
+      SystemLog.create({ time: new Date().toISOString(), message: "Failed to update groups (Bulk Update)", payload: error.message || error.toString(), type: "error" }).catch(() => {});
       res.status(500).json({ error: "Failed to update groups", details: error.message || error.toString() });
     }
   });
@@ -615,7 +631,8 @@ async function startServer() {
         await (JoinEvent as any).bulkWrite(ops);
       }
       res.json({ success: true });
-    } catch (error) {
+    } catch (error: any) {
+      SystemLog.create({ time: new Date().toISOString(), message: "Failed to save events (Bulk)", payload: error.message || error.toString(), type: "error" }).catch(() => {});
       res.status(500).json({ error: "Failed to save events" });
     }
   });

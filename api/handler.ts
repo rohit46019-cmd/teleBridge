@@ -246,6 +246,7 @@ app.put("/api/groups/bulk-update", async (req, res) => {
     res.json({ success: true })
   } catch (error: any) {
     console.error("[API] Bulk update error:", error.message);
+    SystemLog.create({ time: new Date().toISOString(), message: "Failed to update groups (Bulk Update)", payload: error.message || error.toString(), type: "error" }).catch(() => {});
     res.status(500).json({ error: "Failed to update groups", details: error.message })
   }
 })
@@ -288,6 +289,7 @@ app.post("/api/events", async (req, res) => {
     res.json({ success: true })
   } catch (error: any) {
     console.error("[API] Events save error:", error.message);
+    SystemLog.create({ time: new Date().toISOString(), message: "Failed to save events (Bulk)", payload: error.message || error.toString(), type: "error" }).catch(() => {});
     res.status(500).json({ error: "Failed to save events", details: error.message })
   }
 })
@@ -510,6 +512,21 @@ app.get("/api/diagnostics", async (req, res) => {
     res.json(logs);
   } catch (error) {
     res.status(500).json({ error: "Failed to load logs" });
+  }
+});
+
+app.post("/api/diagnostics", async (req, res) => {
+  try {
+    const { message, type, payload } = req.body;
+    const log = await SystemLog.create({
+      time: new Date().toISOString(),
+      message: message || "Frontend Event",
+      payload: payload || null,
+      type: type === 'alert' ? 'error' : (type || 'info')
+    });
+    res.json({ success: true, log });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to save log" });
   }
 });
 

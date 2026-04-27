@@ -279,6 +279,11 @@ const App: React.FC = () => {
 
   const showNotification = (message: string, type: 'success' | 'alert' | 'info' = 'info') => {
     setNotification({ message, type });
+    fetch('/api/diagnostics', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message, type })
+    }).catch(() => {});
     setTimeout(() => setNotification(null), 3000);
   };
   const [analysisEndDate, setAnalysisEndDate] = useState<string>('');
