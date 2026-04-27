@@ -224,12 +224,25 @@ app.put("/api/groups/bulk-update", async (req, res) => {
     const updates = req.body
     if (!Array.isArray(updates)) return res.status(400).json({ error: "Updates must be an array" });
     console.log(`[API] Bulk updating ${updates.length} groups`);
-    for (const g of updates) {
-      if (g.id) {
+    
+    if (updates.length > 0) {
+      const ops = updates.filter(g => g.id).map(g => {
         const { _id, __v, ...groupData } = g;
-        await (Group as any).findOneAndUpdate({ id: g.id.toString() }, groupData, { upsert: true })
+        // ensure id is string
+        groupData.id = g.id.toString();
+        return {
+          updateOne: {
+            filter: { id: groupData.id },
+            update: { $set: groupData },
+            upsert: true
+          }
+        };
+      });
+      if (ops.length > 0) {
+        await (Group as any).bulkWrite(ops);
       }
     }
+    
     res.json({ success: true })
   } catch (error: any) {
     console.error("[API] Bulk update error:", error.message);
@@ -255,10 +268,23 @@ app.post("/api/events", async (req, res) => {
     const events = req.body
     if (!Array.isArray(events)) return res.status(400).json({ error: "Events must be an array" });
     console.log(`[API] Saving ${events.length} events`);
-    for (const ev of events) {
-      const { _id, __v, ...evData } = ev;
-      await (JoinEvent as any).findOneAndUpdate({ userId: ev.userId, timestamp: ev.timestamp }, evData, { upsert: true })
+    
+    if (events.length > 0) {
+      const ops = events.map(ev => {
+        const { _id, __v, ...evData } = ev;
+        return {
+          updateOne: {
+            filter: { userId: ev.userId, timestamp: ev.timestamp },
+            update: { $set: evData },
+            upsert: true
+          }
+        };
+      });
+      if (ops.length > 0) {
+        await (JoinEvent as any).bulkWrite(ops);
+      }
     }
+    
     res.json({ success: true })
   } catch (error: any) {
     console.error("[API] Events save error:", error.message);

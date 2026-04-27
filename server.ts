@@ -543,10 +543,19 @@ async function startServer() {
     try {
       const updates = req.body;
       console.log(`[BulkUpdate] Received ${updates.length} group updates`);
-      for (const g of updates) {
-        console.log(`[BulkUpdate] Updating group ${g.id}, pinned: ${g.pinned}`);
-        const { _id, __v, ...groupData } = g;
-        await (Group as any).findOneAndUpdate({ id: g.id }, groupData, { upsert: true });
+      if (updates.length > 0) {
+        const ops = updates.map((g: any) => {
+          const { _id, __v, ...groupData } = g;
+          groupData.id = g.id.toString(); // ensure string
+          return {
+            updateOne: {
+              filter: { id: groupData.id },
+              update: { $set: groupData },
+              upsert: true
+            }
+          };
+        });
+        await (Group as any).bulkWrite(ops);
       }
       res.json({ success: true });
     } catch (error: any) {
@@ -570,9 +579,18 @@ async function startServer() {
   app.post("/api/events", async (req, res) => {
     try {
       const events = req.body;
-      for (const ev of events) {
-        const { _id, __v, ...eventData } = ev;
-        await (JoinEvent as any).findOneAndUpdate({ userId: ev.userId, timestamp: ev.timestamp }, eventData, { upsert: true });
+      if (events.length > 0) {
+        const ops = events.map((ev: any) => {
+          const { _id, __v, ...eventData } = ev;
+          return {
+            updateOne: {
+              filter: { userId: ev.userId, timestamp: ev.timestamp },
+              update: { $set: eventData },
+              upsert: true
+            }
+          };
+        });
+        await (JoinEvent as any).bulkWrite(ops);
       }
       res.json({ success: true });
     } catch (error) {
