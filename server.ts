@@ -47,6 +47,19 @@ const inviteLinkSchema = new mongoose.Schema({
   createdAt: { type: Number, default: Date.now }
 }, { timestamps: true });
 
+const systemLogSchema = new mongoose.Schema({
+  time: String,
+  message: String,
+  payload: mongoose.Schema.Types.Mixed,
+  type: { type: String, default: 'info' } // 'info', 'error'
+}, { timestamps: true });
+
+const welcomeMessageSchema = new mongoose.Schema({
+  chatId: String,
+  messageId: Number,
+  deleteAt: Number
+}, { timestamps: true });
+
 const botSchema = new mongoose.Schema({
   token: String,
   name: String,
@@ -63,6 +76,8 @@ const JoinEvent = mongoose.models.JoinEvent || mongoose.model("JoinEvent", joinE
 const Group = mongoose.models.Group || mongoose.model("Group", groupSchema);
 const Broadcast = mongoose.models.Broadcast || mongoose.model("Broadcast", broadcastSchema);
 const InviteLink = mongoose.models.InviteLink || mongoose.model("InviteLink", inviteLinkSchema);
+const SystemLog = mongoose.models.SystemLog || mongoose.model("SystemLog", systemLogSchema);
+const WelcomeMessage = mongoose.models.WelcomeMessage || mongoose.model("WelcomeMessage", welcomeMessageSchema);
 const Bot = mongoose.models.Bot || mongoose.model("Bot", botSchema);
 
 // Global Error Handlers to prevent server crashes
@@ -204,8 +219,6 @@ async function startServer() {
   });
 
   // API Routes
-  const webhookLogs: any[] = [];
-
   app.get("/api/health", (req, res) => {
     res.json({ 
       status: "ok", 
@@ -215,8 +228,13 @@ async function startServer() {
     });
   });
 
-  app.get("/api/diagnostics", (req, res) => {
-    res.json(webhookLogs);
+  app.get("/api/diagnostics", async (req, res) => {
+    try {
+      const logs = await SystemLog.find().sort({ createdAt: -1 }).limit(100);
+      res.json(logs);
+    } catch (error) {
+       res.status(500).json({ error: "Failed to load logs" });
+    }
   });
 
   app.post("/api/webhook/:token", async (req, res) => {
@@ -226,14 +244,41 @@ async function startServer() {
       const autoClean = req.query.clean === 'true';
       const u = req.body;
 
-      // Keep recent 50
-      webhookLogs.unshift({ time: new Date().toISOString(), payload: u });
-      if (webhookLogs.length > 50) webhookLogs.pop();
+      try {
+        await SystemLog.create({
+          time: new Date().toISOString(),
+          message: "Webhook event received",
+          payload: u,
+          type: "info"
+        });
+        
+        // Remove older logs asynchronously to keep DB clean
+        SystemLog.countDocuments().then(count => {
+          if(count > 100) {
+            SystemLog.find().sort({createdAt: -1}).skip(100).then(docsToDel => {
+               const ids = docsToDel.map(d => d._id);
+               SystemLog.deleteMany({ _id: { $in: ids } }).catch(() => {});
+            });
+          }
+        }).catch(() => {});
+      } catch(e) {}
 
       res.json({ ok: true }); // Immediately Ack to telegram
 
       (async () => {
         try {
+          // Cleanup expired welcome messages first (Background task)
+          try {
+            const expiredMessages = await (WelcomeMessage as any).find({ deleteAt: { $lte: Date.now() } });
+            if (expiredMessages.length > 0) {
+              const idsToDelete = expiredMessages.map((d: any) => d._id);
+              await Promise.allSettled(expiredMessages.map((msg: any) => 
+                 fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${msg.chatId}&message_id=${msg.messageId}`)
+              ));
+              await (WelcomeMessage as any).deleteMany({ _id: { $in: idsToDelete } });
+            }
+          } catch (cleanupError) {}
+
           const rawJoinsToAdd: any[] = [];
           const memberChanges: Record<string, number> = {};
           let shouldSyncGroup: any = null;
@@ -403,14 +448,15 @@ async function startServer() {
              }
           }
 
-          // In standard express we can safely leave promises hanging, but 
-          // let's mirror Vercel standard timeouts here too
+          // Queue welcome messages for background deletion after 60 seconds
           if (welcomeMessagesToDelete.length > 0) {
-             setTimeout(() => {
-               welcomeMessagesToDelete.forEach(msg => {
-                 fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${msg.chatId}&message_id=${msg.messageId}`).catch(() => {});
-               });
-             }, 12000); // Delete after 12 seconds
+            await Promise.allSettled(welcomeMessagesToDelete.map(msg => 
+              WelcomeMessage.create({
+                chatId: msg.chatId,
+                messageId: msg.messageId,
+                deleteAt: Date.now() + 60000 // 60 seconds
+              })
+            ));
           }
 
           for (const [chatIdStr, diff] of Object.entries(memberChanges)) {
@@ -418,14 +464,32 @@ async function startServer() {
                await (Group as any).findOneAndUpdate({ id: chatIdStr }, { $inc: { memberCount: diff } });
              }
           }
-        } catch (e) {
+        } catch (e: any) {
           console.error("Error processing webhook update:", e);
+          try {
+            await SystemLog.create({
+              time: new Date().toISOString(),
+              message: "Error processing webhook update",
+              payload: e.message || e.toString(),
+              type: "error"
+            });
+          } catch (_) {}
         }
       })();
-    } catch (err) {
+    } catch (err: any) {
       console.error("Webhook route error:", err);
+      try {
+        await SystemLog.create({
+          time: new Date().toISOString(),
+          message: "Webhook route error",
+          payload: err.message || err.toString(),
+          type: "error"
+        });
+      } catch (_) {}
       // Ensure we don't bleed errors and timeout to TG
-      res.status(500).json({ error: "Webhook failure" });
+      if (!res.headersSent) {
+        res.status(500).json({ error: "Webhook failure" });
+      }
     }
   });
 
@@ -443,7 +507,21 @@ async function startServer() {
 
   app.get("/api/events", async (req, res) => {
     try {
-      const events = await JoinEvent.find().sort({ timestamp: -1 }).limit(1000);
+      try {
+        const bot = await (Bot as any).findOne()
+        if (bot && bot.token) {
+          const expiredMessages = await (WelcomeMessage as any).find({ deleteAt: { $lte: Date.now() } });
+          if (expiredMessages.length > 0) {
+            const idsToDelete = expiredMessages.map((d: any) => d._id);
+            await Promise.allSettled(expiredMessages.map((msg: any) => 
+               fetch(`https://api.telegram.org/bot${bot.token}/deleteMessage?chat_id=${msg.chatId}&message_id=${msg.messageId}`)
+            ));
+            await (WelcomeMessage as any).deleteMany({ _id: { $in: idsToDelete } });
+          }
+        }
+      } catch (e) {}
+
+      const events = await JoinEvent.find().sort({ timestamp: -1 }).limit(10000);
       res.json(events);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch events" });
