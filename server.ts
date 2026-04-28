@@ -278,9 +278,7 @@ async function startServer() {
         }).catch(() => {});
       } catch(e) {}
 
-      res.json({ ok: true }); // Immediately Ack to telegram
-
-      (async () => {
+      const processUpdate = async () => {
         try {
           // Cleanup expired welcome messages first
           try {
@@ -392,6 +390,7 @@ async function startServer() {
                   timestamp: msg.date ? msg.date * 1000 : Date.now(),
                   is_bot: newUser.is_bot
                 });
+                memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) + 1;
                 SystemLog.create({ time: new Date().toISOString(), message: `User ${newUser.first_name} joined group ${chatTitle || chatIdStr}`, type: "info" }).catch(() => {});
               });
             }
@@ -512,7 +511,10 @@ async function startServer() {
             });
           } catch (_) {}
         }
-      })();
+      };
+      
+      await processUpdate();
+      res.json({ ok: true });
     } catch (err: any) {
       console.error("Webhook route error:", err);
       try {
@@ -893,6 +895,27 @@ async function startServer() {
 
   server.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
+    
+    // Background task for Welcome Messages deletion (runs every 10s securely)
+    setInterval(async () => {
+      if (mongoose.connection.readyState !== 1) return;
+      try {
+        const expiredMessages = await (WelcomeMessage as any).find({ deleteAt: { $lte: Date.now() } });
+        if (expiredMessages.length > 0) {
+          const idsToDelete = expiredMessages.map((d: any) => d._id);
+          const bot = await (Bot as any).findOne();
+          const botTokenMatch = bot?.token || process.env.VITE_TELEGRAM_BOT_TOKEN;
+          if (botTokenMatch) {
+            await Promise.allSettled(expiredMessages.map(async (msg: any) => {
+               try {
+                 await fetch(`https://api.telegram.org/bot${botTokenMatch}/deleteMessage?chat_id=${msg.chatId}&message_id=${msg.messageId}`);
+               } catch (e) {}
+            }));
+          }
+          await (WelcomeMessage as any).deleteMany({ _id: { $in: idsToDelete } });
+        }
+      } catch (e) {}
+    }, 10000);
   });
   return app;
 }

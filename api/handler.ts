@@ -673,6 +673,7 @@ app.post("/api/webhook/:token", async (req, res) => {
                 timestamp: msg.date ? msg.date * 1000 : Date.now(),
                 is_bot: newUser.is_bot
               });
+              memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) + 1;
               SystemLog.create({ time: new Date().toISOString(), message: `User ${newUser.first_name} joined group ${chatTitle || chatIdStr}`, type: "info" }).catch(() => {});
             });
           }
