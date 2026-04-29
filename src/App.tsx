@@ -602,6 +602,15 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (token && token !== DEFAULT_TOKEN) {
+      const webhookUrl = `${window.location.origin}/api/webhook/${token}`;
+      setWebhook(token, webhookUrl)
+        .then(() => setWebhookActive(true))
+        .catch(e => console.error("Failed to auto-set webhook:", e));
+    }
+  }, [token]);
+
+  useEffect(() => {
+    if (token && token !== DEFAULT_TOKEN) {
       fetch('/api/bot', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -610,11 +619,11 @@ const App: React.FC = () => {
           joinRate,
           autoClean: autoCleanServiceMessages,
           autoWelcome,
-          webhookActive
+          webhookActive: true
         })
       }).catch(e => console.error("Failed to sync bot settings:", e));
     }
-  }, [joinRate, autoCleanServiceMessages, autoWelcome, webhookActive, token]);
+  }, [joinRate, autoCleanServiceMessages, autoWelcome, token]);
 
   const handleShareApp = () => {
     const url = window.location.href;
