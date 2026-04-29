@@ -255,8 +255,17 @@ async function startServer() {
   app.post("/api/webhook/:token", async (req, res) => {
     try {
       const token = req.params.token;
-      const autoWelcome = req.query.welcome === 'true';
-      const autoClean = req.query.clean === 'true';
+      let autoWelcome = req.query.welcome === 'true';
+      let autoClean = req.query.clean === 'true';
+      
+      try {
+        const botConfig = await (Bot as any).findOne();
+        if (botConfig) {
+          if (botConfig.autoWelcome !== undefined) autoWelcome = botConfig.autoWelcome;
+          if (botConfig.autoClean !== undefined) autoClean = botConfig.autoClean;
+        }
+      } catch (err) {}
+
       const u = req.body;
 
       try {
@@ -277,6 +286,9 @@ async function startServer() {
           }
         }).catch(() => {});
       } catch(e) {}
+
+      // Respond immediately to prevent Telegram timeouts
+      res.json({ ok: true });
 
       const processUpdate = async () => {
         try {
@@ -313,15 +325,8 @@ async function startServer() {
           // 0. Process `chat_join_request`
           if (u.chat_join_request && u.chat_join_request.chat) {
             const jr = u.chat_join_request;
-            rawJoinsToAdd.push({
-              userId: jr.from.id,
-              userName: jr.from.first_name + (jr.from.last_name ? ` ${jr.from.last_name}` : ''),
-              chatId: jr.chat.id,
-              chatTitle: jr.chat.title,
-              timestamp: jr.date ? jr.date * 1000 : Date.now(),
-              is_bot: jr.from.is_bot,
-              inviteLink: jr.invite_link?.invite_link
-            });
+            // We intentionally do NOT add this to rawJoinsToAdd to prevent premature welcome messages and incorrect member counts.
+            // The actual join will be captured by `chat_member` once approved.
             shouldSyncGroup = jr.chat;
           }
 
@@ -390,7 +395,6 @@ async function startServer() {
                   timestamp: msg.date ? msg.date * 1000 : Date.now(),
                   is_bot: newUser.is_bot
                 });
-                memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) + 1;
                 SystemLog.create({ time: new Date().toISOString(), message: `User ${newUser.first_name} joined group ${chatTitle || chatIdStr}`, type: "info" }).catch(() => {});
               });
             }
@@ -486,13 +490,16 @@ async function startServer() {
 
           // Queue welcome messages for background deletion after 60 seconds
           if (welcomeMessagesToDelete.length > 0) {
-            await Promise.allSettled(welcomeMessagesToDelete.map(msg => 
-              WelcomeMessage.create({
+            await Promise.allSettled(welcomeMessagesToDelete.map(msg => {
+              setTimeout(() => {
+                fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${msg.chatId}&message_id=${msg.messageId}`).catch(()=>{});
+              }, 60000);
+              return WelcomeMessage.create({
                 chatId: msg.chatId,
                 messageId: msg.messageId,
                 deleteAt: Date.now() + 60000 // 60 seconds
-              })
-            ));
+              });
+            }));
           }
 
           for (const [chatIdStr, diff] of Object.entries(memberChanges)) {
@@ -513,8 +520,7 @@ async function startServer() {
         }
       };
       
-      await processUpdate();
-      res.json({ ok: true });
+      processUpdate().catch(err => console.error("Background webhook error:", err));
     } catch (err: any) {
       console.error("Webhook route error:", err);
       try {

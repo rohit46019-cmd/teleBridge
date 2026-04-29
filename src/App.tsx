@@ -1193,14 +1193,8 @@ const App: React.FC = () => {
 
         if (u.chat_join_request && u.chat_join_request.chat) {
           const jr = u.chat_join_request;
-          newJoins.push({
-            userId: jr.from.id,
-            userName: jr.from.first_name + (jr.from.last_name ? ` ${jr.from.last_name}` : ''),
-            chatId: jr.chat.id,
-            chatTitle: jr.chat.title,
-            timestamp: jr.date ? jr.date * 1000 : Date.now(),
-            is_bot: jr.from.is_bot
-          });
+          // We intentionally do NOT add this to newJoins to prevent premature welcome messages and incorrect member counts.
+          // The actual join will be captured by `chat_member` once approved.
         }
 
         const msg = u.message || u.channel_post;
