@@ -11,8 +11,7 @@ const joinEventSchema = new mongoose.Schema({
   userName: String,
   chatId: Number,
   chatTitle: String,
-  timestamp: Number,
-  inviteLink: String
+  timestamp: Number
 }, { timestamps: true })
 
 const groupSchema = new mongoose.Schema({
@@ -42,28 +41,11 @@ const inviteLinkSchema = new mongoose.Schema({
   createdAt: { type: Number, default: Date.now }
 }, { timestamps: true })
 
-const systemLogSchema = new mongoose.Schema({
-  time: String,
-  message: String,
-  payload: mongoose.Schema.Types.Mixed,
-  type: { type: String, default: 'info' } // 'info', 'error'
-}, { timestamps: true })
-
-const welcomeMessageSchema = new mongoose.Schema({
-  chatId: String,
-  messageId: Number,
-  deleteAt: Number
-}, { timestamps: true })
-
 const botSchema = new mongoose.Schema({
   token: String,
   name: String,
   username: String,
-  lastSync: Number,
-  joinRate: { type: Number, default: 87 },
-  autoClean: { type: Boolean, default: false },
-  autoWelcome: { type: Boolean, default: false },
-  webhookActive: { type: Boolean, default: false }
+  lastSync: Number
 }, { timestamps: true })
 
 // Define Models
@@ -71,8 +53,6 @@ const JoinEvent = mongoose.models.JoinEvent || mongoose.model("JoinEvent", joinE
 const Group = mongoose.models.Group || mongoose.model("Group", groupSchema)
 const Broadcast = mongoose.models.Broadcast || mongoose.model("Broadcast", broadcastSchema)
 const InviteLink = mongoose.models.InviteLink || mongoose.model("InviteLink", inviteLinkSchema)
-const SystemLog = mongoose.models.SystemLog || mongoose.model("SystemLog", systemLogSchema)
-const WelcomeMessage = mongoose.models.WelcomeMessage || mongoose.model("WelcomeMessage", welcomeMessageSchema)
 const Bot = mongoose.models.Bot || mongoose.model("Bot", botSchema)
 
 async function seedData() {
@@ -140,8 +120,7 @@ async function connectDB() {
 
 const app = express()
 app.use(cors())
-app.use(express.json({ limit: '50mb' }))
-app.use(express.urlencoded({ limit: '50mb', extended: true }))
+app.use(express.json())
 
 // DB connection middleware with Vercel diagnostics
 app.use(async (req, res, next) => {
@@ -185,21 +164,7 @@ app.get("/api/groups", async (req, res) => {
 
 app.get("/api/events", async (req, res) => {
   try {
-    try {
-      const bot = await (Bot as any).findOne()
-      if (bot && bot.token) {
-        const expiredMessages = await (WelcomeMessage as any).find({ deleteAt: { $lte: Date.now() } });
-        if (expiredMessages.length > 0) {
-          const idsToDelete = expiredMessages.map((d: any) => d._id);
-          await Promise.allSettled(expiredMessages.map((msg: any) => 
-             fetch(`https://api.telegram.org/bot${bot.token}/deleteMessage?chat_id=${msg.chatId}&message_id=${msg.messageId}`)
-          ));
-          await (WelcomeMessage as any).deleteMany({ _id: { $in: idsToDelete } });
-        }
-      }
-    } catch (e) {}
-
-    const events = await JoinEvent.find().sort({ timestamp: -1 }).limit(10000)
+    const events = await JoinEvent.find().sort({ timestamp: -1 }).limit(1000)
     res.json(events)
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch events" })
@@ -210,8 +175,7 @@ app.post("/api/groups", async (req, res) => {
   try {
     const group = req.body
     if (!group.id) return res.status(400).json({ error: "Group ID is required" });
-    const { _id, __v, ...groupData } = group;
-    const result = await (Group as any).findOneAndUpdate({ id: group.id.toString() }, groupData, { upsert: true, new: true })
+    const result = await (Group as any).findOneAndUpdate({ id: group.id.toString() }, group, { upsert: true, new: true })
     res.json({ success: true, group: result })
   } catch (error: any) {
     console.error(`[API] Group save error for ${req.body?.id}:`, error.message);
@@ -224,29 +188,14 @@ app.put("/api/groups/bulk-update", async (req, res) => {
     const updates = req.body
     if (!Array.isArray(updates)) return res.status(400).json({ error: "Updates must be an array" });
     console.log(`[API] Bulk updating ${updates.length} groups`);
-    
-    if (updates.length > 0) {
-      const ops = updates.filter(g => g.id).map(g => {
-        const { _id, __v, ...groupData } = g;
-        // ensure id is string
-        groupData.id = g.id.toString();
-        return {
-          updateOne: {
-            filter: { id: groupData.id },
-            update: { $set: groupData },
-            upsert: true
-          }
-        };
-      });
-      if (ops.length > 0) {
-        await (Group as any).bulkWrite(ops);
+    for (const g of updates) {
+      if (g.id) {
+        await (Group as any).findOneAndUpdate({ id: g.id.toString() }, g, { upsert: true })
       }
     }
-    
     res.json({ success: true })
   } catch (error: any) {
     console.error("[API] Bulk update error:", error.message);
-    SystemLog.create({ time: new Date().toISOString(), message: "Failed to update groups (Bulk Update)", payload: error.message || error.toString(), type: "error" }).catch(() => {});
     res.status(500).json({ error: "Failed to update groups", details: error.message })
   }
 })
@@ -269,27 +218,12 @@ app.post("/api/events", async (req, res) => {
     const events = req.body
     if (!Array.isArray(events)) return res.status(400).json({ error: "Events must be an array" });
     console.log(`[API] Saving ${events.length} events`);
-    
-    if (events.length > 0) {
-      const ops = events.map(ev => {
-        const { _id, __v, ...evData } = ev;
-        return {
-          updateOne: {
-            filter: { userId: ev.userId, timestamp: ev.timestamp },
-            update: { $set: evData },
-            upsert: true
-          }
-        };
-      });
-      if (ops.length > 0) {
-        await (JoinEvent as any).bulkWrite(ops);
-      }
+    for (const ev of events) {
+      await (JoinEvent as any).findOneAndUpdate({ userId: ev.userId, timestamp: ev.timestamp }, ev, { upsert: true })
     }
-    
     res.json({ success: true })
   } catch (error: any) {
     console.error("[API] Events save error:", error.message);
-    SystemLog.create({ time: new Date().toISOString(), message: "Failed to save events (Bulk)", payload: error.message || error.toString(), type: "error" }).catch(() => {});
     res.status(500).json({ error: "Failed to save events", details: error.message })
   }
 })
@@ -421,24 +355,9 @@ app.get("/api/bot", async (req, res) => {
 
 app.post("/api/bot", async (req, res) => {
   try {
-    const { token, name, username, joinRate, autoClean, autoWelcome, webhookActive } = req.body;
-    
-    // Create an object with the fields present in the request body to allow partial updates
-    const updateData: any = {};
-    if (token !== undefined) updateData.token = token;
-    if (name !== undefined) updateData.name = name;
-    if (username !== undefined) updateData.username = username;
-    if (joinRate !== undefined) updateData.joinRate = joinRate;
-    if (autoClean !== undefined) updateData.autoClean = autoClean;
-    if (autoWelcome !== undefined) updateData.autoWelcome = autoWelcome;
-    if (webhookActive !== undefined) updateData.webhookActive = webhookActive;
-
-    if (!updateData.token) {
-      // Find the first document to update if token is not sent, or we require token always?
-      // Since it's a singleton (updating {}), it's fine.
-    }
-    
-    const bot = await (Bot as any).findOneAndUpdate({}, updateData, { upsert: true, new: true })
+    const { token, name, username } = req.body
+    if (!token) return res.status(400).json({ error: "Bot token is required" })
+    const bot = await (Bot as any).findOneAndUpdate({}, { token, name, username }, { upsert: true, new: true })
     res.json({ success: true, bot })
   } catch (error) {
     res.status(500).json({ error: "Failed to save bot settings" })
@@ -453,18 +372,6 @@ app.get("/api/cron/sync", async (req, res) => {
 
     const bot = await (Bot as any).findOne()
     if (!bot || !bot.token) return res.status(404).json({ error: "No bot token found for sync" })
-
-    // Perform welcome message cleanup on cron task
-    try {
-      const expiredMessages = await (WelcomeMessage as any).find({ deleteAt: { $lte: Date.now() } });
-      if (expiredMessages.length > 0) {
-        const idsToDelete = expiredMessages.map((d: any) => d._id);
-        await Promise.allSettled(expiredMessages.map((msg: any) => 
-           fetch(`https://api.telegram.org/bot${bot.token}/deleteMessage?chat_id=${msg.chatId}&message_id=${msg.messageId}`)
-        ));
-        await (WelcomeMessage as any).deleteMany({ _id: { $in: idsToDelete } });
-      }
-    } catch (e) {}
 
     const groups = await Group.find()
     console.log(`[Sync] Starting daily sync for ${groups.length} groups`)
@@ -506,102 +413,20 @@ app.get("/api/cron/sync", async (req, res) => {
   }
 })
 
-app.get("/api/diagnostics", async (req, res) => {
-  try {
-    const logs = await SystemLog.find().sort({ createdAt: -1 }).limit(100);
-    res.json(logs);
-  } catch (error) {
-    res.status(500).json({ error: "Failed to load logs" });
-  }
-});
-
-app.post("/api/diagnostics", async (req, res) => {
-  try {
-    const { message, type, payload } = req.body;
-    const log = await SystemLog.create({
-      time: new Date().toISOString(),
-      message: message || "Frontend Event",
-      payload: payload || null,
-      type: type === 'alert' ? 'error' : (type || 'info')
-    });
-    res.json({ success: true, log });
-  } catch (error) {
-    res.status(500).json({ error: "Failed to save log" });
-  }
-});
-
 // Webhook Handler for 24/7 Join/Leave Cleanup & Welcome
 app.post("/api/webhook/:token", async (req, res) => {
   try {
     const token = req.params.token;
-    let autoWelcome = req.query.welcome === 'true';
-    let autoClean = req.query.clean === 'true';
-
-    try {
-      const botConfig = await (Bot as any).findOne();
-      if (botConfig) {
-        if (botConfig.autoWelcome !== undefined) autoWelcome = botConfig.autoWelcome;
-        if (botConfig.autoClean !== undefined) autoClean = botConfig.autoClean;
-      }
-    } catch (err) {}
-
+    const autoWelcome = req.query.welcome === 'true';
+    const autoClean = req.query.clean === 'true';
     const u = req.body;
-
-    try {
-      await SystemLog.create({
-        time: new Date().toISOString(),
-        message: "Webhook event received",
-        payload: u,
-        type: "info"
-      });
-
-      // Fire and forget older logs cleanup
-      SystemLog.countDocuments().then(count => {
-        if(count > 100) {
-          SystemLog.find().sort({createdAt: -1}).skip(100).then(docsToDel => {
-            const ids = docsToDel.map(d => d._id);
-            SystemLog.deleteMany({ _id: { $in: ids } }).catch(() => {});
-          }).catch(() => {});
-        }
-      }).catch(() => {});
-    } catch(e) {}
 
     // Immediately ACK to Telegram if we want, but on Vercel we MUST wait if we have async work.
     // However, if we take too long (>10s), Telegram will retry.
     // We'll process as much as possible then respond.
 
-    // Respond immediately after processing to prevent timeout issues on Vercel
-    await processUpdate();
-    res.json({ ok: true });
-
     const processUpdate = async () => {
       try {
-        // Cleanup expired welcome messages first
-        try {
-          const expiredMessages = await (WelcomeMessage as any).find({ deleteAt: { $lte: Date.now() } });
-          if (expiredMessages.length > 0) {
-            const idsToDelete = expiredMessages.map((d: any) => d._id);
-            await Promise.allSettled(expiredMessages.map(async (msg: any) => {
-               try {
-                 await fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${msg.chatId}&message_id=${msg.messageId}`);
-                 await SystemLog.create({
-                   time: new Date().toISOString(),
-                   message: `Welcome message deleted in group ${msg.chatId}`,
-                   type: "info"
-                 });
-               } catch (e) {}
-            }));
-            await (WelcomeMessage as any).deleteMany({ _id: { $in: idsToDelete } });
-          }
-        } catch (cleanupError) {
-           await SystemLog.create({
-             time: new Date().toISOString(),
-             message: "Failed to cleanup expired welcome messages. Please make sure the bot has 'Delete Messages' permission.",
-             payload: cleanupError,
-             type: "error"
-           }).catch(() => {});
-        }
-
         const rawJoinsToAdd: any[] = [];
         const memberChanges: Record<string, number> = {};
         let shouldSyncGroup: any = null;
@@ -609,15 +434,13 @@ app.post("/api/webhook/:token", async (req, res) => {
         // 0. Process `chat_join_request`
         if (u.chat_join_request && u.chat_join_request.chat) {
           const jr = u.chat_join_request;
-          // We record join requests so they appear in the audit section even if the actual 'chat_member' event is delayed or missed.
           rawJoinsToAdd.push({
             userId: jr.from.id,
             userName: jr.from.first_name + (jr.from.last_name ? ` ${jr.from.last_name}` : ''),
             chatId: jr.chat.id,
             chatTitle: jr.chat.title,
             timestamp: jr.date ? jr.date * 1000 : Date.now(),
-            is_bot: jr.from.is_bot,
-            skipWelcome: true
+            is_bot: jr.from.is_bot
           });
           shouldSyncGroup = jr.chat;
         }
@@ -648,15 +471,12 @@ app.post("/api/webhook/:token", async (req, res) => {
               chatId: mu.chat.id,
               chatTitle: mu.chat.title,
               timestamp: mu.date ? mu.date * 1000 : Date.now(),
-              is_bot: mu.new_chat_member.user.is_bot,
-              inviteLink: mu.invite_link?.invite_link
+              is_bot: mu.new_chat_member.user.is_bot
             });
             shouldSyncGroup = mu.chat;
-            SystemLog.create({ time: new Date().toISOString(), message: `User ${mu.new_chat_member.user.first_name} joined group ${mu.chat.title || mu.chat.id}`, type: "info" }).catch(() => {});
           } else if (!isMemberNow && wasMemberBefore) {
             memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) - 1;
             shouldSyncGroup = mu.chat;
-            SystemLog.create({ time: new Date().toISOString(), message: `User ${mu.new_chat_member.user.first_name} left group ${mu.chat.title || mu.chat.id}`, type: "info" }).catch(() => {});
           }
         }
 
@@ -672,8 +492,6 @@ app.post("/api/webhook/:token", async (req, res) => {
           if (autoClean && (msg.new_chat_members || msg.left_chat_member || msg.new_chat_title || msg.new_chat_photo || msg.delete_chat_photo)) {
             await fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${chatId}&message_id=${msg.message_id}`, {
               signal: AbortSignal.timeout(5000)
-            }).then(() => {
-              SystemLog.create({ time: new Date().toISOString(), message: `Cleaned up system message in group ${chatIdStr}`, type: "info" }).catch(() => {});
             }).catch(() => {});
           }
 
@@ -687,13 +505,11 @@ app.post("/api/webhook/:token", async (req, res) => {
                 timestamp: msg.date ? msg.date * 1000 : Date.now(),
                 is_bot: newUser.is_bot
               });
-              SystemLog.create({ time: new Date().toISOString(), message: `User ${newUser.first_name} joined group ${chatTitle || chatIdStr}`, type: "info" }).catch(() => {});
             });
           }
 
           if (msg.left_chat_member) {
             memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) - 1;
-            SystemLog.create({ time: new Date().toISOString(), message: `User ${msg.left_chat_member.first_name} left group ${chatTitle || chatIdStr}`, type: "info" }).catch(() => {});
           }
 
           if (msg.new_chat_title) {
@@ -711,8 +527,6 @@ app.post("/api/webhook/:token", async (req, res) => {
                const countData: any = await countRes.json();
                if (countData.ok) memberCount = countData.result;
              } catch (e) {}
-
-             SystemLog.create({ time: new Date().toISOString(), message: `Auto-discovered new group: ${shouldSyncGroup.title || chatIdStr}`, type: "info" }).catch(() => {});
 
              await (Group as any).create({
                id: chatIdStr,
@@ -734,8 +548,6 @@ app.post("/api/webhook/:token", async (req, res) => {
         }
 
         // 3. Deduplicate joins mathematically!
-        const welcomeMessagesToDelete: {chatId: string, messageId: string}[] = [];
-
         for (const ev of rawJoinsToAdd) {
            const cutoffLower = ev.timestamp - 120000;
            const cutoffUpper = ev.timestamp + 120000;
@@ -757,38 +569,34 @@ app.post("/api/webhook/:token", async (req, res) => {
              const chatIdStr = ev.chatId.toString();
              memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) + 1;
 
-             if (autoWelcome && !ev.is_bot && !ev.skipWelcome) {
-                 try {
-                   const escapedName = (ev.userName || 'Awesome Member').toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-                   const text = `🎉 <b>Welcome to the Hub!</b> 🎉\n\nHey <a href="tg://user?id=${ev.userId}"><b>${escapedName}</b></a>, we're thrilled to have you here! ✨\n\n<i>Enjoy your stay, and keep it friendly!</i> 🚀`;
-                   
-                   const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-                     method: 'POST',
-                     headers: { 'Content-Type': 'application/json' },
-                     body: JSON.stringify({ chat_id: ev.chatId, text, parse_mode: 'HTML' })
-                   });
-                   const data: any = await res.json();
-                   
-                   if (data.ok && data.result) {
-                     welcomeMessagesToDelete.push({ chatId: ev.chatId, messageId: data.result.message_id });
-                   }
-                 } catch (e) {}
+             if (autoWelcome && !ev.is_bot) {
+                // Background welcome handler for Vercel
+                const handleWelcome = async () => {
+                  try {
+                    await new Promise(r => setTimeout(r, 5000)); // 5 SECONDS DELAY
+                    const escapedName = (ev.userName || 'Awesome Member').toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+                    const text = `🎉 <b>Welcome to the Hub!</b> 🎉\n\nHey <a href="tg://user?id=${ev.userId}"><b>${escapedName}</b></a>, we're thrilled to have you here! ✨\n\n<i>Enjoy your stay, and keep it friendly!</i> 🚀`;
+                    
+                    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ chat_id: ev.chatId, text, parse_mode: 'HTML' })
+                    });
+                    const data: any = await res.json();
+                    
+                    if (data.ok && data.result) {
+                      await new Promise(r => setTimeout(r, 59000)); // 59 SECONDS DELAY
+                      await fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${ev.chatId}&message_id=${data.result.message_id}`).catch(() => {});
+                    }
+                  } catch (e) {}
+                };
+                
+                // IMPORTANT: In Vercel serverless, we MUST await this 
+                // or the function ends and kills the timer.
+                // We increase the maxDuration in vercel.json to compensate.
+                await handleWelcome();
              }
            }
-        }
-
-        // Queue welcome messages for background deletion after 60 seconds
-        if (welcomeMessagesToDelete.length > 0) {
-           await Promise.allSettled(welcomeMessagesToDelete.map(msg => {
-             setTimeout(() => {
-               fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${msg.chatId}&message_id=${msg.messageId}`).catch(()=>{});
-             }, 60000);
-             return WelcomeMessage.create({
-               chatId: msg.chatId,
-               messageId: msg.messageId,
-               deleteAt: Date.now() + 60000 // 60 seconds
-             });
-           }));
         }
 
         for (const [chatIdStr, diff] of Object.entries(memberChanges)) {
@@ -796,41 +604,17 @@ app.post("/api/webhook/:token", async (req, res) => {
              await (Group as any).findOneAndUpdate({ id: chatIdStr }, { $inc: { memberCount: diff } });
            }
         }
-      } catch (e: any) {
+      } catch (e) {
         console.error("Error processing webhook update:", e);
-        try {
-          await SystemLog.create({
-            time: new Date().toISOString(),
-            message: "Error processing webhook update",
-            payload: e.message || e.toString(),
-            type: "error"
-          });
-        } catch (_) {}
       }
     };
 
-    processUpdate().catch(err => console.error("Background webhook error:", err));
-  } catch (err: any) {
+    await processUpdate();
+    res.json({ ok: true });
+  } catch (err) {
     console.error("Webhook route error:", err);
-    try {
-      await SystemLog.create({
-        time: new Date().toISOString(),
-        message: "Webhook route error",
-        payload: err.message || err.toString(),
-        type: "error"
-      });
-    } catch (_) {}
     res.status(200).json({ ok: true }); // Always 200 for TG
   }
-});
-
-// Global Error Handler for API routes (catches Payload Too Large, etc.)
-app.use((err: any, req: any, res: any, next: any) => {
-  if (req.path.startsWith('/api')) {
-    console.error("API Error middleware caught:", err);
-    return res.status(err.status || 500).json({ error: err.message || "Internal Server Error", details: err.toString() });
-  }
-  next(err);
 });
 
 export default app

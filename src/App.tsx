@@ -4,7 +4,6 @@ import Sidebar from './components/Sidebar.tsx';
 import GroupCard from './components/GroupCard.tsx';
 import InviteModal from './components/InviteModal.tsx';
 import ConfirmationModal from './components/ConfirmationModal.tsx';
-import LogsPage from './components/LogsPage.tsx';
 import { Icons } from './constants.tsx';
 import { TelegramGroup, JoinEvent, BannedUser } from './types.ts';
 import { verifyBotToken, getChatDetails, TelegramBotInfo, getChatMemberCount, getRecentUpdates, kickChatMember, banMember, unbanMember, deleteMessage, setWebhook, deleteWebhook } from './services/telegramService.ts';
@@ -181,10 +180,8 @@ const App: React.FC = () => {
   const [filterOption, setFilterOption] = useState<'mostMembers' | 'leastMembers' | 'frequent' | 'recent' | 'newAdded' | 'activeToday'>('recent');
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }));
-  const [auditSubTab, setAuditSubTab] = useState<'audit' | 'groups' | 'blocked'>('audit');
+  const [auditSubTab, setAuditSubTab] = useState<'audit' | 'blocked'>('audit');
   const [updates, setUpdates] = useState<any[]>([]);
-  const [showLogsModal, setShowLogsModal] = useState(false);
-  const [systemLogs, setSystemLogs] = useState<any[]>([]);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const saved = localStorage.getItem('theme');
     if (saved) return saved as 'light' | 'dark';
@@ -279,11 +276,6 @@ const App: React.FC = () => {
 
   const showNotification = (message: string, type: 'success' | 'alert' | 'info' = 'info') => {
     setNotification({ message, type });
-    fetch('/api/diagnostics', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message, type })
-    }).catch(() => {});
     setTimeout(() => setNotification(null), 3000);
   };
   const [analysisEndDate, setAnalysisEndDate] = useState<string>('');
@@ -308,11 +300,8 @@ const App: React.FC = () => {
 
     let total = 0;
     let thisMonth = 0;
-    let lastMonthCount = 0; // count of same days last month
-    let lastMonthTotal = 0; // total of whole last month
+    let lastMonthCount = 0;
     let last7Days = 0;
-
-    const currentDayOfMonth = now.getDate();
 
     joinEvents.forEach(event => {
       total++;
@@ -325,10 +314,7 @@ const App: React.FC = () => {
         thisMonth++;
       }
       if (evtMonth === lastMonth && evtYear === lastMonthYear) {
-        lastMonthTotal++;
-        if (d.getDate() <= currentDayOfMonth) {
-          lastMonthCount++;
-        }
+        lastMonthCount++;
       }
       if (d >= sevenDaysAgo) {
         last7Days++;
@@ -343,8 +329,7 @@ const App: React.FC = () => {
     return {
       total: total * joinRate,
       thisMonth: thisMonth * joinRate,
-      lastMonth: lastMonthTotal * joinRate,
-      lastMonthSamePeriod: lastMonthCount * joinRate,
+      lastMonth: lastMonthCount * joinRate,
       last7Days: last7Days * joinRate,
       monthTrend: getTrend(thisMonth, lastMonthCount)
     };
@@ -600,31 +585,6 @@ const App: React.FC = () => {
     localStorage.setItem('tg_join_rate', joinRate.toString());
   }, [joinRate]);
 
-  useEffect(() => {
-    if (token && token !== DEFAULT_TOKEN) {
-      const webhookUrl = `${window.location.origin}/api/webhook/${token}`;
-      setWebhook(token, webhookUrl)
-        .then(() => setWebhookActive(true))
-        .catch(e => console.error("Failed to auto-set webhook:", e));
-    }
-  }, [token]);
-
-  useEffect(() => {
-    if (token && token !== DEFAULT_TOKEN) {
-      fetch('/api/bot', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          token,
-          joinRate,
-          autoClean: autoCleanServiceMessages,
-          autoWelcome,
-          webhookActive: true
-        })
-      }).catch(e => console.error("Failed to sync bot settings:", e));
-    }
-  }, [joinRate, autoCleanServiceMessages, autoWelcome, token]);
-
   const handleShareApp = () => {
     const url = window.location.href;
     if (navigator.share) {
@@ -702,11 +662,6 @@ const App: React.FC = () => {
               username: botData.username || ''
             });
             localStorage.setItem('tg_bot_token', botData.token);
-            
-            if (botData.joinRate !== undefined) setJoinRate(botData.joinRate);
-            if (botData.autoClean !== undefined) setAutoCleanServiceMessages(botData.autoClean);
-            if (botData.autoWelcome !== undefined) setAutoWelcome(botData.autoWelcome);
-            if (botData.webhookActive !== undefined) setWebhookActive(botData.webhookActive);
           }
         }
 
@@ -934,13 +889,12 @@ const App: React.FC = () => {
     const syncPending = async () => {
       if (pendingJoins.length > 0) {
         try {
-          const chunk = pendingJoins.slice(0, 50);
           const res = await fetch('/api/events', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(chunk)
+            body: JSON.stringify(pendingJoins)
           });
-          if (res.ok) setPendingJoins(prev => prev.slice(50));
+          if (res.ok) setPendingJoins([]);
         } catch (e) {
           console.warn("Retrying joins sync later...");
         }
@@ -948,13 +902,12 @@ const App: React.FC = () => {
 
       if (pendingGroups.length > 0) {
         try {
-          const chunk = pendingGroups.slice(0, 50);
           const res = await fetch('/api/groups/bulk-update', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(chunk)
+            body: JSON.stringify(pendingGroups)
           });
-          if (res.ok) setPendingGroups(prev => prev.slice(50));
+          if (res.ok) setPendingGroups([]);
         } catch (e) {
           console.warn("Retrying groups sync later...");
         }
@@ -994,36 +947,22 @@ const App: React.FC = () => {
     try {
       // Sync Groups
       if (pendingGroups.length > 0) {
-        for (let i = 0; i < pendingGroups.length; i += 50) {
-          const chunk = pendingGroups.slice(i, i + 50);
-          const res = await fetch('/api/groups/bulk-update', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(chunk)
-          });
-          if (!res.ok) {
-             const errorData = await res.json().catch(() => ({}));
-             const defaultMsg = res.status === 413 ? "Payload too large. Syncing too much data." : "Groups sync failed";
-             throw new Error(errorData.details || errorData.error || defaultMsg);
-          }
-        }
+        const res = await fetch('/api/groups/bulk-update', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(pendingGroups)
+        });
+        if (!res.ok) throw new Error("Groups sync failed");
       }
 
       // Sync Joins
       if (pendingJoins.length > 0) {
-        for (let i = 0; i < pendingJoins.length; i += 50) {
-          const chunk = pendingJoins.slice(i, i + 50);
-          const res = await fetch('/api/events', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(chunk)
-          });
-          if (!res.ok) {
-             const errorData = await res.json().catch(() => ({}));
-             const defaultMsg = res.status === 413 ? "Payload too large. Syncing too much data." : "Joins sync failed";
-             throw new Error(errorData.details || errorData.error || defaultMsg);
-          }
-        }
+        const res = await fetch('/api/events', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(pendingJoins)
+        });
+        if (!res.ok) throw new Error("Joins sync failed");
       }
 
       setPendingGroups([]);
@@ -1202,8 +1141,14 @@ const App: React.FC = () => {
 
         if (u.chat_join_request && u.chat_join_request.chat) {
           const jr = u.chat_join_request;
-          // We intentionally do NOT add this to newJoins to prevent premature welcome messages and incorrect member counts.
-          // The actual join will be captured by `chat_member` once approved.
+          newJoins.push({
+            userId: jr.from.id,
+            userName: jr.from.first_name + (jr.from.last_name ? ` ${jr.from.last_name}` : ''),
+            chatId: jr.chat.id,
+            chatTitle: jr.chat.title,
+            timestamp: jr.date ? jr.date * 1000 : Date.now(),
+            is_bot: jr.from.is_bot
+          });
         }
 
         const msg = u.message || u.channel_post;
@@ -2030,12 +1975,6 @@ const App: React.FC = () => {
                   <Icons.Activity size={14} /> Audit Log
                 </button>
                 <button 
-                  onClick={() => setAuditSubTab('groups')}
-                  className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${auditSubTab === 'groups' ? 'bg-white dark:bg-slate-700 text-purple-600 dark:text-purple-400 shadow-lg scale-[1.02]' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
-                >
-                  <Icons.Users size={14} /> Group Members
-                </button>
-                <button 
                   onClick={() => setAuditSubTab('blocked')}
                   className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${auditSubTab === 'blocked' ? 'bg-white dark:bg-slate-700 text-rose-600 dark:text-rose-400 shadow-lg scale-[1.02]' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
                 >
@@ -2070,7 +2009,6 @@ const App: React.FC = () => {
                               <th className="px-1 py-2 text-[8px] font-black text-slate-400 uppercase tracking-widest text-center">SL</th>
                               <th className="px-1 py-2 text-[8px] font-black text-slate-400 uppercase tracking-widest">Identity</th>
                               <th className="px-1 py-2 text-[8px] font-black text-slate-400 uppercase tracking-widest">Target</th>
-                              <th className="px-1 py-2 text-[8px] font-black text-slate-400 uppercase tracking-widest">Source (Link)</th>
                               <th className="px-1 py-2 text-[8px] font-black text-slate-400 uppercase tracking-widest">Time</th>
                               <th className="px-1 py-2 text-[8px] font-black text-slate-400 uppercase tracking-widest text-right">Action</th>
                             </tr>
@@ -2085,7 +2023,6 @@ const App: React.FC = () => {
                                    </div>
                                 </td>
                                 <td className="px-1 py-2 text-[8px] font-bold text-slate-500 truncate max-w-[80px]">{e.chatTitle.substring(0, 12)}</td>
-                                <td className="px-1 py-2 text-[8px] font-mono text-indigo-400/80 truncate max-w-[50px]">{e.inviteLink ? e.inviteLink.split('/').pop() : '-'}</td>
                                 <td className="px-1 py-2 text-[8px] font-mono text-slate-400">{formatTime12h(e.timestamp).replace(' ', '')}</td>
                                 <td className="px-1 py-2 text-right">
                                   <div className="flex justify-end gap-1">
@@ -2104,34 +2041,6 @@ const App: React.FC = () => {
                      </div>
                   </div>
                 </>
-              ) : auditSubTab === 'groups' ? (
-                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2.5rem] overflow-hidden shadow-xl border-b-8 border-slate-200 dark:border-slate-800">
-                    <div className="p-4 border-b border-slate-100 dark:divide-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex justify-between items-center">
-                      <div>
-                        <h2 className="text-lg font-black uppercase tracking-tight">Communities / Groups</h2>
-                        <p className="text-[10px] font-bold text-slate-500 mt-0.5 uppercase tracking-widest">Total members across all groups: {groups.reduce((acc, g) => acc + (g.memberCount || 0), 0)}</p>
-                      </div>
-                    </div>
-                    
-                    <div className="p-0 overflow-x-auto max-h-[60vh] custom-scrollbar">
-                       <table className="w-full text-left">
-                         <thead className="sticky top-0 bg-slate-50 dark:bg-slate-950 backdrop-blur-md z-10">
-                           <tr>
-                             <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Group</th>
-                             <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Members</th>
-                           </tr>
-                         </thead>
-                         <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                           {[...groups].sort((a, b) => (b.memberCount || 0) - (a.memberCount || 0)).map((g, idx) => (
-                             <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
-                               <td className="px-4 py-3 text-sm font-bold text-slate-700 dark:text-slate-300">{g.name}</td>
-                               <td className="px-4 py-3 text-sm font-bold text-slate-900 dark:text-white text-right">{g.memberCount || 0}</td>
-                             </tr>
-                           ))}
-                         </tbody>
-                       </table>
-                    </div>
-                </div>
               ) : (
                 <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2.5rem] overflow-hidden shadow-xl border-b-8 border-slate-200 dark:border-slate-800">
                     <div className="p-4 border-b border-slate-100 dark:divide-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
@@ -2453,14 +2362,14 @@ const App: React.FC = () => {
                               </div>
 
                               <div className="flex flex-col justify-end items-end">
-                                <div className="bg-black/40 p-3 rounded-2xl border border-white/10 w-full text-right h-full flex flex-col justify-between">
+                                <div className="bg-black/40 p-3 rounded-2xl border border-white/10 w-full text-right">
                                   <p className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-300 opacity-80 mb-2">Month Explorer</p>
-                                  <div className="flex flex-col items-end gap-2 mt-auto">
+                                  <div className="flex flex-col items-end gap-2">
                                     <input 
                                       type="month" 
                                       value={selectedRevenueMonth}
                                       onChange={(e) => setSelectedRevenueMonth(e.target.value)}
-                                      className="[color-scheme:dark] bg-white/5 hover:bg-white/10 focus:bg-white/20 text-white text-xs font-bold border border-white/10 rounded-xl px-2.5 py-1.5 outline-none transition-all w-full max-w-[140px] text-right cursor-pointer"
+                                      className="bg-white/10 focus:bg-white/20 text-white text-xs font-bold border border-white/10 rounded-xl px-3 py-1.5 outline-none transition-all w-[130px]"
                                     />
                                     <p className={`text-xl font-black text-blue-400 transition-all ${hideRevenue ? 'blur-sm select-none' : ''}`}>
                                       {hideRevenue ? "₹88,888" : `₹${selectedMonthRevenue.toLocaleString()}`}
@@ -2569,11 +2478,25 @@ const App: React.FC = () => {
                            <div className="flex items-center justify-between">
                              <div>
                                <p className="text-[10px] font-black uppercase text-slate-400 mb-1">Background Worker (24/7)</p>
-                               <p className="text-[9px] text-slate-500">Active (Always On)</p>
+                               <p className="text-[9px] text-slate-500">Enable this to run cleanup & welcome 24/7.</p>
                              </div>
-                             <div className="px-3 py-1.5 bg-emerald-500/10 text-emerald-500 text-[9px] font-black uppercase rounded-lg border border-emerald-500/20">
-                               Status: Active
-                             </div>
+                             {webhookActive ? (
+                               <button 
+                                 onClick={handleDeleteWebhook}
+                                 disabled={isProcessingWebhook}
+                                 className="px-3 py-1.5 bg-rose-500/10 text-rose-500 text-[9px] font-black uppercase rounded-lg border border-rose-500/20 hover:bg-rose-500 hover:text-white transition-all disabled:opacity-50 whitespace-nowrap ml-2"
+                               >
+                                 {isProcessingWebhook ? 'Working...' : 'Stop Background'}
+                               </button>
+                             ) : (
+                               <button 
+                                 onClick={handleSetWebhook}
+                                 disabled={isProcessingWebhook}
+                                 className="px-3 py-1.5 bg-emerald-500/10 text-emerald-500 text-[9px] font-black uppercase rounded-lg border border-emerald-500/20 hover:bg-emerald-500 hover:text-white transition-all disabled:opacity-50 whitespace-nowrap ml-2"
+                               >
+                                 {isProcessingWebhook ? 'Working...' : 'Start Background'}
+                               </button>
+                             )}
                            </div>
                         </div>
                       </div>
@@ -2683,7 +2606,7 @@ const App: React.FC = () => {
                         <Icons.UploadCloud size={20} />
                         <span className="text-[10px] font-black uppercase tracking-widest">Import</span>
                       </button>
-                      <button onClick={() => setShowLogsModal(true)} className="flex flex-col items-center justify-center gap-2 p-5 bg-amber-600 text-white rounded-2xl shadow-lg active:scale-95 transition-all w-full col-span-1">
+                      <button onClick={() => window.open('/api/diagnostics', '_blank')} className="flex flex-col items-center justify-center gap-2 p-5 bg-amber-600 text-white rounded-2xl shadow-lg active:scale-95 transition-all w-full col-span-1">
                         <Icons.Activity size={20} />
                         <span className="text-[10px] font-black uppercase tracking-widest">Log</span>
                       </button>
@@ -2696,8 +2619,6 @@ const App: React.FC = () => {
           )}
         </div>
       </main>
-
-      {showLogsModal && <LogsPage onClose={() => setShowLogsModal(false)} />}
 
       {selectedGroup && (
         <InviteModal group={selectedGroup} onClose={() => setSelectedGroup(null)} botToken={token} onInteraction={() => handleGroupInteraction(selectedGroup.id)} />
