@@ -2560,25 +2560,11 @@ const App: React.FC = () => {
                            <div className="flex items-center justify-between">
                              <div>
                                <p className="text-[10px] font-black uppercase text-slate-400 mb-1">Background Worker (24/7)</p>
-                               <p className="text-[9px] text-slate-500">Enable this to run cleanup & welcome 24/7.</p>
+                               <p className="text-[9px] text-slate-500">Active (Always On)</p>
                              </div>
-                             {webhookActive ? (
-                               <button 
-                                 onClick={handleDeleteWebhook}
-                                 disabled={isProcessingWebhook}
-                                 className="px-3 py-1.5 bg-rose-500/10 text-rose-500 text-[9px] font-black uppercase rounded-lg border border-rose-500/20 hover:bg-rose-500 hover:text-white transition-all disabled:opacity-50 whitespace-nowrap ml-2"
-                               >
-                                 {isProcessingWebhook ? 'Working...' : 'Stop Background'}
-                               </button>
-                             ) : (
-                               <button 
-                                 onClick={handleSetWebhook}
-                                 disabled={isProcessingWebhook}
-                                 className="px-3 py-1.5 bg-emerald-500/10 text-emerald-500 text-[9px] font-black uppercase rounded-lg border border-emerald-500/20 hover:bg-emerald-500 hover:text-white transition-all disabled:opacity-50 whitespace-nowrap ml-2"
-                               >
-                                 {isProcessingWebhook ? 'Working...' : 'Start Background'}
-                               </button>
-                             )}
+                             <div className="px-3 py-1.5 bg-emerald-500/10 text-emerald-500 text-[9px] font-black uppercase rounded-lg border border-emerald-500/20">
+                               Status: Active
+                             </div>
                            </div>
                         </div>
                       </div>
