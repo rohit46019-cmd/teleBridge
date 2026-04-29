@@ -278,8 +278,7 @@ async function startServer() {
       } catch(e) {}
 
       // Process updates synchronously to ensure they are saved.
-      // We optimize by doing minimal work before responding, 
-      // but if it's too slow, we might need to reduce operation count.
+      // We process critical operations first.
       await processUpdate(u, token, autoWelcome, autoClean);
 
       res.json({ ok: true });

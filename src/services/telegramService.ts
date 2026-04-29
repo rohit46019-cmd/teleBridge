@@ -13,11 +13,12 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}, timeout 
     return response;
   } catch (error: any) {
     clearTimeout(id);
+    console.error('Telegram fetch failed:', error);
     if (error.name === 'AbortError') {
       throw new Error('Network timeout: Connection to Telegram is too slow.');
     }
-    if (error.message === 'Failed to fetch') {
-      throw new Error('Network error: Could not reach Telegram. Check your internet connection.');
+    if (error.message === 'Failed to fetch' || error.cause) {
+      throw new Error(`Network error: Could not reach Telegram. Details: ${JSON.stringify(error)}`);
     }
     throw error;
   }
