@@ -570,7 +570,8 @@ app.post("/api/webhook/:token", async (req, res) => {
     // However, if we take too long (>10s), Telegram will retry.
     // We'll process as much as possible then respond.
 
-    // Respond immediately to prevent Telegram timeouts
+    // Respond immediately after processing to prevent timeout issues on Vercel
+    await processUpdate();
     res.json({ ok: true });
 
     const processUpdate = async () => {

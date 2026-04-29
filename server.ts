@@ -275,260 +275,14 @@ async function startServer() {
           payload: u,
           type: "info"
         });
-        
-        // Remove older logs asynchronously to keep DB clean
-        SystemLog.countDocuments().then(count => {
-          if(count > 100) {
-            SystemLog.find().sort({createdAt: -1}).skip(100).then(docsToDel => {
-               const ids = docsToDel.map(d => d._id);
-               SystemLog.deleteMany({ _id: { $in: ids } }).catch(() => {});
-            });
-          }
-        }).catch(() => {});
       } catch(e) {}
 
-      // Respond immediately to prevent Telegram timeouts
+      // Process updates synchronously to ensure they are saved.
+      // We optimize by doing minimal work before responding, 
+      // but if it's too slow, we might need to reduce operation count.
+      await processUpdate(u, token, autoWelcome, autoClean);
+
       res.json({ ok: true });
-
-      const processUpdate = async () => {
-        try {
-          // Cleanup expired welcome messages first
-          try {
-            const expiredMessages = await (WelcomeMessage as any).find({ deleteAt: { $lte: Date.now() } });
-            if (expiredMessages.length > 0) {
-              const idsToDelete = expiredMessages.map((d: any) => d._id);
-              await Promise.allSettled(expiredMessages.map(async (msg: any) => {
-                 try {
-                   await fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${msg.chatId}&message_id=${msg.messageId}`);
-                   await SystemLog.create({
-                     time: new Date().toISOString(),
-                     message: `Welcome message deleted in group ${msg.chatId}`,
-                     type: "info"
-                   });
-                 } catch (e) {}
-              }));
-              await (WelcomeMessage as any).deleteMany({ _id: { $in: idsToDelete } });
-            }
-          } catch (cleanupError) {
-             await SystemLog.create({
-               time: new Date().toISOString(),
-               message: "Failed to cleanup expired welcome messages. Please make sure the bot has 'Delete Messages' permission.",
-               payload: cleanupError,
-               type: "error"
-             }).catch(() => {});
-          }
-
-          const rawJoinsToAdd: any[] = [];
-          const memberChanges: Record<string, number> = {};
-          let shouldSyncGroup: any = null;
-
-          // 0. Process `chat_join_request`
-          if (u.chat_join_request && u.chat_join_request.chat) {
-            const jr = u.chat_join_request;
-            // We record join requests so they appear in the audit section even if the actual 'chat_member' event is delayed or missed.
-            rawJoinsToAdd.push({
-              userId: jr.from.id,
-              userName: jr.from.first_name + (jr.from.last_name ? ` ${jr.from.last_name}` : ''),
-              chatId: jr.chat.id,
-              chatTitle: jr.chat.title,
-              timestamp: jr.date ? jr.date * 1000 : Date.now(),
-              is_bot: jr.from.is_bot,
-              skipWelcome: true
-            });
-            shouldSyncGroup = jr.chat;
-          }
-
-          // Handle my_chat_member (Bot's own status changed - added/removed from group)
-          if (u.my_chat_member && u.my_chat_member.chat) {
-            const myMu = u.my_chat_member;
-            const newStatus = myMu.new_chat_member?.status;
-            if (['member', 'administrator', 'creator', 'restricted'].includes(newStatus)) {
-              shouldSyncGroup = myMu.chat;
-            }
-          }
-
-          // 1. Process `chat_member` (Admin-only update, works for hidden members)
-          if (u.chat_member && u.chat_member.chat) {
-            const mu = u.chat_member;
-            const chatIdStr = mu.chat.id.toString();
-            const oldStatus = mu.old_chat_member?.status;
-            const newStatus = mu.new_chat_member?.status;
-
-            const isMemberNow = ['member', 'administrator', 'creator', 'restricted'].includes(newStatus);
-            const wasMemberBefore = ['member', 'administrator', 'creator', 'restricted'].includes(oldStatus);
-
-            if (isMemberNow && !wasMemberBefore) {
-              rawJoinsToAdd.push({
-                userId: mu.new_chat_member.user.id,
-                userName: mu.new_chat_member.user.first_name + (mu.new_chat_member.user.last_name ? ` ${mu.new_chat_member.user.last_name}` : ''),
-                chatId: mu.chat.id,
-                chatTitle: mu.chat.title,
-                timestamp: mu.date ? mu.date * 1000 : Date.now(),
-                is_bot: mu.new_chat_member.user.is_bot,
-                inviteLink: mu.invite_link?.invite_link
-              });
-              shouldSyncGroup = mu.chat;
-              SystemLog.create({ time: new Date().toISOString(), message: `User ${mu.new_chat_member.user.first_name} joined group ${mu.chat.title || mu.chat.id}`, type: "info" }).catch(() => {});
-            } else if (!isMemberNow && wasMemberBefore) {
-              memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) - 1;
-              shouldSyncGroup = mu.chat;
-              SystemLog.create({ time: new Date().toISOString(), message: `User ${mu.new_chat_member.user.first_name} left group ${mu.chat.title || mu.chat.id}`, type: "info" }).catch(() => {});
-            }
-          }
-
-          // 2. Process `message` / `channel_post` (Works for visible members, handles deletions)
-          const msg = u.message || u.channel_post;
-          if (msg && msg.chat) {
-            const chatId = msg.chat.id;
-            const chatTitle = msg.chat.title;
-            const chatIdStr = chatId.toString();
-            shouldSyncGroup = msg.chat;
-
-            // Auto-Cleanup logic for System Messages
-            if (autoClean && (msg.new_chat_members || msg.left_chat_member || msg.new_chat_title || msg.new_chat_photo || msg.delete_chat_photo)) {
-              await fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${chatId}&message_id=${msg.message_id}`, {
-                signal: AbortSignal.timeout(5000)
-              }).then(() => {
-                SystemLog.create({ time: new Date().toISOString(), message: `Cleaned up system message in group ${chatIdStr}`, type: "info" }).catch(() => {});
-              }).catch(() => {});
-            }
-
-            if (msg.new_chat_members) {
-              msg.new_chat_members.forEach((newUser: any) => {
-                rawJoinsToAdd.push({
-                  userId: newUser.id,
-                  userName: newUser.first_name + (newUser.last_name ? ` ${newUser.last_name}` : ''),
-                  chatId: chatId,
-                  chatTitle: chatTitle,
-                  timestamp: msg.date ? msg.date * 1000 : Date.now(),
-                  is_bot: newUser.is_bot
-                });
-                SystemLog.create({ time: new Date().toISOString(), message: `User ${newUser.first_name} joined group ${chatTitle || chatIdStr}`, type: "info" }).catch(() => {});
-              });
-            }
-
-            if (msg.left_chat_member) {
-              memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) - 1;
-              SystemLog.create({ time: new Date().toISOString(), message: `User ${msg.left_chat_member.first_name} left group ${chatTitle || chatIdStr}`, type: "info" }).catch(() => {});
-            }
-
-            if (msg.new_chat_title) {
-              await (Group as any).findOneAndUpdate({ id: chatIdStr }, { name: msg.new_chat_title }, { upsert: false });
-            }
-          }
-          
-          if (shouldSyncGroup && (['group', 'supergroup', 'channel'].includes(shouldSyncGroup.type))) {
-             const chatIdStr = shouldSyncGroup.id.toString();
-             const groupExists = await (Group as any).findOne({ id: chatIdStr });
-             if (!groupExists) {
-               let memberCount = 0;
-               try {
-                 const countRes = await fetch(`https://api.telegram.org/bot${token}/getChatMemberCount?chat_id=${chatIdStr}`);
-                 const countData: any = await countRes.json();
-                 if (countData.ok) memberCount = countData.result;
-               } catch (e) {
-                 console.error("Error fetching member count for new group:", e);
-               }
-
-               SystemLog.create({ time: new Date().toISOString(), message: `Auto-discovered new group: ${shouldSyncGroup.title || chatIdStr}`, type: "info" }).catch(() => {});
-
-               await (Group as any).create({
-                 id: chatIdStr,
-                 name: shouldSyncGroup.title || 'Unknown',
-                 memberCount: memberCount,
-                 description: shouldSyncGroup.description || 'Auto Discovered Hub',
-                 category: 'Telegram',
-                 image: `https://picsum.photos/seed/${chatIdStr}/200`,
-                 lastInteraction: Date.now(),
-                 interactionCount: 1,
-                 createdAt: Date.now()
-               });
-             } else {
-               await (Group as any).findOneAndUpdate({ id: chatIdStr }, { 
-                 $set: { lastInteraction: Date.now() }, 
-                 $inc: { interactionCount: 1 }
-               });
-             }
-          }
-
-          // 3. Deduplicate joins mathematically!
-          const welcomeMessagesToDelete: {chatId: string, messageId: string}[] = [];
-
-          for (const ev of rawJoinsToAdd) {
-             const cutoffLower = ev.timestamp - 120000; // Deduplicate within 2 mins
-             const cutoffUpper = ev.timestamp + 120000;
-             const existing = await (JoinEvent as any).findOne({
-               userId: ev.userId,
-               chatId: ev.chatId,
-               timestamp: { $gt: cutoffLower, $lt: cutoffUpper }
-             });
-
-             if (!existing) {
-               // Only proceed if we haven't tracked this exact join in the last 60s
-               await (JoinEvent as any).create({
-                 userId: ev.userId,
-                 userName: ev.userName,
-                 chatId: ev.chatId,
-                 chatTitle: ev.chatTitle,
-                 timestamp: ev.timestamp
-               });
-
-               const chatIdStr = ev.chatId.toString();
-               memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) + 1;
-
-               if (autoWelcome && !ev.is_bot && !ev.skipWelcome) {
-                  try {
-                    const escapedName = (ev.userName || 'Awesome Member').toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-                    const text = `🎉 <b>Welcome to the Hub!</b> 🎉\n\nHey <a href="tg://user?id=${ev.userId}"><b>${escapedName}</b></a>, we're thrilled to have you here! ✨\n\n<i>Enjoy your stay, and keep it friendly!</i> 🚀`;
-                    
-                    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ chat_id: ev.chatId, text, parse_mode: 'HTML' })
-                    });
-                    const data: any = await res.json();
-                    
-                    if (data.ok && data.result) {
-                      welcomeMessagesToDelete.push({ chatId: ev.chatId, messageId: data.result.message_id });
-                    }
-                  } catch (e) {}
-               }
-             }
-          }
-
-          // Queue welcome messages for background deletion after 60 seconds
-          if (welcomeMessagesToDelete.length > 0) {
-            await Promise.allSettled(welcomeMessagesToDelete.map(msg => {
-              setTimeout(() => {
-                fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${msg.chatId}&message_id=${msg.messageId}`).catch(()=>{});
-              }, 60000);
-              return WelcomeMessage.create({
-                chatId: msg.chatId,
-                messageId: msg.messageId,
-                deleteAt: Date.now() + 60000 // 60 seconds
-              });
-            }));
-          }
-
-          for (const [chatIdStr, diff] of Object.entries(memberChanges)) {
-             if (diff !== 0) {
-               await (Group as any).findOneAndUpdate({ id: chatIdStr }, { $inc: { memberCount: diff } });
-             }
-          }
-        } catch (e: any) {
-          console.error("Error processing webhook update:", e);
-          try {
-            await SystemLog.create({
-              time: new Date().toISOString(),
-              message: "Error processing webhook update",
-              payload: e.message || e.toString(),
-              type: "error"
-            });
-          } catch (_) {}
-        }
-      };
-      
-      processUpdate().catch(err => console.error("Background webhook error:", err));
     } catch (err: any) {
       console.error("Webhook route error:", err);
       try {
@@ -539,12 +293,214 @@ async function startServer() {
           type: "error"
         });
       } catch (_) {}
+      
       // Ensure we don't bleed errors and timeout to TG
       if (!res.headersSent) {
         res.status(500).json({ error: "Webhook failure" });
       }
     }
   });
+
+  async function processUpdate(u: any, token: string, autoWelcome: boolean, autoClean: boolean) {
+    try {
+      // Cleanup expired welcome messages first
+      try {
+        const expiredMessages = await (WelcomeMessage as any).find({ deleteAt: { $lte: Date.now() } });
+        if (expiredMessages.length > 0) {
+          const idsToDelete = expiredMessages.map((d: any) => d._id);
+          await Promise.allSettled(expiredMessages.map(async (msg: any) => {
+             try {
+               await fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${msg.chatId}&message_id=${msg.messageId}`);
+             } catch (e) {}
+          }));
+          await (WelcomeMessage as any).deleteMany({ _id: { $in: idsToDelete } });
+        }
+      } catch (cleanupError) {}
+
+      const rawJoinsToAdd: any[] = [];
+      const memberChanges: Record<string, number> = {};
+      let shouldSyncGroup: any = null;
+
+      // 0. Process `chat_join_request`
+      if (u.chat_join_request && u.chat_join_request.chat) {
+        const jr = u.chat_join_request;
+        rawJoinsToAdd.push({
+          userId: jr.from.id,
+          userName: jr.from.first_name + (jr.from.last_name ? ` ${jr.from.last_name}` : ''),
+          chatId: jr.chat.id,
+          chatTitle: jr.chat.title,
+          timestamp: jr.date ? jr.date * 1000 : Date.now(),
+          is_bot: jr.from.is_bot,
+          skipWelcome: true
+        });
+        shouldSyncGroup = jr.chat;
+      }
+
+      // Handle my_chat_member
+      if (u.my_chat_member && u.my_chat_member.chat) {
+        const myMu = u.my_chat_member;
+        const newStatus = myMu.new_chat_member?.status;
+        if (['member', 'administrator', 'creator', 'restricted'].includes(newStatus)) {
+          shouldSyncGroup = myMu.chat;
+        }
+      }
+
+      // 1. Process `chat_member`
+      if (u.chat_member && u.chat_member.chat) {
+        const mu = u.chat_member;
+        const chatIdStr = mu.chat.id.toString();
+        const oldStatus = mu.old_chat_member?.status;
+        const newStatus = mu.new_chat_member?.status;
+        const isMemberNow = ['member', 'administrator', 'creator', 'restricted'].includes(newStatus);
+        const wasMemberBefore = ['member', 'administrator', 'creator', 'restricted'].includes(oldStatus);
+
+        if (isMemberNow && !wasMemberBefore) {
+          rawJoinsToAdd.push({
+            userId: mu.new_chat_member.user.id,
+            userName: mu.new_chat_member.user.first_name + (mu.new_chat_member.user.last_name ? ` ${mu.new_chat_member.user.last_name}` : ''),
+            chatId: mu.chat.id,
+            chatTitle: mu.chat.title,
+            timestamp: mu.date ? mu.date * 1000 : Date.now(),
+            is_bot: mu.new_chat_member.user.is_bot,
+            inviteLink: mu.invite_link?.invite_link
+          });
+          shouldSyncGroup = mu.chat;
+        } else if (!isMemberNow && wasMemberBefore) {
+          memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) - 1;
+          shouldSyncGroup = mu.chat;
+        }
+      }
+
+      // 2. Process `message` / `channel_post`
+      const msg = u.message || u.channel_post;
+      if (msg && msg.chat) {
+        const chatId = msg.chat.id;
+        const chatTitle = msg.chat.title;
+        const chatIdStr = chatId.toString();
+        shouldSyncGroup = msg.chat;
+
+        if (autoClean && (msg.new_chat_members || msg.left_chat_member || msg.new_chat_title || msg.new_chat_photo || msg.delete_chat_photo)) {
+          await fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${chatId}&message_id=${msg.message_id}`, {
+            signal: AbortSignal.timeout(5000)
+          }).catch(() => {});
+        }
+
+        if (msg.new_chat_members) {
+          msg.new_chat_members.forEach((newUser: any) => {
+            rawJoinsToAdd.push({
+              userId: newUser.id,
+              userName: newUser.first_name + (newUser.last_name ? ` ${newUser.last_name}` : ''),
+              chatId: chatId,
+              chatTitle: chatTitle,
+              timestamp: msg.date ? msg.date * 1000 : Date.now(),
+              is_bot: newUser.is_bot
+            });
+          });
+        }
+        if (msg.left_chat_member) {
+          memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) - 1;
+        }
+        if (msg.new_chat_title) {
+          await (Group as any).findOneAndUpdate({ id: chatIdStr }, { name: msg.new_chat_title }, { upsert: false });
+        }
+      }
+      
+      if (shouldSyncGroup && (['group', 'supergroup', 'channel'].includes(shouldSyncGroup.type))) {
+         const chatIdStr = shouldSyncGroup.id.toString();
+         const groupExists = await (Group as any).findOne({ id: chatIdStr });
+         if (!groupExists) {
+           let memberCount = 0;
+           try {
+             const countRes = await fetch(`https://api.telegram.org/bot${token}/getChatMemberCount?chat_id=${chatIdStr}`);
+             const countData: any = await countRes.json();
+             if (countData.ok) memberCount = countData.result;
+           } catch (e) {}
+
+           await (Group as any).create({
+             id: chatIdStr,
+             name: shouldSyncGroup.title || 'Unknown',
+             memberCount: memberCount,
+             description: shouldSyncGroup.description || 'Auto Discovered Hub',
+             category: 'Telegram',
+             image: `https://picsum.photos/seed/${chatIdStr}/200`,
+             lastInteraction: Date.now(),
+             interactionCount: 1,
+             createdAt: Date.now()
+           });
+         } else {
+           await (Group as any).findOneAndUpdate({ id: chatIdStr }, { 
+             $set: { lastInteraction: Date.now() }, 
+             $inc: { interactionCount: 1 }
+           });
+         }
+      }
+
+      // 3. Deduplicate joins
+      const welcomeMessagesToDelete: {chatId: string, messageId: string}[] = [];
+
+      for (const ev of rawJoinsToAdd) {
+         const cutoffLower = ev.timestamp - 120000;
+         const cutoffUpper = ev.timestamp + 120000;
+         const existing = await (JoinEvent as any).findOne({
+           userId: ev.userId,
+           chatId: ev.chatId,
+           timestamp: { $gt: cutoffLower, $lt: cutoffUpper }
+         });
+
+         if (!existing) {
+           await (JoinEvent as any).create({
+             userId: ev.userId,
+             userName: ev.userName,
+             chatId: ev.chatId,
+             chatTitle: ev.chatTitle,
+             timestamp: ev.timestamp
+           });
+
+           const chatIdStr = ev.chatId.toString();
+           memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) + 1;
+
+           if (autoWelcome && !ev.is_bot && !ev.skipWelcome) {
+              try {
+                const escapedName = (ev.userName || 'Awesome Member').toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+                const text = `🎉 <b>Welcome to the Hub!</b> 🎉\n\nHey <a href="tg://user?id=${ev.userId}"><b>${escapedName}</b></a>, we're thrilled to have you here! ✨\n\n<i>Enjoy your stay, and keep it friendly!</i> 🚀`;
+                
+                const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ chat_id: ev.chatId, text, parse_mode: 'HTML' })
+                });
+                const data: any = await res.json();
+                
+                if (data.ok && data.result) {
+                  welcomeMessagesToDelete.push({ chatId: ev.chatId, messageId: data.result.message_id });
+                }
+              } catch (e) {}
+           }
+         }
+      }
+
+      if (welcomeMessagesToDelete.length > 0) {
+        await Promise.allSettled(welcomeMessagesToDelete.map(msg => {
+          setTimeout(() => {
+            fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${msg.chatId}&message_id=${msg.messageId}`).catch(()=>{});
+          }, 60000);
+          return WelcomeMessage.create({
+            chatId: msg.chatId,
+            messageId: msg.messageId,
+            deleteAt: Date.now() + 60000
+          });
+        }));
+      }
+
+      for (const [chatIdStr, diff] of Object.entries(memberChanges)) {
+         if (diff !== 0) {
+           await (Group as any).findOneAndUpdate({ id: chatIdStr }, { $inc: { memberCount: diff } });
+         }
+      }
+    } catch (e: any) {
+      console.error("Error processing webhook update:", e);
+    }
+  }
 
   app.get("/api/groups", async (req, res) => {
     try {
