@@ -325,8 +325,16 @@ async function startServer() {
           // 0. Process `chat_join_request`
           if (u.chat_join_request && u.chat_join_request.chat) {
             const jr = u.chat_join_request;
-            // We intentionally do NOT add this to rawJoinsToAdd to prevent premature welcome messages and incorrect member counts.
-            // The actual join will be captured by `chat_member` once approved.
+            // We record join requests so they appear in the audit section even if the actual 'chat_member' event is delayed or missed.
+            rawJoinsToAdd.push({
+              userId: jr.from.id,
+              userName: jr.from.first_name + (jr.from.last_name ? ` ${jr.from.last_name}` : ''),
+              chatId: jr.chat.id,
+              chatTitle: jr.chat.title,
+              timestamp: jr.date ? jr.date * 1000 : Date.now(),
+              is_bot: jr.from.is_bot,
+              skipWelcome: true
+            });
             shouldSyncGroup = jr.chat;
           }
 
@@ -468,7 +476,7 @@ async function startServer() {
                const chatIdStr = ev.chatId.toString();
                memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) + 1;
 
-               if (autoWelcome && !ev.is_bot) {
+               if (autoWelcome && !ev.is_bot && !ev.skipWelcome) {
                   try {
                     const escapedName = (ev.userName || 'Awesome Member').toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
                     const text = `🎉 <b>Welcome to the Hub!</b> 🎉\n\nHey <a href="tg://user?id=${ev.userId}"><b>${escapedName}</b></a>, we're thrilled to have you here! ✨\n\n<i>Enjoy your stay, and keep it friendly!</i> 🚀`;
