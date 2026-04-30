@@ -180,7 +180,7 @@ const App: React.FC = () => {
   const [filterOption, setFilterOption] = useState<'mostMembers' | 'leastMembers' | 'frequent' | 'recent' | 'newAdded' | 'activeToday'>('recent');
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }));
-  const [auditSubTab, setAuditSubTab] = useState<'audit' | 'blocked'>('audit');
+  const [auditSubTab, setAuditSubTab] = useState<'audit' | 'groups' | 'blocked'>('audit');
   const [updates, setUpdates] = useState<any[]>([]);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const saved = localStorage.getItem('theme');
@@ -300,8 +300,11 @@ const App: React.FC = () => {
 
     let total = 0;
     let thisMonth = 0;
-    let lastMonthCount = 0;
+    let lastMonthCount = 0; // count of same days last month
+    let lastMonthTotal = 0; // total of whole last month
     let last7Days = 0;
+
+    const currentDayOfMonth = now.getDate();
 
     joinEvents.forEach(event => {
       total++;
@@ -314,7 +317,10 @@ const App: React.FC = () => {
         thisMonth++;
       }
       if (evtMonth === lastMonth && evtYear === lastMonthYear) {
-        lastMonthCount++;
+        lastMonthTotal++;
+        if (d.getDate() <= currentDayOfMonth) {
+          lastMonthCount++;
+        }
       }
       if (d >= sevenDaysAgo) {
         last7Days++;
@@ -329,7 +335,8 @@ const App: React.FC = () => {
     return {
       total: total * joinRate,
       thisMonth: thisMonth * joinRate,
-      lastMonth: lastMonthCount * joinRate,
+      lastMonth: lastMonthTotal * joinRate,
+      lastMonthSamePeriod: lastMonthCount * joinRate,
       last7Days: last7Days * joinRate,
       monthTrend: getTrend(thisMonth, lastMonthCount)
     };
@@ -585,6 +592,22 @@ const App: React.FC = () => {
     localStorage.setItem('tg_join_rate', joinRate.toString());
   }, [joinRate]);
 
+  useEffect(() => {
+    if (token && token !== DEFAULT_TOKEN) {
+      fetch('/api/bot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token,
+          joinRate,
+          autoClean: autoCleanServiceMessages,
+          autoWelcome,
+          webhookActive
+        })
+      }).catch(e => console.error("Failed to sync bot settings:", e));
+    }
+  }, [joinRate, autoCleanServiceMessages, autoWelcome, webhookActive, token]);
+
   const handleShareApp = () => {
     const url = window.location.href;
     if (navigator.share) {
@@ -662,6 +685,11 @@ const App: React.FC = () => {
               username: botData.username || ''
             });
             localStorage.setItem('tg_bot_token', botData.token);
+            
+            if (botData.joinRate !== undefined) setJoinRate(botData.joinRate);
+            if (botData.autoClean !== undefined) setAutoCleanServiceMessages(botData.autoClean);
+            if (botData.autoWelcome !== undefined) setAutoWelcome(botData.autoWelcome);
+            if (botData.webhookActive !== undefined) setWebhookActive(botData.webhookActive);
           }
         }
 
@@ -889,12 +917,13 @@ const App: React.FC = () => {
     const syncPending = async () => {
       if (pendingJoins.length > 0) {
         try {
+          const chunk = pendingJoins.slice(0, 50);
           const res = await fetch('/api/events', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(pendingJoins)
+            body: JSON.stringify(chunk)
           });
-          if (res.ok) setPendingJoins([]);
+          if (res.ok) setPendingJoins(prev => prev.slice(50));
         } catch (e) {
           console.warn("Retrying joins sync later...");
         }
@@ -902,12 +931,13 @@ const App: React.FC = () => {
 
       if (pendingGroups.length > 0) {
         try {
+          const chunk = pendingGroups.slice(0, 50);
           const res = await fetch('/api/groups/bulk-update', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(pendingGroups)
+            body: JSON.stringify(chunk)
           });
-          if (res.ok) setPendingGroups([]);
+          if (res.ok) setPendingGroups(prev => prev.slice(50));
         } catch (e) {
           console.warn("Retrying groups sync later...");
         }
@@ -947,22 +977,36 @@ const App: React.FC = () => {
     try {
       // Sync Groups
       if (pendingGroups.length > 0) {
-        const res = await fetch('/api/groups/bulk-update', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(pendingGroups)
-        });
-        if (!res.ok) throw new Error("Groups sync failed");
+        for (let i = 0; i < pendingGroups.length; i += 50) {
+          const chunk = pendingGroups.slice(i, i + 50);
+          const res = await fetch('/api/groups/bulk-update', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(chunk)
+          });
+          if (!res.ok) {
+             const errorData = await res.json().catch(() => ({}));
+             const defaultMsg = res.status === 413 ? "Payload too large. Syncing too much data." : "Groups sync failed";
+             throw new Error(errorData.details || errorData.error || defaultMsg);
+          }
+        }
       }
 
       // Sync Joins
       if (pendingJoins.length > 0) {
-        const res = await fetch('/api/events', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(pendingJoins)
-        });
-        if (!res.ok) throw new Error("Joins sync failed");
+        for (let i = 0; i < pendingJoins.length; i += 50) {
+          const chunk = pendingJoins.slice(i, i + 50);
+          const res = await fetch('/api/events', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(chunk)
+          });
+          if (!res.ok) {
+             const errorData = await res.json().catch(() => ({}));
+             const defaultMsg = res.status === 413 ? "Payload too large. Syncing too much data." : "Joins sync failed";
+             throw new Error(errorData.details || errorData.error || defaultMsg);
+          }
+        }
       }
 
       setPendingGroups([]);
@@ -1975,6 +2019,12 @@ const App: React.FC = () => {
                   <Icons.Activity size={14} /> Audit Log
                 </button>
                 <button 
+                  onClick={() => setAuditSubTab('groups')}
+                  className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${auditSubTab === 'groups' ? 'bg-white dark:bg-slate-700 text-purple-600 dark:text-purple-400 shadow-lg scale-[1.02]' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                >
+                  <Icons.Users size={14} /> Group Members
+                </button>
+                <button 
                   onClick={() => setAuditSubTab('blocked')}
                   className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${auditSubTab === 'blocked' ? 'bg-white dark:bg-slate-700 text-rose-600 dark:text-rose-400 shadow-lg scale-[1.02]' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
                 >
@@ -2009,6 +2059,7 @@ const App: React.FC = () => {
                               <th className="px-1 py-2 text-[8px] font-black text-slate-400 uppercase tracking-widest text-center">SL</th>
                               <th className="px-1 py-2 text-[8px] font-black text-slate-400 uppercase tracking-widest">Identity</th>
                               <th className="px-1 py-2 text-[8px] font-black text-slate-400 uppercase tracking-widest">Target</th>
+                              <th className="px-1 py-2 text-[8px] font-black text-slate-400 uppercase tracking-widest">Source (Link)</th>
                               <th className="px-1 py-2 text-[8px] font-black text-slate-400 uppercase tracking-widest">Time</th>
                               <th className="px-1 py-2 text-[8px] font-black text-slate-400 uppercase tracking-widest text-right">Action</th>
                             </tr>
@@ -2023,6 +2074,7 @@ const App: React.FC = () => {
                                    </div>
                                 </td>
                                 <td className="px-1 py-2 text-[8px] font-bold text-slate-500 truncate max-w-[80px]">{e.chatTitle.substring(0, 12)}</td>
+                                <td className="px-1 py-2 text-[8px] font-mono text-indigo-400/80 truncate max-w-[50px]">{e.inviteLink ? e.inviteLink.split('/').pop() : '-'}</td>
                                 <td className="px-1 py-2 text-[8px] font-mono text-slate-400">{formatTime12h(e.timestamp).replace(' ', '')}</td>
                                 <td className="px-1 py-2 text-right">
                                   <div className="flex justify-end gap-1">
@@ -2041,6 +2093,34 @@ const App: React.FC = () => {
                      </div>
                   </div>
                 </>
+              ) : auditSubTab === 'groups' ? (
+                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2.5rem] overflow-hidden shadow-xl border-b-8 border-slate-200 dark:border-slate-800">
+                    <div className="p-4 border-b border-slate-100 dark:divide-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex justify-between items-center">
+                      <div>
+                        <h2 className="text-lg font-black uppercase tracking-tight">Communities / Groups</h2>
+                        <p className="text-[10px] font-bold text-slate-500 mt-0.5 uppercase tracking-widest">Total members across all groups: {groups.reduce((acc, g) => acc + (g.memberCount || 0), 0)}</p>
+                      </div>
+                    </div>
+                    
+                    <div className="p-0 overflow-x-auto max-h-[60vh] custom-scrollbar">
+                       <table className="w-full text-left">
+                         <thead className="sticky top-0 bg-slate-50 dark:bg-slate-950 backdrop-blur-md z-10">
+                           <tr>
+                             <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Group</th>
+                             <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Members</th>
+                           </tr>
+                         </thead>
+                         <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                           {[...groups].sort((a, b) => (b.memberCount || 0) - (a.memberCount || 0)).map((g, idx) => (
+                             <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                               <td className="px-4 py-3 text-sm font-bold text-slate-700 dark:text-slate-300">{g.name}</td>
+                               <td className="px-4 py-3 text-sm font-bold text-slate-900 dark:text-white text-right">{g.memberCount || 0}</td>
+                             </tr>
+                           ))}
+                         </tbody>
+                       </table>
+                    </div>
+                </div>
               ) : (
                 <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2.5rem] overflow-hidden shadow-xl border-b-8 border-slate-200 dark:border-slate-800">
                     <div className="p-4 border-b border-slate-100 dark:divide-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
@@ -2362,14 +2442,14 @@ const App: React.FC = () => {
                               </div>
 
                               <div className="flex flex-col justify-end items-end">
-                                <div className="bg-black/40 p-3 rounded-2xl border border-white/10 w-full text-right">
+                                <div className="bg-black/40 p-3 rounded-2xl border border-white/10 w-full text-right h-full flex flex-col justify-between">
                                   <p className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-300 opacity-80 mb-2">Month Explorer</p>
-                                  <div className="flex flex-col items-end gap-2">
+                                  <div className="flex flex-col items-end gap-2 mt-auto">
                                     <input 
                                       type="month" 
                                       value={selectedRevenueMonth}
                                       onChange={(e) => setSelectedRevenueMonth(e.target.value)}
-                                      className="bg-white/10 focus:bg-white/20 text-white text-xs font-bold border border-white/10 rounded-xl px-3 py-1.5 outline-none transition-all w-[130px]"
+                                      className="[color-scheme:dark] bg-white/5 hover:bg-white/10 focus:bg-white/20 text-white text-xs font-bold border border-white/10 rounded-xl px-2.5 py-1.5 outline-none transition-all w-full max-w-[140px] text-right cursor-pointer"
                                     />
                                     <p className={`text-xl font-black text-blue-400 transition-all ${hideRevenue ? 'blur-sm select-none' : ''}`}>
                                       {hideRevenue ? "₹88,888" : `₹${selectedMonthRevenue.toLocaleString()}`}

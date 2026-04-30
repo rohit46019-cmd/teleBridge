@@ -16,7 +16,8 @@ const joinEventSchema = new mongoose.Schema({
   userName: String,
   chatId: Number,
   chatTitle: String,
-  timestamp: Number
+  timestamp: Number,
+  inviteLink: String
 }, { timestamps: true });
 
 const groupSchema = new mongoose.Schema({
@@ -46,11 +47,23 @@ const inviteLinkSchema = new mongoose.Schema({
   createdAt: { type: Number, default: Date.now }
 }, { timestamps: true });
 
+const botSchema = new mongoose.Schema({
+  token: String,
+  name: String,
+  username: String,
+  lastSync: Number,
+  joinRate: { type: Number, default: 87 },
+  autoClean: { type: Boolean, default: false },
+  autoWelcome: { type: Boolean, default: false },
+  webhookActive: { type: Boolean, default: false }
+}, { timestamps: true });
+
 // Define Models
 const JoinEvent = mongoose.models.JoinEvent || mongoose.model("JoinEvent", joinEventSchema);
 const Group = mongoose.models.Group || mongoose.model("Group", groupSchema);
 const Broadcast = mongoose.models.Broadcast || mongoose.model("Broadcast", broadcastSchema);
 const InviteLink = mongoose.models.InviteLink || mongoose.model("InviteLink", inviteLinkSchema);
+const Bot = mongoose.models.Bot || mongoose.model("Bot", botSchema);
 
 // Global Error Handlers to prevent server crashes
 process.on('unhandledRejection', (reason, promise) => {
@@ -160,7 +173,8 @@ async function startServer() {
   const PORT = 3000;
 
   app.use(cors());
-  app.use(express.json());
+  app.use(express.json({ limit: '50mb' }));
+  app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
   // DB connection middleware with better diagnostic info
   app.use(async (req, res, next) => {
@@ -233,7 +247,8 @@ async function startServer() {
               chatId: jr.chat.id,
               chatTitle: jr.chat.title,
               timestamp: jr.date ? jr.date * 1000 : Date.now(),
-              is_bot: jr.from.is_bot
+              is_bot: jr.from.is_bot,
+              inviteLink: jr.invite_link?.invite_link
             });
             shouldSyncGroup = jr.chat;
           }
@@ -264,7 +279,8 @@ async function startServer() {
                 chatId: mu.chat.id,
                 chatTitle: mu.chat.title,
                 timestamp: mu.date ? mu.date * 1000 : Date.now(),
-                is_bot: mu.new_chat_member.user.is_bot
+                is_bot: mu.new_chat_member.user.is_bot,
+                inviteLink: mu.invite_link?.invite_link
               });
               shouldSyncGroup = mu.chat;
             } else if (!isMemberNow && wasMemberBefore) {
@@ -343,6 +359,8 @@ async function startServer() {
           }
 
           // 3. Deduplicate joins mathematically!
+          const welcomeMessagesToDelete: {chatId: string, messageId: string}[] = [];
+
           for (const ev of rawJoinsToAdd) {
              const cutoffLower = ev.timestamp - 120000; // Deduplicate within 2 mins
              const cutoffUpper = ev.timestamp + 120000;
@@ -366,25 +384,33 @@ async function startServer() {
                memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) + 1;
 
                if (autoWelcome && !ev.is_bot) {
-                 setTimeout(() => {
-                   const escapedName = (ev.userName || 'Awesome Member').toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-                   const text = `🎉 <b>Welcome to the Hub!</b> 🎉\n\nHey <a href="tg://user?id=${ev.userId}"><b>${escapedName}</b></a>, we're thrilled to have you here! ✨\n\n<i>Enjoy your stay, and keep it friendly!</i> 🚀`;
-                   fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-                     method: 'POST',
-                     headers: { 'Content-Type': 'application/json' },
-                     body: JSON.stringify({ chat_id: ev.chatId, text, parse_mode: 'HTML' })
-                   })
-                   .then((res: any) => res.json())
-                   .then((data: any) => {
-                     if (data.ok) {
-                       setTimeout(() => {
-                         fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${ev.chatId}&message_id=${data.result.message_id}`).catch(() => {});
-                        }, 59000); // 59 SECONDS
-                     }
-                   }).catch(() => {});
-                 }, 5000); // 5 SECONDS
+                  try {
+                    const escapedName = (ev.userName || 'Awesome Member').toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+                    const text = `🎉 <b>Welcome to the Hub!</b> 🎉\n\nHey <a href="tg://user?id=${ev.userId}"><b>${escapedName}</b></a>, we're thrilled to have you here! ✨\n\n<i>Enjoy your stay, and keep it friendly!</i> 🚀`;
+                    
+                    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ chat_id: ev.chatId, text, parse_mode: 'HTML' })
+                    });
+                    const data: any = await res.json();
+                    
+                    if (data.ok && data.result) {
+                      welcomeMessagesToDelete.push({ chatId: ev.chatId, messageId: data.result.message_id });
+                    }
+                  } catch (e) {}
                }
              }
+          }
+
+          // In standard express we can safely leave promises hanging, but 
+          // let's mirror Vercel standard timeouts here too
+          if (welcomeMessagesToDelete.length > 0) {
+             setTimeout(() => {
+               welcomeMessagesToDelete.forEach(msg => {
+                 fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${msg.chatId}&message_id=${msg.messageId}`).catch(() => {});
+               });
+             }, 12000); // Delete after 12 seconds
           }
 
           for (const [chatIdStr, diff] of Object.entries(memberChanges)) {
@@ -427,7 +453,8 @@ async function startServer() {
   app.post("/api/groups", async (req, res) => {
     try {
       const group = req.body;
-      await (Group as any).findOneAndUpdate({ id: group.id }, group, { upsert: true });
+      const { _id, ...groupData } = group;
+      await (Group as any).findOneAndUpdate({ id: group.id }, groupData, { upsert: true });
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to save group" });
@@ -440,11 +467,13 @@ async function startServer() {
       console.log(`[BulkUpdate] Received ${updates.length} group updates`);
       for (const g of updates) {
         console.log(`[BulkUpdate] Updating group ${g.id}, pinned: ${g.pinned}`);
-        await (Group as any).findOneAndUpdate({ id: g.id }, g, { upsert: true });
+        const { _id, ...groupData } = g;
+        await (Group as any).findOneAndUpdate({ id: g.id }, groupData, { upsert: true });
       }
       res.json({ success: true });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to update groups" });
+    } catch (error: any) {
+      console.error("[BulkUpdate] Global Error:", error);
+      res.status(500).json({ error: "Failed to update groups", details: error.message || error.toString() });
     }
   });
 
@@ -464,7 +493,8 @@ async function startServer() {
     try {
       const events = req.body;
       for (const ev of events) {
-        await (JoinEvent as any).findOneAndUpdate({ userId: ev.userId, timestamp: ev.timestamp }, ev, { upsert: true });
+        const { _id, ...eventData } = ev;
+        await (JoinEvent as any).findOneAndUpdate({ userId: ev.userId, timestamp: ev.timestamp }, eventData, { upsert: true });
       }
       res.json({ success: true });
     } catch (error) {
@@ -647,6 +677,45 @@ async function startServer() {
     } catch (error) {
       res.status(500).json({ error: "Failed to delete broadcast" });
     }
+  });
+
+  // Bot Management
+  app.get("/api/bot", async (req, res) => {
+    try {
+      const bot = await (Bot as any).findOne();
+      res.json(bot || {});
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch bot settings" });
+    }
+  });
+
+  app.post("/api/bot", async (req, res) => {
+    try {
+      const { token, name, username, joinRate, autoClean, autoWelcome, webhookActive } = req.body;
+      
+      const updateData: any = {};
+      if (token !== undefined) updateData.token = token;
+      if (name !== undefined) updateData.name = name;
+      if (username !== undefined) updateData.username = username;
+      if (joinRate !== undefined) updateData.joinRate = joinRate;
+      if (autoClean !== undefined) updateData.autoClean = autoClean;
+      if (autoWelcome !== undefined) updateData.autoWelcome = autoWelcome;
+      if (webhookActive !== undefined) updateData.webhookActive = webhookActive;
+
+      const bot = await (Bot as any).findOneAndUpdate({}, updateData, { upsert: true, new: true });
+      res.json({ success: true, bot });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to save bot settings" });
+    }
+  });
+
+  // Global Error Handler for API routes (catches Payload Too Large, etc.)
+  app.use((err: any, req: any, res: any, next: any) => {
+    if (req.path.startsWith('/api')) {
+      console.error("API Error middleware caught:", err);
+      return res.status(err.status || 500).json({ error: err.message || "Internal Server Error", details: err.toString() });
+    }
+    next(err);
   });
 
   // Vite middleware for development
