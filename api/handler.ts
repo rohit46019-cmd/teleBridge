@@ -11,8 +11,7 @@ const joinEventSchema = new mongoose.Schema({
   userName: String,
   chatId: Number,
   chatTitle: String,
-  timestamp: Number,
-  inviteLink: String
+  timestamp: Number
 }, { timestamps: true })
 
 const groupSchema = new mongoose.Schema({
@@ -42,40 +41,11 @@ const inviteLinkSchema = new mongoose.Schema({
   createdAt: { type: Number, default: Date.now }
 }, { timestamps: true })
 
-const botSchema = new mongoose.Schema({
-  token: String,
-  name: String,
-  username: String,
-  lastSync: Number,
-  joinRate: { type: Number, default: 87 },
-  autoClean: { type: Boolean, default: false },
-  autoWelcome: { type: Boolean, default: false },
-  webhookActive: { type: Boolean, default: false }
-}, { timestamps: true })
-
 // Define Models
 const JoinEvent = mongoose.models.JoinEvent || mongoose.model("JoinEvent", joinEventSchema)
 const Group = mongoose.models.Group || mongoose.model("Group", groupSchema)
 const Broadcast = mongoose.models.Broadcast || mongoose.model("Broadcast", broadcastSchema)
 const InviteLink = mongoose.models.InviteLink || mongoose.model("InviteLink", inviteLinkSchema)
-const Bot = mongoose.models.Bot || mongoose.model("Bot", botSchema)
-
-async function seedData() {
-  try {
-    const groupCount = await Group.countDocuments();
-    if (groupCount > 0) return;
-
-    console.log("Database empty on Vercel, seeding default groups...");
-    const defaultGroups = [
-      { "id": "-1003698762401", "name": "GK & GS Brahmastra 4.0 Batch", "memberCount": 5, "description": "Synced Hub", "category": "Telegram", "image": "https://picsum.photos/seed/-1003698762401/200", "lastInteraction": 1774102797184, "interactionCount": 0, "pinned": false },
-      { "id": "-1003040206839", "name": "ɢᴀɢᴀɴ ᴘʀᴀᴛᴀᴘ", "memberCount": 19, "description": "Synced Hub", "category": "Telegram", "image": "https://picsum.photos/seed/-1003040206839/200", "lastInteraction": 1774101136444, "interactionCount": 0, "pinned": false }
-    ];
-    await Group.insertMany(defaultGroups as any[]);
-    console.log("Seeding successful");
-  } catch (e) {
-    console.error("Seeding failed on Vercel:", e);
-  }
-}
 
 let cachedConnection: typeof mongoose | null = null
 let isConnecting = false
@@ -110,10 +80,6 @@ async function connectDB() {
       dbName: 'telebridge_pro'
     })
     console.log("Connected to MongoDB successfully")
-    
-    // Seed data if needed
-    await seedData();
-    
     return conn
   } catch (error: any) {
     console.error("MongoDB connection error:", error.message)
@@ -125,14 +91,10 @@ async function connectDB() {
 
 const app = express()
 app.use(cors())
-app.use(express.json({ limit: '50mb' }))
-app.use(express.urlencoded({ limit: '50mb', extended: true }))
+app.use(express.json())
 
 // DB connection middleware with Vercel diagnostics
 app.use(async (req, res, next) => {
-  // Only require DB for actual API logic, excluding health check.
-  if (!req.path.startsWith('/api') || req.path === '/api/health') return next();
-
   try {
     await connectDB()
     next()
@@ -170,7 +132,7 @@ app.get("/api/groups", async (req, res) => {
 
 app.get("/api/events", async (req, res) => {
   try {
-    const events = await JoinEvent.find().sort({ timestamp: -1 }).limit(10000)
+    const events = await JoinEvent.find().sort({ timestamp: -1 }).limit(1000)
     res.json(events)
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch events" })
@@ -180,60 +142,46 @@ app.get("/api/events", async (req, res) => {
 app.post("/api/groups", async (req, res) => {
   try {
     const group = req.body
-    if (!group.id) return res.status(400).json({ error: "Group ID is required" });
-    const { _id, ...groupData } = group;
-    const result = await (Group as any).findOneAndUpdate({ id: group.id.toString() }, groupData, { upsert: true, new: true })
-    res.json({ success: true, group: result })
-  } catch (error: any) {
-    console.error(`[API] Group save error for ${req.body?.id}:`, error.message);
-    res.status(500).json({ error: "Failed to save group", details: error.message })
+    await (Group as any).findOneAndUpdate({ id: group.id }, group, { upsert: true })
+    res.json({ success: true })
+  } catch (error) {
+    res.status(500).json({ error: "Failed to save group" })
   }
 })
 
 app.put("/api/groups/bulk-update", async (req, res) => {
   try {
     const updates = req.body
-    if (!Array.isArray(updates)) return res.status(400).json({ error: "Updates must be an array" });
-    console.log(`[API] Bulk updating ${updates.length} groups`);
     for (const g of updates) {
-      if (g.id) {
-        const { _id, ...groupData } = g;
-        await (Group as any).findOneAndUpdate({ id: g.id.toString() }, groupData, { upsert: true })
-      }
+      await (Group as any).findOneAndUpdate({ id: g.id }, g, { upsert: true })
     }
     res.json({ success: true })
-  } catch (error: any) {
-    console.error("[API] Bulk update error:", error.message);
-    res.status(500).json({ error: "Failed to update groups", details: error.message })
+  } catch (error) {
+    res.status(500).json({ error: "Failed to update groups" })
   }
 })
 
 app.put("/api/groups/:id/interaction", async (req, res) => {
   try {
-    await (Group as any).findOneAndUpdate({ id: req.params.id.toString() }, { 
+    await (Group as any).findOneAndUpdate({ id: req.params.id }, { 
       lastInteraction: Date.now(),
       $inc: { interactionCount: 1 }
     })
     res.json({ success: true })
-  } catch (error: any) {
-    console.error(`[API] Interaction update error for ${req.params.id}:`, error.message);
-    res.status(500).json({ error: "Failed to update interaction", details: error.message })
+  } catch (error) {
+    res.status(500).json({ error: "Failed to update interaction" })
   }
 })
 
 app.post("/api/events", async (req, res) => {
   try {
     const events = req.body
-    if (!Array.isArray(events)) return res.status(400).json({ error: "Events must be an array" });
-    console.log(`[API] Saving ${events.length} events`);
     for (const ev of events) {
-      const { _id, ...evData } = ev;
-      await (JoinEvent as any).findOneAndUpdate({ userId: ev.userId, timestamp: ev.timestamp }, evData, { upsert: true })
+      await (JoinEvent as any).findOneAndUpdate({ userId: ev.userId, timestamp: ev.timestamp }, ev, { upsert: true })
     }
     res.json({ success: true })
-  } catch (error: any) {
-    console.error("[API] Events save error:", error.message);
-    res.status(500).json({ error: "Failed to save events", details: error.message })
+  } catch (error) {
+    res.status(500).json({ error: "Failed to save events" })
   }
 })
 
@@ -286,7 +234,7 @@ app.post("/api/broadcast", async (req, res) => {
 
     const broadcastRecord = await (Broadcast as any).create({ message, timestamp, sentTo: [] })
 
-    // Vercel background execution
+    // Vercel background execution (Fire and forget style)
     const sendBatch = async () => {
       const sendPromises = groups.map(async (group) => {
         try {
@@ -302,14 +250,14 @@ app.post("/api/broadcast", async (req, res) => {
       const results = await Promise.all(sendPromises)
       const sentTo = results.filter((r: any) => r.success).map((r: any) => ({ chatId: r.chatId, messageId: r.messageId }))
       await (Broadcast as any).findByIdAndUpdate(broadcastRecord._id, { sentTo })
-      return sentTo.length;
     }
 
-    const sentCount = await sendBatch()
+    // On Vercel, this might finish after the response if lucky, or get killed.
+    // However, we must respond to the client.
+    await sendBatch()
     
-    res.json({ success: true, sentCount, totalCount: groups.length, message: "Broadcast processed" })
+    res.json({ success: true, message: "Broadcast processed" })
   } catch (error: any) {
-    console.error("[API] Broadcast error:", error.message);
     res.status(500).json({ error: "Failed to broadcast message", details: error.message })
   }
 })
@@ -352,91 +300,6 @@ app.delete("/api/broadcast/:id", async (req, res) => {
   }
 })
 
-// Bot Management
-app.get("/api/bot", async (req, res) => {
-  try {
-    const bot = await (Bot as any).findOne()
-    res.json(bot || {})
-  } catch (error) {
-    res.status(500).json({ error: "Failed to fetch bot settings" })
-  }
-})
-
-app.post("/api/bot", async (req, res) => {
-  try {
-    const { token, name, username, joinRate, autoClean, autoWelcome, webhookActive } = req.body;
-    
-    // Create an object with the fields present in the request body to allow partial updates
-    const updateData: any = {};
-    if (token !== undefined) updateData.token = token;
-    if (name !== undefined) updateData.name = name;
-    if (username !== undefined) updateData.username = username;
-    if (joinRate !== undefined) updateData.joinRate = joinRate;
-    if (autoClean !== undefined) updateData.autoClean = autoClean;
-    if (autoWelcome !== undefined) updateData.autoWelcome = autoWelcome;
-    if (webhookActive !== undefined) updateData.webhookActive = webhookActive;
-
-    if (!updateData.token) {
-      // Find the first document to update if token is not sent, or we require token always?
-      // Since it's a singleton (updating {}), it's fine.
-    }
-    
-    const bot = await (Bot as any).findOneAndUpdate({}, updateData, { upsert: true, new: true })
-    res.json({ success: true, bot })
-  } catch (error) {
-    res.status(500).json({ error: "Failed to save bot settings" })
-  }
-})
-
-// Cron Job Sync (Every 24h)
-app.get("/api/cron/sync", async (req, res) => {
-  try {
-    // Basic auth check if needed (Vercel cron sends a specific header)
-    // if (req.headers['x-vercel-cron'] !== 'true') return res.status(401).end();
-
-    const bot = await (Bot as any).findOne()
-    if (!bot || !bot.token) return res.status(404).json({ error: "No bot token found for sync" })
-
-    const groups = await Group.find()
-    console.log(`[Sync] Starting daily sync for ${groups.length} groups`)
-
-    const syncResults = await Promise.allSettled(groups.map(async (group) => {
-      try {
-        const response = await fetch(`https://api.telegram.org/bot${bot.token}/getChat?chat_id=${group.id}`)
-        const data: any = await response.json()
-        if (data.ok) {
-          const chat = data.result;
-          const countRes = await fetch(`https://api.telegram.org/bot${bot.token}/getChatMemberCount?chat_id=${group.id}`)
-          const countData: any = await countRes.json()
-          
-          const updates: any = { 
-            memberCount: countData.ok ? countData.result : group.memberCount,
-            lastInteraction: Date.now()
-          };
-          
-          if (chat.title) updates.name = chat.title;
-          if (chat.description) updates.description = chat.description;
-
-          await (Group as any).findOneAndUpdate({ id: group.id }, updates)
-          return { id: group.id, success: true }
-        }
-      } catch (err) {}
-      return { id: group.id, success: false }
-    }))
-
-    await (Bot as any).updateOne({}, { lastSync: Date.now() })
-    
-    res.json({ 
-      success: true, 
-      processed: syncResults.length, 
-      timestamp: new Date().toISOString() 
-    })
-  } catch (error: any) {
-    console.error("[Sync] Cron error:", error.message)
-    res.status(500).json({ error: "Sync failed", details: error.message })
-  }
-})
-
 // Webhook Handler for 24/7 Join/Leave Cleanup & Welcome
 app.post("/api/webhook/:token", async (req, res) => {
   try {
@@ -464,8 +327,7 @@ app.post("/api/webhook/:token", async (req, res) => {
             chatId: jr.chat.id,
             chatTitle: jr.chat.title,
             timestamp: jr.date ? jr.date * 1000 : Date.now(),
-            is_bot: jr.from.is_bot,
-            inviteLink: jr.invite_link?.invite_link
+            is_bot: jr.from.is_bot
           });
           shouldSyncGroup = jr.chat;
         }
@@ -496,8 +358,7 @@ app.post("/api/webhook/:token", async (req, res) => {
               chatId: mu.chat.id,
               chatTitle: mu.chat.title,
               timestamp: mu.date ? mu.date * 1000 : Date.now(),
-              is_bot: mu.new_chat_member.user.is_bot,
-              inviteLink: mu.invite_link?.invite_link
+              is_bot: mu.new_chat_member.user.is_bot
             });
             shouldSyncGroup = mu.chat;
           } else if (!isMemberNow && wasMemberBefore) {
@@ -513,13 +374,6 @@ app.post("/api/webhook/:token", async (req, res) => {
           const chatTitle = msg.chat.title;
           const chatIdStr = chatId.toString();
           shouldSyncGroup = msg.chat;
-
-          // Auto-Cleanup logic for System Messages
-          if (autoClean && (msg.new_chat_members || msg.left_chat_member || msg.new_chat_title || msg.new_chat_photo || msg.delete_chat_photo)) {
-            await fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${chatId}&message_id=${msg.message_id}`, {
-              signal: AbortSignal.timeout(5000)
-            }).catch(() => {});
-          }
 
           if (msg.new_chat_members) {
             msg.new_chat_members.forEach((newUser: any) => {
@@ -574,8 +428,6 @@ app.post("/api/webhook/:token", async (req, res) => {
         }
 
         // 3. Deduplicate joins mathematically!
-        const welcomeMessagesToDelete: {chatId: string, messageId: string}[] = [];
-
         for (const ev of rawJoinsToAdd) {
            const cutoffLower = ev.timestamp - 120000;
            const cutoffUpper = ev.timestamp + 120000;
@@ -598,31 +450,33 @@ app.post("/api/webhook/:token", async (req, res) => {
              memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) + 1;
 
              if (autoWelcome && !ev.is_bot) {
-                 try {
-                   const escapedName = (ev.userName || 'Awesome Member').toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-                   const text = `🎉 <b>Welcome to the Hub!</b> 🎉\n\nHey <a href="tg://user?id=${ev.userId}"><b>${escapedName}</b></a>, we're thrilled to have you here! ✨\n\n<i>Enjoy your stay, and keep it friendly!</i> 🚀`;
-                   
-                   const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-                     method: 'POST',
-                     headers: { 'Content-Type': 'application/json' },
-                     body: JSON.stringify({ chat_id: ev.chatId, text, parse_mode: 'HTML' })
-                   });
-                   const data: any = await res.json();
-                   
-                   if (data.ok && data.result) {
-                     welcomeMessagesToDelete.push({ chatId: ev.chatId, messageId: data.result.message_id });
-                   }
-                 } catch (e) {}
+                // Background welcome handler for Vercel
+                const handleWelcome = async () => {
+                  try {
+                    await new Promise(r => setTimeout(r, 5000)); // 5 SECONDS DELAY
+                    const escapedName = (ev.userName || 'Awesome Member').toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+                    const text = `🎉 <b>Welcome to the Hub!</b> 🎉\n\nHey <a href="tg://user?id=${ev.userId}"><b>${escapedName}</b></a>, we're thrilled to have you here! ✨\n\n<i>Enjoy your stay, and keep it friendly!</i> 🚀`;
+                    
+                    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ chat_id: ev.chatId, text, parse_mode: 'HTML' })
+                    });
+                    const data: any = await res.json();
+                    
+                    if (data.ok && data.result) {
+                      await new Promise(r => setTimeout(r, 59000)); // 59 SECONDS DELAY
+                      await fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${ev.chatId}&message_id=${data.result.message_id}`).catch(() => {});
+                    }
+                  } catch (e) {}
+                };
+                
+                // IMPORTANT: In Vercel serverless, we MUST await this 
+                // or the function ends and kills the timer.
+                // We increase the maxDuration in vercel.json to compensate.
+                await handleWelcome();
              }
            }
-        }
-
-        // Wait a short duration, then delete welcome messages to keep under Vercel lambda limits
-        if (welcomeMessagesToDelete.length > 0) {
-           await new Promise(r => setTimeout(r, 12000)); // 12 seconds
-           await Promise.allSettled(welcomeMessagesToDelete.map(msg => 
-             fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${msg.chatId}&message_id=${msg.messageId}`).catch(() => {})
-           ));
         }
 
         for (const [chatIdStr, diff] of Object.entries(memberChanges)) {
@@ -641,15 +495,6 @@ app.post("/api/webhook/:token", async (req, res) => {
     console.error("Webhook route error:", err);
     res.status(200).json({ ok: true }); // Always 200 for TG
   }
-});
-
-// Global Error Handler for API routes (catches Payload Too Large, etc.)
-app.use((err: any, req: any, res: any, next: any) => {
-  if (req.path.startsWith('/api')) {
-    console.error("API Error middleware caught:", err);
-    return res.status(err.status || 500).json({ error: err.message || "Internal Server Error", details: err.toString() });
-  }
-  next(err);
 });
 
 export default app

@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import Sidebar from './components/Sidebar.tsx';
-import GroupCard from './components/GroupCard.tsx';
-import InviteModal from './components/InviteModal.tsx';
-import ConfirmationModal from './components/ConfirmationModal.tsx';
-import { Icons } from './constants.tsx';
-import { TelegramGroup, JoinEvent, BannedUser } from './types.ts';
-import { verifyBotToken, getChatDetails, TelegramBotInfo, getChatMemberCount, getRecentUpdates, kickChatMember, banMember, unbanMember, deleteMessage, setWebhook, deleteWebhook } from './services/telegramService.ts';
+import Sidebar from '../components/Sidebar.tsx';
+import GroupCard from '../components/GroupCard.tsx';
+import InviteModal from '../components/InviteModal.tsx';
+import ConfirmationModal from '../components/ConfirmationModal.tsx';
+import { Icons } from '../constants.tsx';
+import { TelegramGroup, JoinEvent, BannedUser } from '../types.ts';
+import { verifyBotToken, getChatDetails, TelegramBotInfo, getChatMemberCount, getRecentUpdates, kickChatMember, banMember, unbanMember, deleteMessage, setWebhook, deleteWebhook } from '../services/telegramService.ts';
 import { 
   AreaChart, 
   Area, 
@@ -180,7 +180,7 @@ const App: React.FC = () => {
   const [filterOption, setFilterOption] = useState<'mostMembers' | 'leastMembers' | 'frequent' | 'recent' | 'newAdded' | 'activeToday'>('recent');
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }));
-  const [auditSubTab, setAuditSubTab] = useState<'audit' | 'groups' | 'blocked'>('audit');
+  const [auditSubTab, setAuditSubTab] = useState<'audit' | 'blocked'>('audit');
   const [updates, setUpdates] = useState<any[]>([]);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const saved = localStorage.getItem('theme');
@@ -284,79 +284,6 @@ const App: React.FC = () => {
   const [joinRate, setJoinRate] = useState(() => {
     return Number(localStorage.getItem('tg_join_rate')) || 87;
   });
-  const [selectedRevenueMonth, setSelectedRevenueMonth] = useState(() => new Date().toISOString().slice(0, 7)); // "YYYY-MM"
-
-  const earningStats = useMemo(() => {
-    const now = new Date();
-    const currentMonth = now.getMonth();
-    const currentYear = now.getFullYear();
-
-    const lastMonth = currentMonth === 0 ? 11 : currentMonth - 1;
-    const lastMonthYear = currentMonth === 0 ? currentYear - 1 : currentYear;
-
-    const sevenDaysAgo = new Date(now);
-    sevenDaysAgo.setDate(now.getDate() - 7);
-    sevenDaysAgo.setHours(0, 0, 0, 0);
-
-    let total = 0;
-    let thisMonth = 0;
-    let lastMonthCount = 0; // count of same days last month
-    let lastMonthTotal = 0; // total of whole last month
-    let last7Days = 0;
-
-    const currentDayOfMonth = now.getDate();
-
-    joinEvents.forEach(event => {
-      total++;
-      const d = new Date(event.timestamp);
-      
-      const evtMonth = d.getMonth();
-      const evtYear = d.getFullYear();
-
-      if (evtMonth === currentMonth && evtYear === currentYear) {
-        thisMonth++;
-      }
-      if (evtMonth === lastMonth && evtYear === lastMonthYear) {
-        lastMonthTotal++;
-        if (d.getDate() <= currentDayOfMonth) {
-          lastMonthCount++;
-        }
-      }
-      if (d >= sevenDaysAgo) {
-        last7Days++;
-      }
-    });
-
-    const getTrend = (curr: number, prev: number) => {
-      if (prev === 0) return curr > 0 ? 100 : 0;
-      return Math.round(((curr - prev) / prev) * 100);
-    };
-
-    return {
-      total: total * joinRate,
-      thisMonth: thisMonth * joinRate,
-      lastMonth: lastMonthTotal * joinRate,
-      lastMonthSamePeriod: lastMonthCount * joinRate,
-      last7Days: last7Days * joinRate,
-      monthTrend: getTrend(thisMonth, lastMonthCount)
-    };
-  }, [joinEvents, joinRate]);
-
-  const selectedMonthRevenue = useMemo(() => {
-    if (!selectedRevenueMonth || !joinEvents.length) return 0;
-    const [yearStr, monthStr] = selectedRevenueMonth.split('-');
-    const year = parseInt(yearStr);
-    const month = parseInt(monthStr) - 1;
-
-    let count = 0;
-    joinEvents.forEach(event => {
-      const d = new Date(event.timestamp);
-      if (d.getFullYear() === year && d.getMonth() === month) {
-        count++;
-      }
-    });
-    return count * joinRate;
-  }, [joinEvents, joinRate, selectedRevenueMonth]);
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
@@ -592,22 +519,6 @@ const App: React.FC = () => {
     localStorage.setItem('tg_join_rate', joinRate.toString());
   }, [joinRate]);
 
-  useEffect(() => {
-    if (token && token !== DEFAULT_TOKEN) {
-      fetch('/api/bot', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          token,
-          joinRate,
-          autoClean: autoCleanServiceMessages,
-          autoWelcome,
-          webhookActive
-        })
-      }).catch(e => console.error("Failed to sync bot settings:", e));
-    }
-  }, [joinRate, autoCleanServiceMessages, autoWelcome, webhookActive, token]);
-
   const handleShareApp = () => {
     const url = window.location.href;
     if (navigator.share) {
@@ -665,33 +576,12 @@ const App: React.FC = () => {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 15000); 
 
-        const [groupsRes, eventsRes, botRes] = await Promise.all([
+        const [groupsRes, eventsRes] = await Promise.all([
           fetch('/api/groups', { signal: controller.signal, headers: { 'Accept': 'application/json' } }),
-          fetch('/api/events', { signal: controller.signal, headers: { 'Accept': 'application/json' } }),
-          fetch('/api/bot', { signal: controller.signal, headers: { 'Accept': 'application/json' } })
+          fetch('/api/events', { signal: controller.signal, headers: { 'Accept': 'application/json' } })
         ]);
         
         clearTimeout(timeoutId);
-
-        // Process Bot Info if available
-        if (botRes.ok) {
-          const botData = await botRes.json();
-          if (botData.token) {
-            setToken(botData.token);
-            setBotInfo({
-              id: 0,
-              is_bot: true,
-              first_name: botData.name || 'Bot',
-              username: botData.username || ''
-            });
-            localStorage.setItem('tg_bot_token', botData.token);
-            
-            if (botData.joinRate !== undefined) setJoinRate(botData.joinRate);
-            if (botData.autoClean !== undefined) setAutoCleanServiceMessages(botData.autoClean);
-            if (botData.autoWelcome !== undefined) setAutoWelcome(botData.autoWelcome);
-            if (botData.webhookActive !== undefined) setWebhookActive(botData.webhookActive);
-          }
-        }
 
         if (!groupsRes.ok) {
           const errorData = await groupsRes.json().catch(() => ({}));
@@ -917,13 +807,12 @@ const App: React.FC = () => {
     const syncPending = async () => {
       if (pendingJoins.length > 0) {
         try {
-          const chunk = pendingJoins.slice(0, 50);
           const res = await fetch('/api/events', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(chunk)
+            body: JSON.stringify(pendingJoins)
           });
-          if (res.ok) setPendingJoins(prev => prev.slice(50));
+          if (res.ok) setPendingJoins([]);
         } catch (e) {
           console.warn("Retrying joins sync later...");
         }
@@ -931,13 +820,12 @@ const App: React.FC = () => {
 
       if (pendingGroups.length > 0) {
         try {
-          const chunk = pendingGroups.slice(0, 50);
           const res = await fetch('/api/groups/bulk-update', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(chunk)
+            body: JSON.stringify(pendingGroups)
           });
-          if (res.ok) setPendingGroups(prev => prev.slice(50));
+          if (res.ok) setPendingGroups([]);
         } catch (e) {
           console.warn("Retrying groups sync later...");
         }
@@ -977,36 +865,22 @@ const App: React.FC = () => {
     try {
       // Sync Groups
       if (pendingGroups.length > 0) {
-        for (let i = 0; i < pendingGroups.length; i += 50) {
-          const chunk = pendingGroups.slice(i, i + 50);
-          const res = await fetch('/api/groups/bulk-update', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(chunk)
-          });
-          if (!res.ok) {
-             const errorData = await res.json().catch(() => ({}));
-             const defaultMsg = res.status === 413 ? "Payload too large. Syncing too much data." : "Groups sync failed";
-             throw new Error(errorData.details || errorData.error || defaultMsg);
-          }
-        }
+        const res = await fetch('/api/groups/bulk-update', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(pendingGroups)
+        });
+        if (!res.ok) throw new Error("Groups sync failed");
       }
 
       // Sync Joins
       if (pendingJoins.length > 0) {
-        for (let i = 0; i < pendingJoins.length; i += 50) {
-          const chunk = pendingJoins.slice(i, i + 50);
-          const res = await fetch('/api/events', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(chunk)
-          });
-          if (!res.ok) {
-             const errorData = await res.json().catch(() => ({}));
-             const defaultMsg = res.status === 413 ? "Payload too large. Syncing too much data." : "Joins sync failed";
-             throw new Error(errorData.details || errorData.error || defaultMsg);
-          }
-        }
+        const res = await fetch('/api/events', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(pendingJoins)
+        });
+        if (!res.ok) throw new Error("Joins sync failed");
       }
 
       setPendingGroups([]);
@@ -1084,18 +958,6 @@ const App: React.FC = () => {
       setBotInfo(info);
       setToken(testToken);
       localStorage.setItem('tg_bot_token', testToken);
-      
-      // Save bot info to Database for server-side persistence and cron sync
-      await fetch('/api/bot', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          token: testToken,
-          name: info.first_name,
-          username: info.username
-        })
-      }).catch(e => console.error("Failed to save bot info to DB:", e));
-
       discoverGroupsAndJoins(testToken);
     } catch (err: any) {
       setBotInfo(null);
@@ -1583,27 +1445,13 @@ const App: React.FC = () => {
     reader.onload = (event) => {
       try {
         const data = JSON.parse(event.target?.result as string);
-        if (data.joinEvents) {
-          setJoinEvents(data.joinEvents);
-          setPendingJoins(prev => {
-            const combined = [...prev, ...data.joinEvents];
-            return combined.filter((v, i, a) => 
-              a.findIndex(t => t.userId === v.userId && t.timestamp === v.timestamp) === i
-            );
-          });
-        }
-        if (data.groups) {
-          setGroups(data.groups);
-          setPendingGroups(prev => {
-            const combined = [...prev, ...data.groups];
-            return combined.filter((v, i, a) => a.findIndex(t => t.id === v.id) === i);
-          });
-        }
+        if (data.joinEvents) setJoinEvents(data.joinEvents);
+        if (data.groups) setGroups(data.groups);
         if (data.token) {
           setToken(data.token);
           handleVerify(data.token);
         }
-        showNotification('Data imported! Click Sync to update Database.', 'success');
+        showNotification('Data imported!', 'success');
       } catch (err) { showNotification('Import failed.', 'alert'); }
     };
     reader.readAsText(file);
@@ -1869,14 +1717,10 @@ const App: React.FC = () => {
                       <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm"><Icons.TrendingUp size={20} className="text-white" strokeWidth={3} /></div>
                       <button 
                         onClick={() => setHideRevenue(!hideRevenue)}
-                        className="p-2.5 bg-white/20 hover:bg-white/30 rounded-2xl transition-all shadow-lg flex items-center justify-center backdrop-blur-md border border-white/30"
+                        className="p-2 hover:bg-white/10 rounded-full transition-colors"
                         title={hideRevenue ? "Show Revenue" : "Hide Revenue"}
                       >
-                        {hideRevenue ? (
-                          <Icons.EyeOff size={20} className="text-white" />
-                        ) : (
-                          <Icons.Eye size={20} className="text-white" />
-                        )}
+                        {hideRevenue ? <Icons.EyeOff size={16} className="text-white/70" /> : <Icons.Eye size={16} className="text-white/70" />}
                       </button>
                     </div>
                     <p className="text-[10px] font-black text-rose-100 uppercase tracking-widest mb-1 relative z-10">Today's Revenue</p>
@@ -2019,12 +1863,6 @@ const App: React.FC = () => {
                   <Icons.Activity size={14} /> Audit Log
                 </button>
                 <button 
-                  onClick={() => setAuditSubTab('groups')}
-                  className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${auditSubTab === 'groups' ? 'bg-white dark:bg-slate-700 text-purple-600 dark:text-purple-400 shadow-lg scale-[1.02]' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
-                >
-                  <Icons.Users size={14} /> Group Members
-                </button>
-                <button 
                   onClick={() => setAuditSubTab('blocked')}
                   className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${auditSubTab === 'blocked' ? 'bg-white dark:bg-slate-700 text-rose-600 dark:text-rose-400 shadow-lg scale-[1.02]' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
                 >
@@ -2059,7 +1897,6 @@ const App: React.FC = () => {
                               <th className="px-1 py-2 text-[8px] font-black text-slate-400 uppercase tracking-widest text-center">SL</th>
                               <th className="px-1 py-2 text-[8px] font-black text-slate-400 uppercase tracking-widest">Identity</th>
                               <th className="px-1 py-2 text-[8px] font-black text-slate-400 uppercase tracking-widest">Target</th>
-                              <th className="px-1 py-2 text-[8px] font-black text-slate-400 uppercase tracking-widest">Source (Link)</th>
                               <th className="px-1 py-2 text-[8px] font-black text-slate-400 uppercase tracking-widest">Time</th>
                               <th className="px-1 py-2 text-[8px] font-black text-slate-400 uppercase tracking-widest text-right">Action</th>
                             </tr>
@@ -2074,7 +1911,6 @@ const App: React.FC = () => {
                                    </div>
                                 </td>
                                 <td className="px-1 py-2 text-[8px] font-bold text-slate-500 truncate max-w-[80px]">{e.chatTitle.substring(0, 12)}</td>
-                                <td className="px-1 py-2 text-[8px] font-mono text-indigo-400/80 truncate max-w-[50px]">{e.inviteLink ? e.inviteLink.split('/').pop() : '-'}</td>
                                 <td className="px-1 py-2 text-[8px] font-mono text-slate-400">{formatTime12h(e.timestamp).replace(' ', '')}</td>
                                 <td className="px-1 py-2 text-right">
                                   <div className="flex justify-end gap-1">
@@ -2093,34 +1929,6 @@ const App: React.FC = () => {
                      </div>
                   </div>
                 </>
-              ) : auditSubTab === 'groups' ? (
-                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2.5rem] overflow-hidden shadow-xl border-b-8 border-slate-200 dark:border-slate-800">
-                    <div className="p-4 border-b border-slate-100 dark:divide-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex justify-between items-center">
-                      <div>
-                        <h2 className="text-lg font-black uppercase tracking-tight">Communities / Groups</h2>
-                        <p className="text-[10px] font-bold text-slate-500 mt-0.5 uppercase tracking-widest">Total members across all groups: {groups.reduce((acc, g) => acc + (g.memberCount || 0), 0)}</p>
-                      </div>
-                    </div>
-                    
-                    <div className="p-0 overflow-x-auto max-h-[60vh] custom-scrollbar">
-                       <table className="w-full text-left">
-                         <thead className="sticky top-0 bg-slate-50 dark:bg-slate-950 backdrop-blur-md z-10">
-                           <tr>
-                             <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Group</th>
-                             <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Members</th>
-                           </tr>
-                         </thead>
-                         <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                           {[...groups].sort((a, b) => (b.memberCount || 0) - (a.memberCount || 0)).map((g, idx) => (
-                             <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
-                               <td className="px-4 py-3 text-sm font-bold text-slate-700 dark:text-slate-300">{g.name}</td>
-                               <td className="px-4 py-3 text-sm font-bold text-slate-900 dark:text-white text-right">{g.memberCount || 0}</td>
-                             </tr>
-                           ))}
-                         </tbody>
-                       </table>
-                    </div>
-                </div>
               ) : (
                 <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2.5rem] overflow-hidden shadow-xl border-b-8 border-slate-200 dark:border-slate-800">
                     <div className="p-4 border-b border-slate-100 dark:divide-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
@@ -2337,16 +2145,7 @@ const App: React.FC = () => {
                     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2.5rem] p-6 shadow-xl">
                       <div className="flex items-center justify-between mb-4">
                         <div>
-                          <div className="flex items-center gap-3">
-                            <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">Revenue Analysis</h3>
-                            <button 
-                              onClick={() => setHideRevenue(!hideRevenue)}
-                              className="p-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-all"
-                              title={hideRevenue ? "Show Revenue" : "Hide Revenue"}
-                            >
-                              {hideRevenue ? <Icons.EyeOff size={14} className="text-slate-500" /> : <Icons.Eye size={14} className="text-slate-500" />}
-                            </button>
-                          </div>
+                          <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">Revenue Analysis</h3>
                           <p className="text-[10px] font-bold text-slate-500 uppercase mt-0.5">
                             {analyticsRange === 'CUSTOM' ? 'Custom Period' : `Last ${revenueDays} Days`}
                           </p>
@@ -2365,7 +2164,7 @@ const App: React.FC = () => {
                           </div>
                         )}
                       </div>
-                      <div className={`h-[100px] w-full -ml-4 transition-all duration-500 ${hideRevenue ? 'blur-lg opacity-40 select-none pointer-events-none' : ''}`}>
+                      <div className="h-[100px] w-full -ml-4">
                         <ResponsiveContainer width="100%" height="100%">
                           <AreaChart data={revenueAnalysis.data} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
                             <defs>
@@ -2381,9 +2180,7 @@ const App: React.FC = () => {
                                   return (
                                     <div className="bg-slate-900 text-white p-2 rounded-lg text-[10px] font-black border border-white/10 shadow-2xl">
                                       <p className="opacity-60">{new Date(payload[0].payload.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</p>
-                                      <p className="text-indigo-400 text-xs">
-                                        {hideRevenue ? "₹****" : `₹${payload[0].value?.toLocaleString()}`}
-                                      </p>
+                                      <p className="text-indigo-400 text-xs">₹{payload[0].value?.toLocaleString()}</p>
                                     </div>
                                   );
                                 }
@@ -2405,75 +2202,15 @@ const App: React.FC = () => {
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
-                      <div className="col-span-2 bg-gradient-to-br from-indigo-900 via-slate-900 to-black p-6 rounded-[2rem] text-white shadow-xl relative overflow-hidden">
-                        <div className="absolute top-0 right-0 w-48 h-48 bg-indigo-500/20 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none"></div>
-                        <div className="relative z-10 flex flex-col gap-6">
-                           <div className="flex justify-between items-start">
-                             <div>
-                               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-300 opacity-80 mb-1">Total Earning</p>
-                               <p className={`text-4xl font-black mt-1 transition-all ${hideRevenue ? 'blur-md select-none' : ''}`}>
-                                 {hideRevenue ? "₹8,88,888" : `₹${earningStats.total.toLocaleString()}`}
-                               </p>
-                             </div>
-                             <div className="bg-white/5 rounded-2xl p-4 text-right backdrop-blur-md border border-white/5">
-                                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-200 opacity-80 mb-1">Last 7 Days</p>
-                                <p className={`text-xl font-black mt-1 text-emerald-400 transition-all ${hideRevenue ? 'blur-sm select-none' : ''}`}>
-                                  {hideRevenue ? "₹88,888" : `₹${earningStats.last7Days.toLocaleString()}`}
-                                </p>
-                             </div>
-                           </div>
-
-                           <div className="grid grid-cols-2 gap-4 pt-4 border-t border-white/10">
-                              <div>
-                                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-300 opacity-80 mb-1">This Month</p>
-                                <div className="flex items-center gap-3">
-                                  <p className={`text-2xl font-black transition-all ${hideRevenue ? 'blur-sm select-none' : ''}`}>
-                                    {hideRevenue ? "₹88,888" : `₹${earningStats.thisMonth.toLocaleString()}`}
-                                  </p>
-                                  {!hideRevenue && (
-                                    <span className={`text-[10px] font-bold px-2 py-1 rounded-full whitespace-nowrap ${earningStats.monthTrend >= 0 ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'}`}>
-                                      {earningStats.monthTrend >= 0 ? '↑' : '↓'} {Math.abs(earningStats.monthTrend)}%
-                                    </span>
-                                  )}
-                                </div>
-                                <p className="text-[9px] text-indigo-200 mt-2 opacity-60 font-medium">
-                                  vs {hideRevenue ? "₹88,888" : `₹${earningStats.lastMonth.toLocaleString()}`} last month
-                                </p>
-                              </div>
-
-                              <div className="flex flex-col justify-end items-end">
-                                <div className="bg-black/40 p-3 rounded-2xl border border-white/10 w-full text-right h-full flex flex-col justify-between">
-                                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-300 opacity-80 mb-2">Month Explorer</p>
-                                  <div className="flex flex-col items-end gap-2 mt-auto">
-                                    <input 
-                                      type="month" 
-                                      value={selectedRevenueMonth}
-                                      onChange={(e) => setSelectedRevenueMonth(e.target.value)}
-                                      className="[color-scheme:dark] bg-white/5 hover:bg-white/10 focus:bg-white/20 text-white text-xs font-bold border border-white/10 rounded-xl px-2.5 py-1.5 outline-none transition-all w-full max-w-[140px] text-right cursor-pointer"
-                                    />
-                                    <p className={`text-xl font-black text-blue-400 transition-all ${hideRevenue ? 'blur-sm select-none' : ''}`}>
-                                      {hideRevenue ? "₹88,888" : `₹${selectedMonthRevenue.toLocaleString()}`}
-                                    </p>
-                                  </div>
-                                </div>
-                              </div>
-                           </div>
-                        </div>
-                      </div>
-
                       <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-5 rounded-[2rem] text-white shadow-lg">
                         <p className="text-[8px] font-black uppercase tracking-[0.2em] opacity-70 mb-1">Highest Income</p>
                         <p className="text-xs font-black truncate">{revenueAnalysis.highest ? new Date(revenueAnalysis.highest.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : 'N/A'}</p>
-                        <p className={`text-lg font-black mt-1 transition-all ${hideRevenue ? 'blur-sm select-none' : ''}`}>
-                          {hideRevenue ? "₹88,888" : `₹${revenueAnalysis.highest?.revenue.toLocaleString() || 0}`}
-                        </p>
+                        <p className="text-lg font-black mt-1">₹{revenueAnalysis.highest?.revenue.toLocaleString() || 0}</p>
                       </div>
                       <div className="bg-white dark:bg-slate-800 p-5 rounded-[2rem] border border-slate-200 dark:border-slate-700 shadow-lg">
                         <p className="text-[8px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">Lowest Income</p>
                         <p className="text-xs font-black text-slate-900 dark:text-white truncate">{revenueAnalysis.lowest ? new Date(revenueAnalysis.lowest.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : 'N/A'}</p>
-                        <p className={`text-lg font-black text-slate-900 dark:text-white mt-1 transition-all ${hideRevenue ? 'blur-sm select-none' : ''}`}>
-                          {hideRevenue ? "₹88,888" : `₹${revenueAnalysis.lowest?.revenue.toLocaleString() || 0}`}
-                        </p>
+                        <p className="text-lg font-black text-slate-900 dark:text-white mt-1">₹{revenueAnalysis.lowest?.revenue.toLocaleString() || 0}</p>
                       </div>
                     </div>
                   </div>
@@ -2524,26 +2261,6 @@ const App: React.FC = () => {
                             className={`w-10 h-5 rounded-full transition-all relative ${autoWelcome ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'}`}
                           >
                             <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${autoWelcome ? 'left-6' : 'left-1'}`} />
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-800">
-                        <div>
-                          <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">
-                            Privacy Mode
-                          </h4>
-                          <p className="text-[9px] text-slate-500 font-bold">Hide income & sensitive stats</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className={`text-[8px] font-black ${hideRevenue ? 'text-blue-500' : 'text-slate-400'}`}>
-                            {hideRevenue ? 'ACTIVE' : 'OFF'}
-                          </span>
-                          <button 
-                            onClick={() => setHideRevenue(!hideRevenue)}
-                            className={`w-10 h-5 rounded-full transition-all relative ${hideRevenue ? 'bg-blue-500' : 'bg-slate-300 dark:bg-slate-700'}`}
-                          >
-                            <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${hideRevenue ? 'left-6' : 'left-1'}`} />
                           </button>
                         </div>
                       </div>

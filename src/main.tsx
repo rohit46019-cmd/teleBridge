@@ -1,4 +1,3 @@
-
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.tsx';
@@ -17,5 +16,3 @@ root.render(
     </ErrorBoundary>
   </React.StrictMode>
 );
-
-// PWA Service Worker Registration is handled by vite-plugin-pwa
