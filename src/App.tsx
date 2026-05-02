@@ -280,7 +280,10 @@ const App: React.FC = () => {
   };
   const [analysisEndDate, setAnalysisEndDate] = useState<string>('');
   const [settingsSubTab, setSettingsSubTab] = useState<'charts' | 'config'>('charts');
-  const [revenueDays, setRevenueDays] = useState(14);
+  const [revenueOption, setRevenueOption] = useState<number | { month: number, year: number }>(14);
+  const [isPickerOpen, setIsPickerOpen] = useState(false);
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [joinRate, setJoinRate] = useState(() => {
     return Number(localStorage.getItem('tg_join_rate')) || 87;
   });
@@ -414,10 +417,16 @@ const App: React.FC = () => {
     } else {
       const now = new Date();
       startDate = new Date();
-      startDate.setDate(now.getDate() - revenueDays + 1);
-      startDate.setHours(0, 0, 0, 0);
       endDate = new Date();
-      endDate.setHours(23, 59, 59, 999);
+      
+      if (typeof revenueOption === 'number') {
+        startDate.setDate(now.getDate() - revenueOption + 1);
+        startDate.setHours(0, 0, 0, 0);
+        endDate.setHours(23, 59, 59, 999);
+      } else {
+        startDate = new Date(revenueOption.year, revenueOption.month, 1);
+        endDate = new Date(revenueOption.year, revenueOption.month + 1, 0, 23, 59, 59, 999);
+      }
     }
 
     const dataMap: Record<string, number> = {};
@@ -445,7 +454,7 @@ const App: React.FC = () => {
     });
 
     return { data, highest, lowest };
-  }, [joinEvents, joinRate, revenueDays, analyticsRange, analysisStartDate, analysisEndDate]);
+  }, [joinEvents, joinRate, revenueOption, analyticsRange, analysisStartDate, analysisEndDate]);
 
   useEffect(() => {
     lastUpdateIdRef.current = lastUpdateId;
@@ -2147,57 +2156,48 @@ const App: React.FC = () => {
                         <div>
                           <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">Revenue Analysis</h3>
                           <p className="text-[10px] font-bold text-slate-500 uppercase mt-0.5">
-                            {analyticsRange === 'CUSTOM' ? 'Custom Period' : `Last ${revenueDays} Days`}
+                            {analyticsRange === 'CUSTOM' ? 'Custom Period' : (
+                              typeof revenueOption === 'number' 
+                                ? `Last ${revenueOption} Days` 
+                                : `${new Date(0, revenueOption.month).toLocaleString('default', { month: 'short' })} ${revenueOption.year}`
+                            )}
                           </p>
                         </div>
                         {analyticsRange !== 'CUSTOM' && (
-                          <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
-                            {([7, 14, 30, 90] as const).map(days => (
+                          <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl items-center gap-1">
+                            {[7, 14, 30, 90].map(days => (
                               <button
                                 key={days}
-                                onClick={() => setRevenueDays(days)}
-                                className={`px-2.5 py-1 text-[8px] font-black uppercase rounded-lg transition-all ${revenueDays === days ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                                onClick={() => setRevenueOption(days)}
+                                className={`px-2.5 py-1 text-[8px] font-black uppercase rounded-lg transition-all ${revenueOption === days ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
                               >
                                 {days}D
                               </button>
                             ))}
+                            <button
+                              onClick={() => setIsPickerOpen(!isPickerOpen)}
+                              className={`px-2.5 py-1 text-[8px] font-black uppercase rounded-lg transition-all ${isPickerOpen ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                            >
+                              Picker
+                            </button>
+                          </div>
+                        )}
+                        {isPickerOpen && (
+                          <div className="absolute right-6 mt-2 p-3 bg-white dark:bg-slate-900 shadow-xl border border-slate-200 dark:border-slate-800 rounded-xl z-20 flex gap-2">
+                             <select value={selectedMonth} onChange={e => setSelectedMonth(Number(e.target.value))} className="text-xs bg-transparent">
+                               {[...Array(12).keys()].map(m => <option key={m} value={m}>{new Date(0, m).toLocaleString('default', { month: 'short' })}</option>)}
+                             </select>
+                             <select value={selectedYear} onChange={e => setSelectedYear(Number(e.target.value))} className="text-xs bg-transparent">
+                               {[2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
+                             </select>
+                             <button onClick={() => { setRevenueOption({ month: selectedMonth, year: selectedYear }); setIsPickerOpen(false); }} className="text-[8px] bg-indigo-600 text-white px-2 rounded">Set</button>
                           </div>
                         )}
                       </div>
-                      <div className="h-[100px] w-full -ml-4">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <AreaChart data={revenueAnalysis.data} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
-                            <defs>
-                              <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3}/>
-                                <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
-                              </linearGradient>
-                            </defs>
-                            <XAxis dataKey="date" hide />
-                            <Tooltip 
-                              content={({ active, payload }) => {
-                                if (active && payload && payload.length) {
-                                  return (
-                                    <div className="bg-slate-900 text-white p-2 rounded-lg text-[10px] font-black border border-white/10 shadow-2xl">
-                                      <p className="opacity-60">{new Date(payload[0].payload.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</p>
-                                      <p className="text-indigo-400 text-xs">₹{payload[0].value?.toLocaleString()}</p>
-                                    </div>
-                                  );
-                                }
-                                return null;
-                              }}
-                            />
-                            <Area 
-                              type="monotone" 
-                              dataKey="revenue" 
-                              stroke="#6366f1" 
-                              strokeWidth={2.5}
-                              fillOpacity={1} 
-                              fill="url(#colorRevenue)" 
-                              animationDuration={1500}
-                            />
-                          </AreaChart>
-                        </ResponsiveContainer>
+                      <div className="mt-4">
+                        <p className="text-3xl font-black text-slate-900 dark:text-white">
+                          ₹{revenueAnalysis.data.reduce((sum, item) => sum + item.revenue, 0).toLocaleString()}
+                        </p>
                       </div>
                     </div>
 
