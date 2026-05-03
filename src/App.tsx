@@ -287,6 +287,7 @@ const App: React.FC = () => {
   const [joinRate, setJoinRate] = useState(() => {
     return Number(localStorage.getItem('tg_join_rate')) || 87;
   });
+  const [linkToRevoke, setLinkToRevoke] = useState('');
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
@@ -1570,6 +1571,25 @@ const App: React.FC = () => {
     }
   };
 
+  const handleRevokeLink = async () => {
+    if (!linkToRevoke) return;
+    try {
+      const response = await fetch('/api/revoke-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ link: linkToRevoke, token }),
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to revoke link');
+      }
+      showNotification("Link revoked successfully!", 'success');
+      setLinkToRevoke('');
+    } catch (err: any) {
+      showNotification("Failed to revoke link: " + err.message, 'alert');
+    }
+  };
+
   const filteredJoins = useMemo(() => joinEvents.filter(e => new Date(e.timestamp).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }) === selectedDate).sort((a, b) => b.timestamp - a.timestamp), [joinEvents, selectedDate]);
   const joinsTodayCount = useMemo(() => {
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
@@ -2385,6 +2405,24 @@ const App: React.FC = () => {
                         <br/><span className="text-emerald-500">2. Type /start or any message</span>
                         <br/><span className="text-slate-500">3. App will auto-inject the batch!</span>
                       </p>
+                    </div>
+
+                    <div className="mb-6 p-6 bg-white dark:bg-black/20 rounded-[2rem] border border-slate-200 dark:border-white/5">
+                      <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2">
+                        <Icons.Link size={14} className="text-red-500" /> Revoke Invite Link
+                      </h4>
+                      <input 
+                        placeholder="Paste link to revoke..." 
+                        className="w-full bg-slate-50 dark:bg-black/30 border border-slate-200 dark:border-white/10 px-6 py-4 rounded-2xl text-slate-900 dark:text-white text-xs outline-none focus:ring-4 focus:ring-indigo-500/20 mb-4 transition-all"
+                        value={linkToRevoke}
+                        onChange={e => setLinkToRevoke(e.target.value)}
+                      />
+                      <button 
+                        onClick={handleRevokeLink}
+                        className="w-full py-4 bg-red-600 text-white font-black uppercase text-xs rounded-2xl shadow-xl hover:bg-red-500 active:scale-95 transition-all disabled:opacity-50"
+                      >
+                        Revoke Link
+                      </button>
                     </div>
 
                     <div className="grid grid-cols-2 gap-3 border-t border-slate-200 dark:border-slate-800 pt-6">
