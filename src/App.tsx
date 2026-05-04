@@ -1573,6 +1573,7 @@ const App: React.FC = () => {
 
   const handleRevokeLink = async () => {
     if (!linkToRevoke) return;
+    console.log("handleRevokeLink called. Link:", linkToRevoke, "Token:", token);
     try {
       const response = await fetch('/api/revoke-link', {
         method: 'POST',
@@ -1580,8 +1581,14 @@ const App: React.FC = () => {
         body: JSON.stringify({ link: linkToRevoke, token }),
       });
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to revoke link');
+        const text = await response.text();
+        console.error("Server response:", text);
+        try {
+          const data = JSON.parse(text);
+          throw new Error(data.error || 'Failed to revoke link');
+        } catch {
+          throw new Error('Failed to revoke link (server returned non-JSON)');
+        }
       }
       showNotification("Link revoked successfully!", 'success');
       setLinkToRevoke('');
