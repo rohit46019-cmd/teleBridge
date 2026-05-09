@@ -77,10 +77,10 @@ const GroupCard: React.FC<GroupCardProps> = ({ group, onClick, onTogglePin }) =>
   return (
     <div 
       onClick={() => onClick(group)}
-      className={`group relative rounded-2xl p-4 flex items-center justify-between transition-all duration-500 cursor-pointer 
+      className={`group relative rounded-xl p-3 flex items-center justify-between transition-all duration-500 cursor-pointer 
         bg-white dark:bg-slate-900 border-2 ${theme.border}
-        hover:-translate-y-1 hover:shadow-[0_10px_20px_-10px_rgba(0,0,0,0.3)] 
-        dark:hover:shadow-[0_10px_20px_-10px_rgba(0,0,0,0.7)]
+        hover:-translate-y-0.5 hover:shadow-[0_5px_15px_-5px_rgba(0,0,0,0.3)] 
+        dark:hover:shadow-[0_5px_15px_-5px_rgba(0,0,0,0.5)]
         active:scale-[0.98] active:translate-y-0 overflow-hidden w-full
         before:absolute before:inset-0 before:opacity-0 hover:before:opacity-100 before:transition-opacity before:duration-500
         before:bg-gradient-to-br ${theme.gradient}
@@ -94,22 +94,22 @@ const GroupCard: React.FC<GroupCardProps> = ({ group, onClick, onTogglePin }) =>
       <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
       
       {/* Colorful Accent Glow */}
-      <div className={`absolute -right-8 -top-8 w-24 h-24 rounded-full blur-3xl opacity-20 group-hover:opacity-40 transition-opacity duration-500 ${theme.accent}`} />
+      <div className={`absolute -right-8 -top-8 w-20 h-20 rounded-full blur-3xl opacity-10 group-hover:opacity-30 transition-opacity duration-500 ${theme.accent}`} />
 
       <button 
         onClick={(e) => onTogglePin(e, group.id)} 
-        className={`absolute top-2 left-2 p-1 rounded-lg transition-all shadow-md z-20 border backdrop-blur-md
+        className={`absolute top-2 left-2 p-0.5 rounded-lg transition-all shadow-sm z-20 border backdrop-blur-md
           ${group.pinned 
             ? 'bg-amber-400 text-white border-amber-300 scale-110 rotate-12' 
             : 'bg-white/90 dark:bg-slate-800/90 border-slate-200 dark:border-slate-700 text-slate-400 hover:text-blue-500'}`}
       >
-         <span className="text-[9px] leading-none">{group.pinned ? '📌' : '📍'}</span>
+         <span className="text-[8px] leading-none">{group.pinned ? '📌' : '📍'}</span>
       </button>
 
-      <div className="flex items-center gap-4 relative z-10 flex-1 min-w-0 ml-4">
+      <div className="flex items-center gap-3 relative z-10 flex-1 min-w-0 ml-6">
         <div className="relative">
-          <div className={`absolute inset-0 blur-lg opacity-40 group-hover:opacity-60 transition-opacity duration-500 rounded-xl ${theme.accent}`} />
-          <div className="w-12 h-12 rounded-xl overflow-hidden bg-slate-200 dark:bg-slate-800 flex-shrink-0 group-hover:scale-110 transition-transform duration-500 border-2 border-white/20 shadow-xl relative z-10">
+          <div className={`absolute inset-0 blur-lg opacity-40 group-hover:opacity-60 transition-opacity duration-500 rounded-lg ${theme.accent}`} />
+          <div className="w-10 h-10 rounded-lg overflow-hidden bg-slate-200 dark:bg-slate-800 flex-shrink-0 group-hover:scale-110 transition-transform duration-500 border-2 border-white/20 shadow-lg relative z-10">
             <img 
               src={group.image.replace('/200', '/100')} 
               alt={group.name} 
@@ -123,11 +123,11 @@ const GroupCard: React.FC<GroupCardProps> = ({ group, onClick, onTogglePin }) =>
           </div>
         </div>
         <div className="flex-1 min-w-0">
-          <h3 className="text-base font-display font-black text-slate-900 dark:text-white truncate leading-tight mb-1 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+          <h3 className="text-sm font-display font-black text-slate-900 dark:text-white truncate leading-tight mb-0.5 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
             {group.name}
           </h3>
-          <div className="flex items-center gap-2">
-            <div className={`px-2 py-0.5 rounded-full text-[8px] font-black text-white uppercase tracking-widest shadow-sm ${theme.accent}`}>
+          <div className="flex items-center gap-1.5">
+            <div className={`px-1.5 py-0 rounded-full text-[8px] font-black text-white uppercase tracking-wider shadow-sm ${theme.accent}`}>
               {group.memberCount} MEMBERS
             </div>
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
@@ -135,19 +135,19 @@ const GroupCard: React.FC<GroupCardProps> = ({ group, onClick, onTogglePin }) =>
         </div>
       </div>
 
-      <div className="flex items-center gap-3 relative z-10 ml-2">
+      <div className="flex items-center gap-2 relative z-10 ml-1">
         <button 
           onClick={copyId} 
-          className="hidden md:flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-white dark:hover:bg-slate-700 rounded-xl transition-all border border-slate-200 dark:border-slate-700 group/copy"
+          className="hidden md:flex items-center gap-1 px-2 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-white dark:hover:bg-slate-700 rounded-lg transition-all border border-slate-200 dark:border-slate-700 group/copy"
         >
-          <span className="text-[9px] font-mono font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest truncate max-w-[100px]">
+          <span className="text-[8px] font-mono font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest truncate max-w-[80px]">
             {copied ? 'COPIED!' : `ID: ${group.id}`}
           </span>
-          <Icons.Copy size={12} className={copied ? 'text-emerald-500 scale-125' : 'text-slate-400 group-hover/copy:text-blue-500 transition-all'} />
+          <Icons.Copy size={10} className={copied ? 'text-emerald-500 scale-125' : 'text-slate-400 group-hover/copy:text-blue-500 transition-all'} />
         </button>
         
-        <div className={`w-10 h-10 text-white rounded-xl flex items-center justify-center group-hover:scale-110 group-hover:rotate-6 transition-all shadow-lg active:scale-90 ${theme.accent} border-2 border-white/20`}>
-          <Icons.Link size={18} strokeWidth={3} />
+        <div className={`w-8 h-8 text-white rounded-lg flex items-center justify-center group-hover:scale-105 group-hover:rotate-3 transition-all shadow-md active:scale-90 ${theme.accent} border-2 border-white/20`}>
+          <Icons.Link size={14} strokeWidth={3} />
         </div>
       </div>
     </div>
