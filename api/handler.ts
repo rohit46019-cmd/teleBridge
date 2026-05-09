@@ -224,6 +224,27 @@ app.delete("/api/groups/:id/links", async (req, res) => {
   }
 })
 
+app.post("/api/revoke-link", async (req, res) => {
+  try {
+    const { link, token } = req.body
+    const inviteLinkDoc = await (InviteLink as any).findOne({ link })
+    
+    if (!inviteLinkDoc) return res.status(404).json({ error: "Link not found in database" })
+    
+    const chatId = inviteLinkDoc.groupId
+    
+    const response = await fetch(`https://api.telegram.org/bot${token}/revokeChatInviteLink?chat_id=${chatId}&invite_link=${link}`)
+    const data: any = await response.json()
+    
+    if (!data.ok) throw new Error(data.description || "Failed to revoke link on Telegram")
+    
+    await (InviteLink as any).deleteOne({ link })
+    res.json({ success: true })
+  } catch (error: any) {
+    res.status(500).json({ error: "Failed to revoke link: " + error.message })
+  }
+})
+
 app.post("/api/broadcast", async (req, res) => {
   try {
     const { token, message } = req.body

@@ -1587,7 +1587,7 @@ const App: React.FC = () => {
           const data = JSON.parse(text);
           throw new Error(data.error || 'Failed to revoke link');
         } catch {
-          throw new Error('Failed to revoke link (server returned non-JSON)');
+          throw new Error(`Failed to revoke link (server returned non-JSON): ${text.substring(0, 50)}...`);
         }
       }
       showNotification("Link revoked successfully!", 'success');

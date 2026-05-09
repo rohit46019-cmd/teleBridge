@@ -544,27 +544,24 @@ async function startServer() {
       }
       
       const inviteLinkDoc = await (InviteLink as any).findOne({ link });
-      console.log("Found inviteLinkDoc:", inviteLinkDoc);
       
       if (!inviteLinkDoc) {
-        return res.status(404).json({ error: "Link not found" });
+        return res.status(404).json({ error: "Link not found in database" });
       }
       
       const chatId = inviteLinkDoc.groupId;
-      console.log("Chat ID:", chatId);
       
       // Call Telegram API
       try {
         const response = await fetch(`https://api.telegram.org/bot${token}/revokeChatInviteLink?chat_id=${chatId}&invite_link=${link}`);
         const data = await response.json();
-        console.log("Telegram API response:", data);
         
         if (!data.ok) {
           throw new Error(data.description || "Failed to revoke link on Telegram");
         }
       } catch (tgError: any) {
         console.error("[POST] Telegram API error:", tgError);
-        return res.status(500).json({ error: "Failed to revoke link on Telegram: " + tgError.message });
+        return res.status(500).json({ error: "Failed to revoke link on Telegram: " + tgError.message, stage: 'tg_api' });
       }
       
       await (InviteLink as any).deleteOne({ link });
@@ -572,7 +569,7 @@ async function startServer() {
       res.json({ success: true });
     } catch (error) {
       console.error("[POST] Failed to revoke link:", error);
-      res.status(500).json({ error: "Failed to revoke link: " + (error as any).message });
+      res.status(500).json({ error: "Failed to revoke link: " + (error as any).message, stage: 'internal' });
     }
   });
 
