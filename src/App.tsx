@@ -1698,22 +1698,11 @@ const App: React.FC = () => {
                   <motion.div 
                     whileHover={{ scale: 1.02, translateY: -4, boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.4)' }}
                     whileTap={{ scale: 0.98 }}
-                    className="bg-gradient-to-br from-blue-600 to-indigo-700 p-5 rounded-[2rem] border-b-4 border-indigo-900 shadow-[0_15px_30px_rgba(30,58,138,0.4)] transition-all relative overflow-hidden"
-                  >
-                    <BubbleBackground />
-                    <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-4 backdrop-blur-sm relative z-10"><Icons.Home size={20} className="text-white" strokeWidth={3} /></div>
-                    <p className="text-[10px] font-black text-blue-100 uppercase tracking-widest mb-1 relative z-10">Batches</p>
-                    <p className="text-3xl font-black text-white relative z-10">{groups.length}</p>
-                 </motion.div>
-
-                 <motion.div 
-                    whileHover={{ scale: 1.02, translateY: -4, boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.4)' }}
-                    whileTap={{ scale: 0.98 }}
                     className="bg-gradient-to-br from-emerald-500 to-teal-700 p-5 rounded-[2rem] border-b-4 border-teal-900 shadow-[0_15px_30px_rgba(6,78,59,0.4)] transition-all relative overflow-hidden"
                   >
                     <BubbleBackground />
                     <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-4 backdrop-blur-sm relative z-10"><Icons.Users size={20} className="text-white" strokeWidth={3} /></div>
-                    <p className="text-[10px] font-black text-emerald-100 uppercase tracking-widest mb-1 relative z-10">Total Verified</p>
+                    <p className="text-[10px] font-black text-emerald-100 uppercase tracking-widest mb-1 relative z-10">Total Members</p>
                     <p className="text-3xl font-black text-white relative z-10">{totalMembers.toLocaleString()}</p>
                  </motion.div>
 
@@ -1726,6 +1715,17 @@ const App: React.FC = () => {
                     <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-4 backdrop-blur-sm relative z-10"><Icons.Activity size={20} className="text-white" strokeWidth={3} /></div>
                     <p className="text-[10px] font-black text-amber-50 uppercase tracking-widest mb-1 relative z-10">Joins Today</p>
                     <p className="text-3xl font-black text-white relative z-10">{joinsTodayCount}</p>
+                 </motion.div>
+
+                  <motion.div 
+                    whileHover={{ scale: 1.02, translateY: -4, boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.4)' }}
+                    whileTap={{ scale: 0.98 }}
+                    className="bg-gradient-to-br from-blue-600 to-indigo-700 p-5 rounded-[2rem] border-b-4 border-indigo-900 shadow-[0_15px_30px_rgba(30,58,138,0.4)] transition-all relative overflow-hidden"
+                  >
+                    <BubbleBackground />
+                    <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-4 backdrop-blur-sm relative z-10"><Icons.Home size={20} className="text-white" strokeWidth={3} /></div>
+                    <p className="text-[10px] font-black text-blue-100 uppercase tracking-widest mb-1 relative z-10">Batches</p>
+                    <p className="text-3xl font-black text-white relative z-10">{groups.length}</p>
                  </motion.div>
 
                  <motion.div 
