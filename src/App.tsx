@@ -1803,89 +1803,105 @@ const App: React.FC = () => {
 
           {activeTab === 'groups' && (
             <div className={`space-y-6 ${animationClass}`}>
-               <div className="relative group flex gap-2">
-                <div className="relative flex-1">
-                  <Icons.Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
-                  <input 
-                    type="text" 
-                    placeholder="Search active batches..." 
-                    className="w-full bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 pl-10 pr-10 py-3 rounded-2xl text-xs outline-none focus:ring-4 focus:ring-blue-500/10 shadow-sm transition-all" 
-                    value={searchQuery} 
-                    onChange={e => setSearchQuery(e.target.value)} 
-                    onFocus={() => setShowRecentSearches(true)}
-                    onBlur={() => setTimeout(() => setShowRecentSearches(false), 200)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && searchQuery.trim()) {
-                        setRecentSearches(prev => [searchQuery.trim(), ...prev.filter(s => s !== searchQuery.trim())].slice(0, 10));
-                        setShowRecentSearches(false);
-                      }
-                    }}
-                  />
+                <div className="relative group">
+                  <div className="relative flex items-center bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm focus-within:ring-4 focus-within:ring-blue-500/10 focus-within:border-blue-500/50 transition-all">
+                    <div className="pl-4 text-slate-400">
+                      <Icons.Search size={16} />
+                    </div>
+                    <input 
+                      type="text" 
+                      placeholder="Search active batches..." 
+                      className="flex-1 bg-transparent py-3 px-3 text-xs outline-none"
+                      value={searchQuery} 
+                      onChange={e => setSearchQuery(e.target.value)} 
+                      onFocus={() => setShowRecentSearches(true)}
+                      onBlur={() => setTimeout(() => setShowRecentSearches(false), 200)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && searchQuery.trim()) {
+                          setRecentSearches(prev => [searchQuery.trim(), ...prev.filter(s => s !== searchQuery.trim())].slice(0, 5));
+                          setShowRecentSearches(false);
+                        }
+                      }}
+                    />
+                    {searchQuery && (
+                      <button 
+                        onClick={() => setSearchQuery('')}
+                        className="pr-4 text-slate-400 hover:text-rose-500 transition-colors"
+                      >
+                        <Icons.X size={16} />
+                      </button>
+                    )}
+                  </div>
                   {showRecentSearches && recentSearches.length > 0 && (
-                    <div className="absolute top-full mt-2 w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl z-30 py-2">
-                      <p className="px-4 py-1 text-[9px] font-black text-slate-400 uppercase">Recent Searches</p>
+                    <div className="flex flex-row gap-2 overflow-x-auto py-2 mt-2 custom-scrollbar">
+                      <span className="text-[9px] font-black text-slate-400 uppercase whitespace-nowrap self-center">Recent:</span>
                       {recentSearches.map((s, i) => (
-                        <button key={i} onClick={() => { setSearchQuery(s); setShowRecentSearches(false); }} className="w-full text-left px-4 py-2 text-xs text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">
+                        <button 
+                          key={i} 
+                          onClick={() => {
+                            setSearchQuery(s);
+                            setShowRecentSearches(false);
+                          }} 
+                          className="px-3 py-1 rounded-full text-[10px] whitespace-nowrap transition-colors font-bold bg-gradient-to-r from-blue-500/10 to-indigo-500/10 text-indigo-600 dark:text-indigo-400 hover:from-blue-500/20 hover:to-indigo-500/20"
+                        >
                           {s}
                         </button>
                       ))}
                     </div>
                   )}
-                  {searchQuery && (
-                    <button onClick={() => setSearchQuery('')} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
-                      <Icons.X size={14} />
-                    </button>
-                  )}
                 </div>
-                <div className="relative">
-                  <button 
-                    onClick={() => setShowFilterMenu(!showFilterMenu)} 
-                    className={`flex items-center gap-2 p-3 ${filterOption !== 'recent' ? 'bg-blue-600 text-white border-blue-500' : 'bg-white dark:bg-slate-900/50 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400'} border rounded-2xl shadow-sm hover:brightness-110 transition-all`}
-                  >
-                    <Icons.Filter size={18} />
-                    {filterOption !== 'recent' && (
-                      <span className="text-[10px] font-black uppercase tracking-widest hidden sm:inline">
-                        {filterOption.replace(/([A-Z])/g, ' $1')}
-                      </span>
+
+                <div className="flex items-center gap-2">
+                  <div className="relative">
+                    <button 
+                      onClick={() => setShowFilterMenu(!showFilterMenu)} 
+                      className={`flex items-center gap-2 p-3 ${filterOption !== 'recent' ? 'bg-blue-600 text-white border-blue-500' : 'bg-white dark:bg-slate-900/50 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400'} border rounded-2xl shadow-sm hover:brightness-110 transition-all`}
+                    >
+                      <Icons.Filter size={18} />
+                      {filterOption !== 'recent' && (
+                        <span className="text-[10px] font-black uppercase tracking-widest hidden sm:inline">
+                          {filterOption.replace(/([A-Z])/g, ' $1')}
+                        </span>
+                      )}
+                    </button>
+                    {showFilterMenu && (
+                      <div className="absolute right-0 top-full mt-2 w-56 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl z-20 py-2 overflow-hidden">
+                        <p className="px-4 py-1 text-[9px] font-black text-slate-400 uppercase tracking-widest bg-slate-50 dark:bg-slate-800/50 mb-1">Sort & Filter</p>
+                        {[
+                          { id: 'recent', label: 'Last Active', icon: <Icons.Zap size={12} /> },
+                          { id: 'newAdded', label: 'Newly Added', icon: <Icons.PlusCircle size={12} /> },
+                          { id: 'activeToday', label: 'Active Today', icon: <Icons.Activity size={12} /> },
+                          { id: 'frequent', label: 'Most Frequent', icon: <Icons.BarChart size={12} /> },
+                          { id: 'mostMembers', label: 'Biggest Community', icon: <Icons.Users size={12} /> },
+                          { id: 'leastMembers', label: 'Smallest Community', icon: <Icons.User size={12} /> },
+                        ].map(opt => (
+                          <button 
+                            key={opt.id} 
+                            onClick={() => { setFilterOption(opt.id as any); setShowFilterMenu(false); }} 
+                            className={`w-full text-left px-4 py-2.5 text-xs font-bold flex items-center gap-3 transition-colors ${filterOption === opt.id ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}
+                          >
+                            <span className={filterOption === opt.id ? 'text-blue-600' : 'text-slate-400'}>{opt.icon}</span>
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
                     )}
-                  </button>
-                  {showFilterMenu && (
-                    <div className="absolute right-0 top-full mt-2 w-56 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl z-20 py-2 overflow-hidden">
-                      <p className="px-4 py-1 text-[9px] font-black text-slate-400 uppercase tracking-widest bg-slate-50 dark:bg-slate-800/50 mb-1">Sort & Filter</p>
-                      {[
-                        { id: 'recent', label: 'Last Active', icon: <Icons.Zap size={12} /> },
-                        { id: 'newAdded', label: 'Newly Added', icon: <Icons.PlusCircle size={12} /> },
-                        { id: 'activeToday', label: 'Active Today', icon: <Icons.Activity size={12} /> },
-                        { id: 'frequent', label: 'Most Frequent', icon: <Icons.BarChart size={12} /> },
-                        { id: 'mostMembers', label: 'Biggest Community', icon: <Icons.Users size={12} /> },
-                        { id: 'leastMembers', label: 'Smallest Community', icon: <Icons.User size={12} /> },
-                      ].map(opt => (
-                        <button 
-                          key={opt.id} 
-                          onClick={() => { setFilterOption(opt.id as any); setShowFilterMenu(false); }} 
-                          className={`w-full text-left px-4 py-2.5 text-xs font-bold flex items-center gap-3 transition-colors ${filterOption === opt.id ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}
-                        >
-                          <span className={filterOption === opt.id ? 'text-blue-600' : 'text-slate-400'}>{opt.icon}</span>
-                          {opt.label}
-                        </button>
-                      ))}
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 gap-4">
+                  {filteredGroups.length > 0 ? (
+                    filteredGroups.map((g, index) => (
+                      <GroupCard key={g.id} group={g} index={index} onClick={() => setSelectedGroup(g)} onTogglePin={handleTogglePin} />
+                    ))
+                  ) : (
+                    <div className="flex flex-col items-center justify-center py-20 text-slate-400 bg-slate-50 dark:bg-slate-900/20 rounded-[2.5rem] border-2 border-dashed border-slate-200 dark:border-slate-800">
+                      <Icons.Search size={32} className="mb-4 opacity-20" />
+                      <p className="text-sm font-bold uppercase tracking-widest">No batches found</p>
+                      <p className="text-[10px] mt-1 opacity-60">Try a different search or add a new batch</p>
                     </div>
                   )}
                 </div>
-              </div>
-              <div className="grid grid-cols-1 gap-4">
-                {filteredGroups.length > 0 ? (
-                  filteredGroups.map((g, index) => (
-                    <GroupCard key={g.id} group={g} index={index} onClick={() => setSelectedGroup(g)} onTogglePin={handleTogglePin} />
-                  ))
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-20 text-slate-400 bg-slate-50 dark:bg-slate-900/20 rounded-[2.5rem] border-2 border-dashed border-slate-200 dark:border-slate-800">
-                    <Icons.Search size={32} className="mb-4 opacity-20" />
-                    <p className="text-sm font-bold uppercase tracking-widest">No batches found</p>
-                    <p className="text-[10px] mt-1 opacity-60">Try a different search or add a new batch</p>
-                  </div>
-                )}
-              </div>
             </div>
           )}
 
