@@ -1875,8 +1875,8 @@ const App: React.FC = () => {
               </div>
               <div className="grid grid-cols-1 gap-4">
                 {filteredGroups.length > 0 ? (
-                  filteredGroups.map(g => (
-                    <GroupCard key={g.id} group={g} onClick={() => setSelectedGroup(g)} onTogglePin={handleTogglePin} />
+                  filteredGroups.map((g, index) => (
+                    <GroupCard key={g.id} group={g} index={index} onClick={() => setSelectedGroup(g)} onTogglePin={handleTogglePin} />
                   ))
                 ) : (
                   <div className="flex flex-col items-center justify-center py-20 text-slate-400 bg-slate-50 dark:bg-slate-900/20 rounded-[2.5rem] border-2 border-dashed border-slate-200 dark:border-slate-800">

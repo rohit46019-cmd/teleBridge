@@ -133,13 +133,13 @@ const InviteModal: React.FC<InviteModalProps> = ({ group, onClose, botToken, onI
           <div className="flex gap-3">
             <button 
               onClick={handleGenerateLink}
-              className="flex-1 py-3.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-bold transition-all shadow-lg shadow-blue-500/25 active:scale-95"
+              className="flex-1 py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-sm font-black uppercase tracking-widest transition-all shadow-lg shadow-blue-500/30 active:scale-95 border-b-4 border-blue-800"
             >
               Rotate Key
             </button>
             <button 
               onClick={copyToClipboard}
-              className={`flex-1 py-3.5 rounded-xl text-sm font-bold transition-all active:scale-95 border ${copied ? 'bg-emerald-500 text-white border-emerald-500 shadow-xl shadow-emerald-500/20' : 'bg-indigo-50 dark:bg-indigo-500/10 border-indigo-200 dark:border-indigo-500/20 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-500/20'}`}
+              className={`flex-1 py-3.5 rounded-xl text-sm font-black uppercase tracking-widest transition-all active:scale-95 border-b-4 ${copied ? 'bg-emerald-500 text-white border-emerald-700 shadow-lg shadow-emerald-500/30' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700 shadow-sm'}`}
             >
               {copied ? 'Copied' : 'Duplicate'}
             </button>

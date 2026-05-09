@@ -7,6 +7,7 @@ interface GroupCardProps {
   group: TelegramGroup;
   onClick: (group: TelegramGroup) => void;
   onTogglePin: (e: React.MouseEvent, id: string) => void;
+  index?: number;
 }
 
 const UNIQUE_THEMES = [
@@ -60,11 +61,13 @@ const UNIQUE_THEMES = [
   },
 ];
 
-const GroupCard: React.FC<GroupCardProps> = ({ group, onClick, onTogglePin }) => {
+const GroupCard: React.FC<GroupCardProps> = ({ group, onClick, onTogglePin, index }) => {
   const [copied, setCopied] = useState(false);
 
-  // Use a stable index for the theme based on the group ID
-  const themeIndex = Math.abs(group.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)) % UNIQUE_THEMES.length;
+  // Use index if provided, otherwise fallback to group ID based stable index
+  const themeIndex = index !== undefined 
+    ? index % UNIQUE_THEMES.length
+    : Math.abs(group.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)) % UNIQUE_THEMES.length;
   const theme = UNIQUE_THEMES[themeIndex];
 
   const copyId = (e: React.MouseEvent) => {
