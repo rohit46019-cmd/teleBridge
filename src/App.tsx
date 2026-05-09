@@ -1803,55 +1803,55 @@ const App: React.FC = () => {
 
           {activeTab === 'groups' && (
             <div className={`space-y-6 ${animationClass}`}>
-                <div className="relative group">
-                  <div className="relative flex items-center bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm focus-within:ring-4 focus-within:ring-blue-500/10 focus-within:border-blue-500/50 transition-all">
-                    <div className="pl-4 text-slate-400">
-                      <Icons.Search size={16} />
+                <div className="flex gap-2">
+                  <div className="relative group flex-1">
+                    <div className="relative flex items-center bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm focus-within:ring-4 focus-within:ring-blue-500/10 focus-within:border-blue-500/50 transition-all">
+                      <div className="pl-4 text-slate-400">
+                        <Icons.Search size={16} />
+                      </div>
+                      <input 
+                        type="text" 
+                        placeholder="Search active batches..." 
+                        className="flex-1 bg-transparent py-3 px-3 text-xs outline-none"
+                        value={searchQuery} 
+                        onChange={e => setSearchQuery(e.target.value)} 
+                        onFocus={() => setShowRecentSearches(true)}
+                        onBlur={() => setTimeout(() => setShowRecentSearches(false), 200)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && searchQuery.trim()) {
+                            setRecentSearches(prev => [searchQuery.trim(), ...prev.filter(s => s !== searchQuery.trim())].slice(0, 5));
+                            setShowRecentSearches(false);
+                          }
+                        }}
+                      />
+                      {searchQuery && (
+                        <button 
+                          onClick={() => setSearchQuery('')}
+                          className="pr-4 text-slate-400 hover:text-rose-500 transition-colors"
+                        >
+                          <Icons.X size={16} />
+                        </button>
+                      )}
                     </div>
-                    <input 
-                      type="text" 
-                      placeholder="Search active batches..." 
-                      className="flex-1 bg-transparent py-3 px-3 text-xs outline-none"
-                      value={searchQuery} 
-                      onChange={e => setSearchQuery(e.target.value)} 
-                      onFocus={() => setShowRecentSearches(true)}
-                      onBlur={() => setTimeout(() => setShowRecentSearches(false), 200)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && searchQuery.trim()) {
-                          setRecentSearches(prev => [searchQuery.trim(), ...prev.filter(s => s !== searchQuery.trim())].slice(0, 5));
-                          setShowRecentSearches(false);
-                        }
-                      }}
-                    />
-                    {searchQuery && (
-                      <button 
-                        onClick={() => setSearchQuery('')}
-                        className="pr-4 text-slate-400 hover:text-rose-500 transition-colors"
-                      >
-                        <Icons.X size={16} />
-                      </button>
+                    {showRecentSearches && recentSearches.length > 0 && (
+                      <div className="flex flex-row gap-2 overflow-x-auto py-2 mt-2 custom-scrollbar">
+                        <span className="text-[9px] font-black text-slate-400 uppercase whitespace-nowrap self-center">Recent:</span>
+                        {recentSearches.map((s, i) => (
+                          <button 
+                            key={i} 
+                            onClick={() => {
+                              setSearchQuery(s);
+                              setShowRecentSearches(false);
+                            }} 
+                            className="px-3 py-1 rounded-full text-[10px] whitespace-nowrap transition-colors font-bold bg-gradient-to-r from-blue-500/10 to-indigo-500/10 text-indigo-600 dark:text-indigo-400 hover:from-blue-500/20 hover:to-indigo-500/20"
+                          >
+                            {s}
+                          </button>
+                        ))}
+                      </div>
                     )}
                   </div>
-                  {showRecentSearches && recentSearches.length > 0 && (
-                    <div className="flex flex-row gap-2 overflow-x-auto py-2 mt-2 custom-scrollbar">
-                      <span className="text-[9px] font-black text-slate-400 uppercase whitespace-nowrap self-center">Recent:</span>
-                      {recentSearches.map((s, i) => (
-                        <button 
-                          key={i} 
-                          onClick={() => {
-                            setSearchQuery(s);
-                            setShowRecentSearches(false);
-                          }} 
-                          className="px-3 py-1 rounded-full text-[10px] whitespace-nowrap transition-colors font-bold bg-gradient-to-r from-blue-500/10 to-indigo-500/10 text-indigo-600 dark:text-indigo-400 hover:from-blue-500/20 hover:to-indigo-500/20"
-                        >
-                          {s}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
 
-                <div className="flex items-center gap-2">
                   <div className="relative">
                     <button 
                       onClick={() => setShowFilterMenu(!showFilterMenu)} 
