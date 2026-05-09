@@ -14,37 +14,49 @@ const UNIQUE_THEMES = [
     gradient: 'from-blue-600/30 to-indigo-700/30', 
     accent: 'bg-blue-600', 
     border: 'border-blue-500/30 shadow-blue-500/10',
-    pattern: 'radial-gradient(circle at 1.5px 1.5px, rgba(59,130,246,0.1) 1px, transparent 0)' 
+    pattern: 'radial-gradient(circle at 1.5px 1.5px, rgba(59,130,246,0.15) 1px, transparent 0)' 
   },
   { 
     gradient: 'from-emerald-500/30 to-teal-700/30', 
     accent: 'bg-emerald-600', 
     border: 'border-emerald-500/30 shadow-emerald-500/10',
-    pattern: 'repeating-linear-gradient(45deg, rgba(16,185,129,0.05) 0px, rgba(16,185,129,0.05) 1px, transparent 1px, transparent 6px)' 
+    pattern: 'repeating-linear-gradient(45deg, rgba(16,185,129,0.1) 0px, rgba(16,185,129,0.1) 2px, transparent 2px, transparent 8px)' 
   },
   { 
     gradient: 'from-rose-500/30 to-pink-700/30', 
     accent: 'bg-rose-600', 
     border: 'border-rose-500/30 shadow-rose-500/10',
-    pattern: 'radial-gradient(circle at 3px 3px, rgba(244,63,94,0.1) 1.5px, transparent 0)' 
+    pattern: 'radial-gradient(circle at 3px 3px, rgba(244,63,94,0.15) 1.5px, transparent 0)' 
   },
   { 
     gradient: 'from-amber-400/30 to-orange-600/30', 
     accent: 'bg-amber-600', 
     border: 'border-amber-500/30 shadow-amber-500/10',
-    pattern: 'repeating-linear-gradient(-45deg, rgba(245,158,11,0.05) 0px, rgba(245,158,11,0.05) 1px, transparent 1px, transparent 6px)' 
+    pattern: 'repeating-linear-gradient(-45deg, rgba(245,158,11,0.1) 0px, rgba(245,158,11,0.1) 2px, transparent 2px, transparent 8px)' 
   },
   { 
     gradient: 'from-purple-600/30 to-fuchsia-700/30', 
     accent: 'bg-purple-600', 
     border: 'border-purple-500/30 shadow-purple-500/10',
-    pattern: 'radial-gradient(circle at 1.5px 1.5px, rgba(147,51,234,0.1) 1px, transparent 0)' 
+    pattern: 'radial-gradient(circle at 1.5px 1.5px, rgba(147,51,234,0.15) 1px, transparent 0)' 
   },
   { 
     gradient: 'from-cyan-500/30 to-blue-600/30', 
     accent: 'bg-cyan-600', 
     border: 'border-cyan-500/30 shadow-cyan-500/10',
-    pattern: 'radial-gradient(circle at 1px 1px, rgba(6,182,212,0.15) 1px, transparent 0)' 
+    pattern: 'radial-gradient(circle at 1px 1px, rgba(6,182,212,0.2) 1.5px, transparent 0)' 
+  },
+  { 
+    gradient: 'from-lime-500/30 to-green-600/30', 
+    accent: 'bg-lime-600', 
+    border: 'border-lime-500/30 shadow-lime-500/10',
+    pattern: 'linear-gradient(45deg, rgba(132,204,22,0.08) 25%, transparent 25%, transparent 75%, rgba(132,204,22,0.08) 75%)' 
+  },
+  { 
+    gradient: 'from-fuchsia-500/30 to-rose-600/30', 
+    accent: 'bg-fuchsia-600', 
+    border: 'border-fuchsia-500/30 shadow-fuchsia-500/10',
+    pattern: 'radial-gradient(circle at 50% 50%, rgba(192,38,211,0.1) 0, rgba(192,38,211,0.1) 1px, transparent 1px, transparent 15px)' 
   },
 ];
 
