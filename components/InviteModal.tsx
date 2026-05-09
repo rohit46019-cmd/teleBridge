@@ -79,9 +79,32 @@ const InviteModal: React.FC<InviteModalProps> = ({ group, onClose, botToken, onI
 
   const copyToClipboard = () => {
     if (!link) return;
-    navigator.clipboard.writeText(link);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    
+    // Try standard way first, then fallback
+    navigator.clipboard.writeText(link).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }).catch(err => {
+      // Fallback: Create a temporary textarea to copy from
+      const textArea = document.createElement("textarea");
+      textArea.value = link;
+      // Ensure it's not visible but focusable
+      textArea.style.position = "fixed";
+      textArea.style.left = "-9999px";
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      try {
+        const successful = document.execCommand('copy');
+        if (successful) {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2000);
+        }
+      } catch (err) {
+        console.error('Fallback copy failed', err);
+      }
+      document.body.removeChild(textArea);
+    });
   };
 
   return (
