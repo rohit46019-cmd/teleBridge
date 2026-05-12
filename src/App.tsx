@@ -175,7 +175,16 @@ const App: React.FC = () => {
   const [selectedGroup, setSelectedGroup] = useState<TelegramGroup | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
-  const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  const [recentSearches, setRecentSearches] = useState<string[]>(() => {
+    if (typeof window === 'undefined') return [];
+    const saved = localStorage.getItem('tg_recent_searches');
+    try {
+      const parsed = saved ? JSON.parse(saved) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      return [];
+    }
+  });
   const [showRecentSearches, setShowRecentSearches] = useState(false);
   const [filterOption, setFilterOption] = useState<'mostMembers' | 'leastMembers' | 'frequent' | 'recent' | 'newAdded' | 'activeToday'>('recent');
   const [showFilterMenu, setShowFilterMenu] = useState(false);
@@ -467,6 +476,10 @@ const App: React.FC = () => {
     }, 300);
     return () => clearTimeout(timer);
   }, [searchQuery]);
+
+  useEffect(() => {
+    localStorage.setItem('tg_recent_searches', JSON.stringify(recentSearches));
+  }, [recentSearches]);
 
   useEffect(() => {
     localStorage.setItem('activeTab', activeTab);
@@ -1816,10 +1829,11 @@ const App: React.FC = () => {
                         value={searchQuery} 
                         onChange={e => setSearchQuery(e.target.value)} 
                         onFocus={() => setShowRecentSearches(true)}
-                        onBlur={() => setTimeout(() => setShowRecentSearches(false), 200)}
+                        onBlur={() => setTimeout(() => setShowRecentSearches(false), 350)}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter' && searchQuery.trim()) {
-                            setRecentSearches(prev => [searchQuery.trim(), ...prev.filter(s => s !== searchQuery.trim())].slice(0, 5));
+                            const trimmed = searchQuery.trim();
+                            setRecentSearches(prev => [trimmed, ...prev.filter(s => s !== trimmed)].slice(0, 8));
                             setShowRecentSearches(false);
                           }
                         }}
@@ -1836,18 +1850,28 @@ const App: React.FC = () => {
                     {showRecentSearches && recentSearches.length > 0 && (
                       <div className="flex flex-row gap-2 overflow-x-auto py-2 mt-2 custom-scrollbar">
                         <span className="text-[9px] font-black text-slate-400 uppercase whitespace-nowrap self-center">Recent:</span>
-                        {recentSearches.map((s, i) => (
-                          <button 
-                            key={i} 
-                            onClick={() => {
-                              setSearchQuery(s);
-                              setShowRecentSearches(false);
-                            }} 
-                            className="px-3 py-1 rounded-full text-[10px] whitespace-nowrap transition-colors font-bold bg-gradient-to-r from-blue-500/10 to-indigo-500/10 text-indigo-600 dark:text-indigo-400 hover:from-blue-500/20 hover:to-indigo-500/20"
-                          >
-                            {s}
-                          </button>
-                        ))}
+                        {recentSearches.map((s, i) => {
+                          const colors = [
+                            'from-pink-500/20 to-rose-500/20 text-rose-600 dark:text-rose-400',
+                            'from-blue-500/20 to-cyan-500/20 text-blue-600 dark:text-blue-400',
+                            'from-purple-500/20 to-fuchsia-500/20 text-fuchsia-600 dark:text-fuchsia-400',
+                            'from-amber-500/20 to-orange-500/20 text-amber-600 dark:text-amber-400',
+                            'from-emerald-500/20 to-teal-500/20 text-emerald-600 dark:text-emerald-400'
+                          ];
+                          const colorClass = colors[i % colors.length];
+                          return (
+                            <button 
+                              key={i} 
+                              onClick={() => {
+                                setSearchQuery(s);
+                                setShowRecentSearches(false);
+                              }} 
+                              className={`px-4 py-1.5 rounded-full text-[10px] whitespace-nowrap transition-all font-black border border-white/10 shadow-sm hover:scale-105 active:scale-95 bg-gradient-to-r ${colorClass}`}
+                            >
+                              {s}
+                            </button>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -1892,7 +1916,13 @@ const App: React.FC = () => {
                 <div className="grid grid-cols-1 gap-4">
                   {filteredGroups.length > 0 ? (
                     filteredGroups.map((g, index) => (
-                      <GroupCard key={g.id} group={g} index={index} onClick={() => setSelectedGroup(g)} onTogglePin={handleTogglePin} />
+                      <GroupCard key={g.id} group={g} index={index} onClick={() => {
+                        setSelectedGroup(g);
+                        if (searchQuery.trim()) {
+                          const trimmed = searchQuery.trim();
+                          setRecentSearches(prev => [trimmed, ...prev.filter(s => s !== trimmed)].slice(0, 8));
+                        }
+                      }} onTogglePin={handleTogglePin} />
                     ))
                   ) : (
                     <div className="flex flex-col items-center justify-center py-20 text-slate-400 bg-slate-50 dark:bg-slate-900/20 rounded-[2.5rem] border-2 border-dashed border-slate-200 dark:border-slate-800">

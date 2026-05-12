@@ -23,6 +23,16 @@
     animation: float 12s ease-in-out infinite;
     animation-delay: -3s;
   }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    height: 3px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-slate-300 dark:bg-slate-700 rounded-full;
+  }
 }
 
 @layer base {
