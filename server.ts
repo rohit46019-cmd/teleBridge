@@ -293,6 +293,11 @@ async function startServer() {
               memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) - 1;
             }
 
+            // Auto-clean service messages (Join/Leave)
+            if (autoClean && msg.message_id && (msg.new_chat_members || msg.left_chat_member)) {
+              fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${chatId}&message_id=${msg.message_id}`).catch(() => {});
+            }
+
             if (msg.new_chat_title) {
               await (Group as any).findOneAndUpdate({ id: chatIdStr }, { name: msg.new_chat_title }, { upsert: false });
             }

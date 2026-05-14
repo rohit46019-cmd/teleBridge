@@ -1165,6 +1165,11 @@ const App: React.FC = () => {
           memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) - 1;
         }
 
+        // Auto-clean service messages (Join/Leave)
+        if (autoCleanServiceMessages && msg && msg.message_id && (msg.new_chat_members || msg.left_chat_member)) {
+          deleteMessage(currentToken, msg.chat.id, msg.message_id).catch(() => {});
+        }
+
         if (msg && msg.new_chat_title) {
           const chatIdStr = msg.chat.id.toString();
           titleChanges[chatIdStr] = msg.new_chat_title;
