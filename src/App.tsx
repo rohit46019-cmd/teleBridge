@@ -1822,7 +1822,7 @@ const App: React.FC = () => {
           {activeTab === 'groups' && (
             <div className={`space-y-6 ${animationClass}`}>
                 <div className="flex gap-2">
-                  <div className="relative group flex-1">
+                  <div className="relative group flex-1 min-w-0">
                     <div className="relative flex items-center bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm focus-within:ring-4 focus-within:ring-blue-500/10 focus-within:border-blue-500/50 transition-all">
                       <div className="pl-4 text-slate-400">
                         <Icons.Search size={16} />
@@ -1838,7 +1838,7 @@ const App: React.FC = () => {
                         onKeyDown={(e) => {
                           if (e.key === 'Enter' && searchQuery.trim()) {
                             const trimmed = searchQuery.trim();
-                            setRecentSearches(prev => [trimmed, ...prev.filter(s => s !== trimmed)].slice(0, 8));
+                            setRecentSearches(prev => [trimmed, ...prev.filter(s => s !== trimmed)].slice(0, 10));
                             setShowRecentSearches(false);
                           }
                         }}
@@ -1853,8 +1853,8 @@ const App: React.FC = () => {
                       )}
                     </div>
                     {showRecentSearches && recentSearches.length > 0 && (
-                      <div className="flex flex-row gap-2 overflow-x-auto py-2 mt-2 custom-scrollbar">
-                        <span className="text-[9px] font-black text-slate-400 uppercase whitespace-nowrap self-center">Recent:</span>
+                      <div className="flex flex-row gap-2 overflow-x-auto py-2 mt-2 custom-scrollbar max-w-full">
+                        <span className="text-[9px] font-black text-slate-400 uppercase whitespace-nowrap self-center sticky left-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm pr-2 z-10">Recent:</span>
                         {recentSearches.map((s, i) => {
                           const colors = [
                             'from-pink-500/20 to-rose-500/20 text-rose-600 dark:text-rose-400',
@@ -1925,7 +1925,7 @@ const App: React.FC = () => {
                         setSelectedGroup(g);
                         if (searchQuery.trim()) {
                           const trimmed = searchQuery.trim();
-                          setRecentSearches(prev => [trimmed, ...prev.filter(s => s !== trimmed)].slice(0, 8));
+                          setRecentSearches(prev => [trimmed, ...prev.filter(s => s !== trimmed)].slice(0, 10));
                         }
                       }} onTogglePin={handleTogglePin} />
                     ))
