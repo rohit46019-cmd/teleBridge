@@ -1166,8 +1166,11 @@ const App: React.FC = () => {
         }
 
         // Auto-clean service messages (Join/Leave)
-        if (autoCleanServiceMessages && msg && msg.message_id && (msg.new_chat_members || msg.left_chat_member)) {
-          deleteMessage(currentToken, msg.chat.id, msg.message_id).catch(() => {});
+        const isJoinLeave = msg && msg.message_id && (msg.new_chat_members || msg.left_chat_member || msg.new_chat_participant || msg.left_chat_participant);
+        if (autoCleanServiceMessages && isJoinLeave) {
+          setTimeout(() => {
+            deleteMessage(currentToken, msg.chat.id, msg.message_id).catch(() => {});
+          }, 1000);
         }
 
         if (msg && msg.new_chat_title) {

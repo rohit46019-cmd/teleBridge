@@ -294,8 +294,17 @@ async function startServer() {
             }
 
             // Auto-clean service messages (Join/Leave)
-            if (autoClean && msg.message_id && (msg.new_chat_members || msg.left_chat_member)) {
-              fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${chatId}&message_id=${msg.message_id}`).catch(() => {});
+            const isJoinLeave = msg.new_chat_members || msg.left_chat_member || msg.new_chat_participant || msg.left_chat_participant;
+            if (autoClean && msg.message_id && isJoinLeave) {
+              // Add a tiny delay to ensure message is registered
+              setTimeout(() => {
+                fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${chatId}&message_id=${msg.message_id}`)
+                  .then(r => r.json())
+                  .then(d => {
+                    if (!d.ok) console.warn("Failed to delete service message:", d.description);
+                  })
+                  .catch(() => {});
+              }, 1000); // 1 second delay
             }
 
             if (msg.new_chat_title) {
