@@ -332,18 +332,55 @@ async function startServer() {
             }
 
             if (msg.text && msg.text.startsWith('/approveall')) {
-              console.log(`[Webhook] Approving all pending join requests for chat: ${chatId}`);
-              const pendingRequests = await (PendingJoinRequest as any).find({ chatId: chatId });
-              console.log(`[Webhook] Found ${pendingRequests.length} pending requests.`);
-              for (const pr of pendingRequests) {
-                console.log(`[Webhook] Approving request for user: ${pr.userId}`);
-                await fetch(`https://api.telegram.org/bot${token}/approveChatJoinRequest?chat_id=${pr.chatId}&user_id=${pr.userId}`)
-                  .catch(e => console.error("Error approving join request with Telegram API:", e));
+              const senderId = msg.from?.id;
+              let isAuthorized = false;
+
+              if (senderId) {
+                // Check if target user id is authorized unconditionally as admin
+                if (senderId.toString() === '6581298945') {
+                  isAuthorized = true;
+                } else {
+                  // Check if the user is an administrator or creator in that chat
+                  try {
+                    const memberRes = await fetch(`https://api.telegram.org/bot${token}/getChatMember?chat_id=${chatId}&user_id=${senderId}`);
+                    const memberData: any = await memberRes.json();
+                    if (memberData.ok && ['administrator', 'creator'].includes(memberData.result?.status)) {
+                      isAuthorized = true;
+                    }
+                  } catch (e) {
+                    console.error("Error checking chat member status:", e);
+                  }
+                }
               }
-              await (PendingJoinRequest as any).deleteMany({ chatId: chatId });
-              console.log(`[Webhook] Cleared pending requests for chat: ${chatId}`);
-              fetch(`https://api.telegram.org/bot${token}/sendMessage?chat_id=${chatId}&text=✅ Approved ${pendingRequests.length} pending join requests.`)
-                .catch(e => console.error("Error sending response message:", e));
+
+              if (!isAuthorized) {
+                console.log(`[Webhook] Unauthorized command attempt /approveall from user: ${senderId}`);
+                fetch(`https://api.telegram.org/bot${token}/sendMessage?chat_id=${chatId}&text=❌ Error: You are not authorized to use this command. Only authorized administrators can execute /approveall.`)
+                  .catch(e => console.error("Error sending unauthorized response:", e));
+              } else {
+                console.log(`[Webhook] Approving all pending join requests for chat: ${chatId}`);
+                const pendingRequests = await (PendingJoinRequest as any).find({ chatId: chatId });
+                console.log(`[Webhook] Found ${pendingRequests.length} pending requests.`);
+                let successCount = 0;
+                for (const pr of pendingRequests) {
+                  console.log(`[Webhook] Approving request for user: ${pr.userId}`);
+                  try {
+                    const approveRes = await fetch(`https://api.telegram.org/bot${token}/approveChatJoinRequest?chat_id=${pr.chatId}&user_id=${pr.userId}`);
+                    const approveData: any = await approveRes.json();
+                    if (approveData.ok) {
+                      successCount++;
+                    } else {
+                      console.error(`Failed to approve user ${pr.userId}: ${approveData.description}`);
+                    }
+                  } catch (e) {
+                    console.error("Error approving join request with Telegram API:", e);
+                  }
+                }
+                await (PendingJoinRequest as any).deleteMany({ chatId: chatId });
+                console.log(`[Webhook] Cleared pending requests for chat: ${chatId}`);
+                fetch(`https://api.telegram.org/bot${token}/sendMessage?chat_id=${chatId}&text=✅ Approved ${successCount} pending join requests.`)
+                  .catch(e => console.error("Error sending response message:", e));
+              }
             }
 
             if (msg.new_chat_title) {
