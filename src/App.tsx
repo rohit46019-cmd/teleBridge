@@ -1958,7 +1958,7 @@ const App: React.FC = () => {
                           const trimmed = searchQuery.trim();
                           setRecentSearches(prev => [trimmed, ...prev.filter(s => s !== trimmed)].slice(0, 10));
                         }
-                      }} onTogglePin={handleTogglePin} onDelete={handleDeleteGroup} />
+                      }} onTogglePin={handleTogglePin} />
                     ))
                   ) : (
                     <div className="flex flex-col items-center justify-center py-20 text-slate-400 bg-slate-50 dark:bg-slate-900/20 rounded-[2.5rem] border-2 border-dashed border-slate-200 dark:border-slate-800">
@@ -2352,6 +2352,21 @@ const App: React.FC = () => {
                             <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${autoCleanServiceMessages ? 'left-6' : 'left-1'}`} />
                           </button>
                         </div>
+                      </div>
+                      
+                      <div className="flex flex-col gap-2 mt-4 pt-4 border-t border-slate-200 dark:border-slate-800">
+                        <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Manage Groups</h4>
+                        {groups.map(g => (
+                          <div key={g.id} className="flex items-center justify-between p-2 bg-slate-50 dark:bg-slate-800 rounded-lg">
+                            <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300 truncate max-w-[150px]">{g.name}</span>
+                            <button 
+                              onClick={(e) => handleDeleteGroup(e, g.id)}
+                              className="text-[9px] font-bold text-rose-500 hover:text-rose-600 bg-rose-50 dark:bg-rose-900/20 px-2 py-1 rounded"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        ))}
                       </div>
 
                       <div className="flex items-center justify-between mt-4">
