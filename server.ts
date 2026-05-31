@@ -512,6 +512,22 @@ async function startServer() {
     }
   });
 
+  app.post("/api/groups/remove", async (req, res) => {
+    try {
+      const { id } = req.body;
+      console.log(`[API POST Remove] Removing group with ID: ${id}`);
+      if (!id) {
+        return res.status(400).json({ error: "Missing group ID" });
+      }
+      const result = await (Group as any).deleteOne({ id: String(id) });
+      console.log(`[API POST Remove] Delete result:`, result);
+      res.json({ success: true, deletedCount: result.deletedCount });
+    } catch (error: any) {
+      console.error(`[API POST Remove] Error deleting group:`, error);
+      res.status(500).json({ error: "Failed to delete group", details: error.message });
+    }
+  });
+
   app.delete("/api/groups/:id", async (req, res) => {
     try {
       const groupId = req.params.id || req.query.id;
