@@ -292,6 +292,7 @@ const App: React.FC = () => {
   };
   const [analysisEndDate, setAnalysisEndDate] = useState<string>('');
   const [isGroupListCollapsed, setIsGroupListCollapsed] = useState(true);
+  const [selectedGroupToDelete, setSelectedGroupToDelete] = useState('');
   const [settingsSubTab, setSettingsSubTab] = useState<'charts' | 'config'>('charts');
   const [revenueOption, setRevenueOption] = useState<number | { month: number, year: number }>(14);
   const [isPickerOpen, setIsPickerOpen] = useState(false);
@@ -1485,10 +1486,14 @@ const App: React.FC = () => {
       message: 'Are you sure you want to remove this group? This action will permanently remove it from the synced hub.',
       onConfirm: async () => {
         try {
-          const res = await fetch(`/api/groups/${id}`, { method: 'DELETE' });
-          if (!res.ok) throw new Error("Failed to delete group");
+          const res = await fetch(`/api/groups/${encodeURIComponent(id)}`, { method: 'DELETE' });
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.error || errData.details || "Server error while deleting group");
+          }
           
           setGroups(prev => prev.filter(g => g.id !== id));
+          setSelectedGroupToDelete('');
           setConfirmationModalConfig(prev => ({ ...prev, isOpen: false }));
           showNotification("Group removed successfully", 'success');
         } catch (err: any) {
@@ -2357,23 +2362,40 @@ const App: React.FC = () => {
                       
                       <div className="flex flex-col gap-2 mt-4 pt-4 border-t border-slate-200 dark:border-slate-800">
                         <div className="flex items-center justify-between cursor-pointer" onClick={() => setIsGroupListCollapsed(!isGroupListCollapsed)}>
-                          <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Manage Groups</h4>
+                          <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Manage Groups</h4>
                           <span className="text-[10px] font-bold text-slate-500">{isGroupListCollapsed ? 'Show' : 'Hide'}</span>
                         </div>
-                        {!isGroupListCollapsed && groups.map(g => (
-                          <div key={g.id} className="flex items-center justify-between p-2 bg-slate-50 dark:bg-slate-800 rounded-lg">
-                            <div className="flex flex-col truncate">
-                               <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300 truncate max-w-[150px]">{g.name}</span>
-                               <span className="text-[9px] text-slate-500 font-medium">{g.memberCount} members</span>
+                        {!isGroupListCollapsed && (
+                          <div className="flex flex-col gap-2 mt-2 bg-slate-50 dark:bg-slate-900/40 p-3 rounded-xl border border-slate-200 dark:border-slate-800">
+                            <label className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mb-1">Select Group to Remove</label>
+                            <div className="flex gap-2">
+                              <select 
+                                value={selectedGroupToDelete}
+                                onChange={(e) => setSelectedGroupToDelete(e.target.value)}
+                                className="text-[10px] font-bold p-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex-1 focus:outline-none focus:ring-1 focus:ring-rose-500 text-slate-700 dark:text-slate-200"
+                              >
+                                <option value="">-- Choose a Group --</option>
+                                {groups.map(g => (
+                                  <option key={g.id} value={g.id}>
+                                    {g.name} ({g.memberCount || 0} members)
+                                  </option>
+                                ))}
+                              </select>
+                              <button 
+                                onClick={(e) => {
+                                  if (!selectedGroupToDelete) {
+                                    showNotification("Please select a group first", "alert");
+                                    return;
+                                  }
+                                  handleDeleteGroup(e, selectedGroupToDelete);
+                                }}
+                                className="text-[9px] font-bold text-rose-500 hover:text-white bg-rose-50 hover:bg-rose-500 dark:bg-rose-900/20 dark:hover:bg-rose-600 px-3 py-2 rounded-lg transition-all border border-rose-200 dark:border-rose-900/30"
+                              >
+                                Remove
+                              </button>
                             </div>
-                            <button 
-                              onClick={(e) => handleDeleteGroup(e, g.id)}
-                              className="text-[9px] font-bold text-rose-500 hover:text-rose-600 bg-rose-50 dark:bg-rose-900/20 px-2 py-1 rounded"
-                            >
-                              Delete
-                            </button>
                           </div>
-                        ))}
+                        )}
                       </div>
 
                       <div className="flex items-center justify-between mt-4">

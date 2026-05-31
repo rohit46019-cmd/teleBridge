@@ -153,6 +153,18 @@ export async function setWebhook(token: string, url: string): Promise<boolean> {
   });
   const data = await response.json();
   if (!data.ok) throw new Error(data.description || 'Failed to set webhook');
+  
+  // Also register the commands list
+  await fetchWithTimeout(`${BASE_URL}${token}/setMyCommands`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      commands: [
+        { command: 'approveall', description: 'Approve all pending join requests in this group' }
+  ]
+    })
+  }).catch(err => console.warn("Failed to set commands:", err));
+
   return true;
 }
 

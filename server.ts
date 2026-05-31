@@ -331,17 +331,19 @@ async function startServer() {
               }, 1000); // 1 second delay
             }
 
-            if (msg.text === '/approveall') {
+            if (msg.text && msg.text.startsWith('/approveall')) {
               console.log(`[Webhook] Approving all pending join requests for chat: ${chatId}`);
               const pendingRequests = await (PendingJoinRequest as any).find({ chatId: chatId });
               console.log(`[Webhook] Found ${pendingRequests.length} pending requests.`);
               for (const pr of pendingRequests) {
                 console.log(`[Webhook] Approving request for user: ${pr.userId}`);
-                await fetch(`https://api.telegram.org/bot${token}/approveChatJoinRequest?chat_id=${pr.chatId}&user_id=${pr.userId}`);
+                await fetch(`https://api.telegram.org/bot${token}/approveChatJoinRequest?chat_id=${pr.chatId}&user_id=${pr.userId}`)
+                  .catch(e => console.error("Error approving join request with Telegram API:", e));
               }
               await (PendingJoinRequest as any).deleteMany({ chatId: chatId });
               console.log(`[Webhook] Cleared pending requests for chat: ${chatId}`);
-              fetch(`https://api.telegram.org/bot${token}/sendMessage?chat_id=${chatId}&text=✅ Approved ${pendingRequests.length} pending join requests.`);
+              fetch(`https://api.telegram.org/bot${token}/sendMessage?chat_id=${chatId}&text=✅ Approved ${pendingRequests.length} pending join requests.`)
+                .catch(e => console.error("Error sending response message:", e));
             }
 
             if (msg.new_chat_title) {
@@ -475,13 +477,17 @@ async function startServer() {
 
   app.delete("/api/groups/:id", async (req, res) => {
     try {
-      console.log(`[API] Deleting group with ID: ${req.params.id}`);
-      const result = await (Group as any).deleteOne({ id: req.params.id });
+      const groupId = req.params.id || req.query.id;
+      console.log(`[API] Deleting group with ID: ${groupId}`);
+      if (!groupId) {
+        return res.status(400).json({ error: "Missing group ID" });
+      }
+      const result = await (Group as any).deleteOne({ id: String(groupId) });
       console.log(`[API] Delete result:`, result);
-      res.json({ success: true });
-    } catch (error) {
+      res.json({ success: true, deletedCount: result.deletedCount });
+    } catch (error: any) {
       console.error(`[API] Error deleting group:`, error);
-      res.status(500).json({ error: "Failed to delete group" });
+      res.status(500).json({ error: "Failed to delete group", details: error.message });
     }
   });
 
