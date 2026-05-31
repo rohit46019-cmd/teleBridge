@@ -2358,7 +2358,10 @@ const App: React.FC = () => {
                         <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Manage Groups</h4>
                         {groups.map(g => (
                           <div key={g.id} className="flex items-center justify-between p-2 bg-slate-50 dark:bg-slate-800 rounded-lg">
-                            <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300 truncate max-w-[150px]">{g.name}</span>
+                            <div className="flex flex-col truncate">
+                               <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300 truncate max-w-[150px]">{g.name}</span>
+                               <span className="text-[9px] text-slate-500 font-medium">{g.memberCount} members</span>
+                            </div>
                             <button 
                               onClick={(e) => handleDeleteGroup(e, g.id)}
                               className="text-[9px] font-bold text-rose-500 hover:text-rose-600 bg-rose-50 dark:bg-rose-900/20 px-2 py-1 rounded"

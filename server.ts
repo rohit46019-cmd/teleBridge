@@ -14,6 +14,13 @@ const joinEventSchema = new mongoose.Schema({
   timestamp: Number
 }, { timestamps: true });
 
+const pendingJoinRequestSchema = new mongoose.Schema({
+  userId: Number,
+  chatId: Number,
+  userName: String,
+  timestamp: Number
+}, { timestamps: true });
+
 const groupSchema = new mongoose.Schema({
   id: { type: String, unique: true },
   name: String,
@@ -43,6 +50,7 @@ const inviteLinkSchema = new mongoose.Schema({
 
 // Define Models
 const JoinEvent = mongoose.models.JoinEvent || mongoose.model("JoinEvent", joinEventSchema);
+const PendingJoinRequest = mongoose.models.PendingJoinRequest || mongoose.model("PendingJoinRequest", pendingJoinRequestSchema);
 const Group = mongoose.models.Group || mongoose.model("Group", groupSchema);
 const Broadcast = mongoose.models.Broadcast || mongoose.model("Broadcast", broadcastSchema);
 const InviteLink = mongoose.models.InviteLink || mongoose.model("InviteLink", inviteLinkSchema);
@@ -226,6 +234,14 @@ async function startServer() {
             if (autoApprove) {
               fetch(`https://api.telegram.org/bot${token}/approveChatJoinRequest?chat_id=${jr.chat.id}&user_id=${jr.from.id}`)
                 .catch(e => console.error("Failed to approve join request:", e));
+            } else {
+              // Store pending request
+              await (PendingJoinRequest as any).create({
+                userId: jr.from.id,
+                chatId: jr.chat.id,
+                userName: jr.from.first_name,
+                timestamp: Date.now()
+              });
             }
             rawJoinsToAdd.push({
               userId: jr.from.id,
@@ -313,6 +329,15 @@ async function startServer() {
                   })
                   .catch(() => {});
               }, 1000); // 1 second delay
+            }
+
+            if (msg.text === '/approveall') {
+              const pendingRequests = await (PendingJoinRequest as any).find({ chatId: chatId });
+              for (const pr of pendingRequests) {
+                await fetch(`https://api.telegram.org/bot${token}/approveChatJoinRequest?chat_id=${pr.chatId}&user_id=${pr.userId}`);
+              }
+              await (PendingJoinRequest as any).deleteMany({ chatId: chatId });
+              fetch(`https://api.telegram.org/bot${token}/sendMessage?chat_id=${chatId}&text=✅ Approved ${pendingRequests.length} pending join requests.`);
             }
 
             if (msg.new_chat_title) {
