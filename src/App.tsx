@@ -1493,8 +1493,17 @@ const App: React.FC = () => {
           });
           
           if (!res.ok) {
-            const errData = await res.json().catch(() => ({}));
-            throw new Error(errData.error || errData.details || "Server error while deleting group");
+            let errorMsg = `HTTP Error ${res.status}`;
+            try {
+              const errData = await res.json();
+              errorMsg = errData.error || errData.details || errorMsg;
+            } catch (errJson) {
+              const errText = await res.text().catch(() => "");
+              if (errText) {
+                errorMsg += `: ${errText.slice(0, 100)}`;
+              }
+            }
+            throw new Error(errorMsg);
           }
           
           setGroups(prev => prev.filter(g => g.id !== id));
@@ -2366,37 +2375,36 @@ const App: React.FC = () => {
                       </div>
                       
                       <div className="flex flex-col gap-2 mt-4 pt-4 border-t border-slate-200 dark:border-slate-800">
-                        <div className="flex items-center justify-between cursor-pointer" onClick={() => setIsGroupListCollapsed(!isGroupListCollapsed)}>
-                          <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Manage Groups</h4>
-                          <span className="text-[10px] font-bold text-slate-500">{isGroupListCollapsed ? 'Show' : 'Hide'}</span>
+                        <div className="flex items-center justify-between cursor-pointer py-1" onClick={() => setIsGroupListCollapsed(!isGroupListCollapsed)}>
+                          <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                            <Icons.Users size={12} className="text-slate-400" />
+                            Manage Groups ({groups.length})
+                          </h4>
+                          <span className="text-[10px] font-bold text-indigo-500 dark:text-indigo-400 hover:underline">{isGroupListCollapsed ? 'Show' : 'Hide'}</span>
                         </div>
+                        
                         {!isGroupListCollapsed && (
-                          <div className="flex flex-col gap-3 mt-2 bg-slate-50 dark:bg-slate-900/40 p-3 rounded-xl border border-slate-200 dark:border-slate-800">
-                            <label className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">Select Group to Remove</label>
-                            <select 
-                              value={selectedGroupToDelete}
-                              onChange={(e) => setSelectedGroupToDelete(e.target.value)}
-                              className="text-[10px] font-bold p-2.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 w-full focus:outline-none focus:ring-1 focus:ring-rose-500 text-slate-700 dark:text-slate-200"
-                            >
-                              <option value="">-- Choose a Group --</option>
-                              {groups.map(g => (
-                                <option key={g.id} value={g.id}>
-                                  {g.name} ({g.memberCount || 0} members)
-                                </option>
-                              ))}
-                            </select>
-                            <button 
-                              onClick={(e) => {
-                                if (!selectedGroupToDelete) {
-                                  showNotification("Please select a group first", "alert");
-                                  return;
-                                }
-                                handleDeleteGroup(e, selectedGroupToDelete);
-                              }}
-                              className="text-[10px] font-bold text-rose-500 hover:text-white bg-rose-50 hover:bg-rose-500 dark:bg-rose-950/40 dark:hover:bg-rose-600 w-full py-2.5 rounded-lg transition-all border border-rose-200 dark:border-rose-900/30 flex items-center justify-center gap-1 cursor-pointer"
-                            >
-                              ✕ Remove Selected Group
-                            </button>
+                          <div className="mt-2 flex flex-col gap-2 max-h-[240px] overflow-y-auto pr-1">
+                            {groups.length === 0 ? (
+                              <div className="text-[10px] text-slate-400 text-center py-4 bg-slate-50 dark:bg-slate-900/20 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
+                                No groups synced yet.
+                              </div>
+                            ) : (
+                              groups.map(g => (
+                                <div key={g.id} className="flex items-center justify-between p-2.5 bg-slate-50 hover:bg-slate-100 dark:bg-slate-900/30 dark:hover:bg-slate-900/50 rounded-xl border border-slate-200/60 dark:border-slate-800/60 transition-all gap-2">
+                                  <div className="flex flex-col truncate flex-1 min-w-0">
+                                    <span className="text-[10px] font-bold text-slate-800 dark:text-slate-200 truncate pr-1">{g.name}</span>
+                                    <span className="text-[9px] text-slate-400 font-medium">{g.memberCount || 0} members • ID: {g.id}</span>
+                                  </div>
+                                  <button 
+                                    onClick={(e) => handleDeleteGroup(e, g.id)}
+                                    className="text-[9px] font-bold text-rose-500 hover:text-white bg-rose-50 hover:bg-rose-500 dark:bg-rose-950/40 dark:hover:bg-rose-600 px-2.5 py-1.5 rounded-lg border border-rose-200 dark:border-rose-900/30 transition-all cursor-pointer flex-shrink-0"
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+                              ))
+                            )}
                           </div>
                         )}
                       </div>

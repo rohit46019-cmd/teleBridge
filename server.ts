@@ -519,7 +519,12 @@ async function startServer() {
       if (!id) {
         return res.status(400).json({ error: "Missing group ID" });
       }
-      const result = await (Group as any).deleteOne({ id: String(id) });
+      const result = await (Group as any).deleteOne({
+        $or: [
+          { id: String(id) },
+          { id: Number(id) }
+        ]
+      });
       console.log(`[API POST Remove] Delete result:`, result);
       res.json({ success: true, deletedCount: result.deletedCount });
     } catch (error: any) {
@@ -535,7 +540,12 @@ async function startServer() {
       if (!groupId) {
         return res.status(400).json({ error: "Missing group ID" });
       }
-      const result = await (Group as any).deleteOne({ id: String(groupId) });
+      const result = await (Group as any).deleteOne({
+        $or: [
+          { id: String(groupId) },
+          { id: Number(groupId) }
+        ]
+      });
       console.log(`[API] Delete result:`, result);
       res.json({ success: true, deletedCount: result.deletedCount });
     } catch (error: any) {
