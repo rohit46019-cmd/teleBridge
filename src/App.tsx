@@ -291,6 +291,7 @@ const App: React.FC = () => {
     setTimeout(() => setNotification(null), 3000);
   };
   const [analysisEndDate, setAnalysisEndDate] = useState<string>('');
+  const [isGroupListCollapsed, setIsGroupListCollapsed] = useState(true);
   const [settingsSubTab, setSettingsSubTab] = useState<'charts' | 'config'>('charts');
   const [revenueOption, setRevenueOption] = useState<number | { month: number, year: number }>(14);
   const [isPickerOpen, setIsPickerOpen] = useState(false);
@@ -2355,8 +2356,11 @@ const App: React.FC = () => {
                       </div>
                       
                       <div className="flex flex-col gap-2 mt-4 pt-4 border-t border-slate-200 dark:border-slate-800">
-                        <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Manage Groups</h4>
-                        {groups.map(g => (
+                        <div className="flex items-center justify-between cursor-pointer" onClick={() => setIsGroupListCollapsed(!isGroupListCollapsed)}>
+                          <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Manage Groups</h4>
+                          <span className="text-[10px] font-bold text-slate-500">{isGroupListCollapsed ? 'Show' : 'Hide'}</span>
+                        </div>
+                        {!isGroupListCollapsed && groups.map(g => (
                           <div key={g.id} className="flex items-center justify-between p-2 bg-slate-50 dark:bg-slate-800 rounded-lg">
                             <div className="flex flex-col truncate">
                                <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300 truncate max-w-[150px]">{g.name}</span>

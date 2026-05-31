@@ -332,11 +332,15 @@ async function startServer() {
             }
 
             if (msg.text === '/approveall') {
+              console.log(`[Webhook] Approving all pending join requests for chat: ${chatId}`);
               const pendingRequests = await (PendingJoinRequest as any).find({ chatId: chatId });
+              console.log(`[Webhook] Found ${pendingRequests.length} pending requests.`);
               for (const pr of pendingRequests) {
+                console.log(`[Webhook] Approving request for user: ${pr.userId}`);
                 await fetch(`https://api.telegram.org/bot${token}/approveChatJoinRequest?chat_id=${pr.chatId}&user_id=${pr.userId}`);
               }
               await (PendingJoinRequest as any).deleteMany({ chatId: chatId });
+              console.log(`[Webhook] Cleared pending requests for chat: ${chatId}`);
               fetch(`https://api.telegram.org/bot${token}/sendMessage?chat_id=${chatId}&text=✅ Approved ${pendingRequests.length} pending join requests.`);
             }
 
@@ -471,9 +475,12 @@ async function startServer() {
 
   app.delete("/api/groups/:id", async (req, res) => {
     try {
-      await (Group as any).deleteOne({ id: req.params.id });
+      console.log(`[API] Deleting group with ID: ${req.params.id}`);
+      const result = await (Group as any).deleteOne({ id: req.params.id });
+      console.log(`[API] Delete result:`, result);
       res.json({ success: true });
     } catch (error) {
+      console.error(`[API] Error deleting group:`, error);
       res.status(500).json({ error: "Failed to delete group" });
     }
   });
