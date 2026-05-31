@@ -7,6 +7,7 @@ interface GroupCardProps {
   group: TelegramGroup;
   onClick: (group: TelegramGroup) => void;
   onTogglePin: (e: React.MouseEvent, id: string) => void;
+  onDelete: (e: React.MouseEvent, id: string) => void;
   index?: number;
 }
 
@@ -147,6 +148,16 @@ const GroupCard: React.FC<GroupCardProps> = ({ group, onClick, onTogglePin, inde
             {copied ? 'COPIED!' : `ID: ${group.id}`}
           </span>
           <Icons.Copy size={10} className={copied ? 'text-emerald-500 scale-125' : 'text-slate-400 group-hover/copy:text-blue-500 transition-all'} />
+        </button>
+        
+        <button 
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(e, group.id);
+          }}
+          className="flex items-center justify-center w-8 h-8 bg-slate-100 dark:bg-slate-800 hover:bg-rose-100 dark:hover:bg-rose-900/30 text-slate-500 hover:text-rose-500 rounded-lg transition-all border border-slate-200 dark:border-slate-700"
+        >
+          <Icons.Trash size={14} />
         </button>
         
         <div className={`w-8 h-8 text-white rounded-lg flex items-center justify-center group-hover:scale-105 group-hover:rotate-3 transition-all shadow-md active:scale-90 ${theme.accent} border-2 border-white/20`}>

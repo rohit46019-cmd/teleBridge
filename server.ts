@@ -205,6 +205,7 @@ async function startServer() {
       const token = req.params.token;
       const autoWelcome = req.query.welcome === 'true';
       const autoClean = req.query.clean === 'true';
+      const autoApprove = req.query.approve === 'true';
       const u = req.body;
 
       // Keep recent 50
@@ -222,6 +223,10 @@ async function startServer() {
           // 0. Process `chat_join_request`
           if (u.chat_join_request && u.chat_join_request.chat) {
             const jr = u.chat_join_request;
+            if (autoApprove) {
+              fetch(`https://api.telegram.org/bot${token}/approveChatJoinRequest?chat_id=${jr.chat.id}&user_id=${jr.from.id}`)
+                .catch(e => console.error("Failed to approve join request:", e));
+            }
             rawJoinsToAdd.push({
               userId: jr.from.id,
               userName: jr.from.first_name + (jr.from.last_name ? ` ${jr.from.last_name}` : ''),
@@ -239,6 +244,9 @@ async function startServer() {
             const newStatus = myMu.new_chat_member?.status;
             if (['member', 'administrator', 'creator', 'restricted'].includes(newStatus)) {
               shouldSyncGroup = myMu.chat;
+            } else if (['left', 'kicked'].includes(newStatus)) {
+              console.log(`[Webhook] Bot removed from group ${myMu.chat.id}, deleting from DB`);
+              await (Group as any).deleteOne({ id: myMu.chat.id.toString() });
             }
           }
 
@@ -433,6 +441,15 @@ async function startServer() {
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to save group" });
+    }
+  });
+
+  app.delete("/api/groups/:id", async (req, res) => {
+    try {
+      await (Group as any).deleteOne({ id: req.params.id });
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete group" });
     }
   });
 

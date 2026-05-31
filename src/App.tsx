@@ -204,6 +204,9 @@ const App: React.FC = () => {
   const [autoWelcome, setAutoWelcome] = useState(() => {
     return localStorage.getItem('tg_auto_welcome') === 'true';
   });
+  const [autoApproveJoinRequest, setAutoApproveJoinRequest] = useState(() => {
+    return localStorage.getItem('tg_auto_approve') === 'true';
+  });
   const [hideRevenue, setHideRevenue] = useState(() => {
     return localStorage.getItem('hideRevenue') === 'true';
   });
@@ -496,6 +499,9 @@ const App: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('tg_auto_welcome', autoWelcome.toString());
   }, [autoWelcome]);
+  useEffect(() => {
+    localStorage.setItem('tg_auto_approve', autoApproveJoinRequest.toString());
+  }, [autoApproveJoinRequest]);
 
   useEffect(() => {
     localStorage.setItem('tg_webhook_active', webhookActive.toString());
@@ -1469,6 +1475,28 @@ const App: React.FC = () => {
     }
   };
 
+  const handleDeleteGroup = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    
+    setConfirmationModalConfig({
+      isOpen: true,
+      title: 'Remove Group',
+      message: 'Are you sure you want to remove this group? This action will permanently remove it from the synced hub.',
+      onConfirm: async () => {
+        try {
+          const res = await fetch(`/api/groups/${id}`, { method: 'DELETE' });
+          if (!res.ok) throw new Error("Failed to delete group");
+          
+          setGroups(prev => prev.filter(g => g.id !== id));
+          setConfirmationModalConfig(prev => ({ ...prev, isOpen: false }));
+          showNotification("Group removed successfully", 'success');
+        } catch (err: any) {
+          showNotification(`Failed to remove: ${err.message}`, 'alert');
+        }
+      }
+    });
+  };
+
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -1504,7 +1532,7 @@ const App: React.FC = () => {
     setIsProcessingWebhook(true);
     try {
       const baseUrl = window.location.origin;
-      const webhookUrl = `${baseUrl}/api/webhook/${token}?welcome=${autoWelcome}&clean=${autoCleanServiceMessages}`;
+      const webhookUrl = `${baseUrl}/api/webhook/${token}?welcome=${autoWelcome}&clean=${autoCleanServiceMessages}&approve=${autoApproveJoinRequest}`;
       await setWebhook(token, webhookUrl);
       setWebhookActive(true);
       showNotification("Webhook set! 24/7 background mode is now ACTIVE.", "success");
@@ -1930,7 +1958,7 @@ const App: React.FC = () => {
                           const trimmed = searchQuery.trim();
                           setRecentSearches(prev => [trimmed, ...prev.filter(s => s !== trimmed)].slice(0, 10));
                         }
-                      }} onTogglePin={handleTogglePin} />
+                      }} onTogglePin={handleTogglePin} onDelete={handleDeleteGroup} />
                     ))
                   ) : (
                     <div className="flex flex-col items-center justify-center py-20 text-slate-400 bg-slate-50 dark:bg-slate-900/20 rounded-[2.5rem] border-2 border-dashed border-slate-200 dark:border-slate-800">
@@ -2322,6 +2350,26 @@ const App: React.FC = () => {
                             className={`w-10 h-5 rounded-full transition-all relative ${autoCleanServiceMessages ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'}`}
                           >
                             <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${autoCleanServiceMessages ? 'left-6' : 'left-1'}`} />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between mt-4">
+                        <div>
+                          <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1 flex items-center justify-between">
+                            Join Requests
+                          </h4>
+                          <p className="text-[9px] text-slate-500 font-bold">Auto-approve all join requests</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[8px] font-black ${autoApproveJoinRequest ? 'text-emerald-500' : 'text-slate-400'}`}>
+                            {autoApproveJoinRequest ? 'ACTIVE' : 'OFF'}
+                          </span>
+                          <button 
+                            onClick={() => setAutoApproveJoinRequest(!autoApproveJoinRequest)}
+                            className={`w-10 h-5 rounded-full transition-all relative ${autoApproveJoinRequest ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'}`}
+                          >
+                            <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${autoApproveJoinRequest ? 'left-6' : 'left-1'}`} />
                           </button>
                         </div>
                       </div>
