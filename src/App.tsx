@@ -1522,10 +1522,9 @@ const App: React.FC = () => {
         
         try {
           // Permanently remove on the server
-          const res = await fetch('/api/groups/remove', {
-            method: 'POST',
+          const res = await fetch(`/api/groups/${id}`, {
+            method: 'DELETE',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id })
           });
           
           if (!res.ok) {
