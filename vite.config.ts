@@ -59,7 +59,7 @@ export default defineConfig(({ mode }) => {
             ]
           },
           devOptions: {
-            enabled: true
+            enabled: false
           },
           workbox: {
             globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
@@ -72,21 +72,6 @@ export default defineConfig(({ mode }) => {
                   expiration: {
                     maxEntries: 50,
                     maxAgeSeconds: 60 * 60 * 24 * 30 // 30 Days
-                  },
-                  cacheableResponse: {
-                    statuses: [0, 200]
-                  }
-                }
-              },
-              {
-                urlPattern: /^\/api\/.*/i,
-                handler: 'NetworkFirst',
-                options: {
-                  cacheName: 'api-cache',
-                  networkTimeoutSeconds: 5,
-                  expiration: {
-                    maxEntries: 100,
-                    maxAgeSeconds: 60 * 60 * 24 // 24 Hours
                   },
                   cacheableResponse: {
                     statuses: [0, 200]

@@ -149,6 +149,48 @@ app.post("/api/groups", async (req, res) => {
   }
 })
 
+app.post("/api/groups/remove", async (req, res) => {
+  try {
+    const { id } = req.body;
+    console.log(`[API POST Remove] Removing group with ID: ${id}`);
+    if (!id) {
+      return res.status(400).json({ error: "Missing group ID" });
+    }
+    const result = await (Group as any).deleteOne({
+      $or: [
+        { id: String(id) },
+        { id: Number(id) }
+      ]
+    });
+    console.log(`[API POST Remove] Delete result:`, result);
+    res.json({ success: true, deletedCount: result.deletedCount });
+  } catch (error: any) {
+    console.error(`[API POST Remove] Error deleting group:`, error);
+    res.status(500).json({ error: "Failed to delete group", details: error.message });
+  }
+})
+
+app.delete("/api/groups/:id", async (req, res) => {
+  try {
+    const groupId = req.params.id || req.query.id;
+    console.log(`[API] Deleting group with ID: ${groupId}`);
+    if (!groupId) {
+      return res.status(400).json({ error: "Missing group ID" });
+    }
+    const result = await (Group as any).deleteOne({
+      $or: [
+        { id: String(groupId) },
+        { id: Number(groupId) }
+      ]
+    });
+    console.log(`[API] Delete result:`, result);
+    res.json({ success: true, deletedCount: result.deletedCount });
+  } catch (error: any) {
+    console.error(`[API] Error deleting group:`, error);
+    res.status(500).json({ error: "Failed to delete group", details: error.message });
+  }
+})
+
 app.put("/api/groups/bulk-update", async (req, res) => {
   try {
     const updates = req.body

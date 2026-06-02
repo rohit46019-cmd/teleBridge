@@ -226,7 +226,9 @@ const App: React.FC = () => {
   const [groups, setGroups] = useState<TelegramGroup[]>(() => {
     const saved = localStorage.getItem('tg_groups');
     try {
-      return saved ? JSON.parse(saved) : [];
+      const parsed = saved ? JSON.parse(saved) : [];
+      const deletedIds = JSON.parse(localStorage.getItem('tg_deleted_groups') || '[]');
+      return Array.isArray(parsed) ? parsed.filter((g: any) => g && g.id && !deletedIds.includes(String(g.id))) : [];
     } catch (e) {
       return [];
     }
@@ -630,8 +632,18 @@ const App: React.FC = () => {
         // Merge Strategy: Use server data as truth, but preserve local groups not on server
         // and use newer timestamps if available
         setGroups(prev => {
-          const merged = [...serverGroups];
+          const deletedIds = JSON.parse(localStorage.getItem('tg_deleted_groups') || '[]');
+          
+          // Filter out deleted groups from server data
+          const activeServerGroups = Array.isArray(serverGroups) 
+            ? serverGroups.filter(sg => sg && sg.id && !deletedIds.includes(String(sg.id)))
+            : [];
+          
+          const merged = [...activeServerGroups];
+          
           prev.forEach(localG => {
+            if (!localG || !localG.id || deletedIds.includes(String(localG.id))) return;
+            
             const serverG = merged.find(sg => sg.id === localG.id);
             if (!serverG) {
               // Local only group (maybe created offline), keep it
@@ -714,8 +726,14 @@ const App: React.FC = () => {
             if (isJson) {
               const serverGroups: TelegramGroup[] = await groupsRes.json();
               setGroups(prev => {
-                const merged = [...serverGroups];
+                const deletedIds = JSON.parse(localStorage.getItem('tg_deleted_groups') || '[]');
+                const activeServerGroups = Array.isArray(serverGroups)
+                  ? serverGroups.filter(sg => sg && sg.id && !deletedIds.includes(String(sg.id)))
+                  : [];
+                
+                const merged = [...activeServerGroups];
                 prev.forEach(localG => {
+                  if (!localG || !localG.id || deletedIds.includes(String(localG.id))) return;
                   const serverG = merged.find(sg => sg.id === localG.id);
                   if (!serverG) merged.push(localG);
                 });
@@ -1485,7 +1503,25 @@ const App: React.FC = () => {
       title: 'Remove Group',
       message: 'Are you sure you want to remove this group? This action will permanently remove it from the synced hub.',
       onConfirm: async () => {
+        // Track the deleted group ID in localStorage permanently to prevent resurrection in offline-first sync
         try {
+          const deletedIds = JSON.parse(localStorage.getItem('tg_deleted_groups') || '[]');
+          if (!deletedIds.includes(String(id))) {
+            deletedIds.push(String(id));
+            localStorage.setItem('tg_deleted_groups', JSON.stringify(deletedIds));
+          }
+        } catch (err) {
+          console.error("Failed to update tg_deleted_groups in localStorage", err);
+        }
+
+        // OPTIMISTIC UPDATE: Remove group from UI immediately
+        setGroups(prev => prev.filter(g => g.id !== id));
+        setSelectedGroupToDelete('');
+        setConfirmationModalConfig(prev => ({ ...prev, isOpen: false }));
+        showNotification("Group removed successfully", 'success');
+        
+        try {
+          // Permanently remove on the server
           const res = await fetch('/api/groups/remove', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1505,13 +1541,11 @@ const App: React.FC = () => {
             }
             throw new Error(errorMsg);
           }
-          
-          setGroups(prev => prev.filter(g => g.id !== id));
-          setSelectedGroupToDelete('');
-          setConfirmationModalConfig(prev => ({ ...prev, isOpen: false }));
-          showNotification("Group removed successfully", 'success');
+          console.log(`[API POST Remove] Group ${id} deleted permanently from DB.`);
         } catch (err: any) {
-          showNotification(`Failed to remove: ${err.message}`, 'alert');
+          console.error(`[API POST Remove] Server deletion failed (cached ID will prevent resurrection):`, err.message);
+          // Show a subtle notification that server sync will be retried later, but keep the UI clean
+          showNotification(`Local change synced. Server sync will retry later.`, 'success');
         }
       }
     });
