@@ -2423,8 +2423,11 @@ const App: React.FC = () => {
                                 No groups synced yet.
                               </div>
                             ) : (
-                              groups.map(g => (
+                              groups.map((g, idx) => (
                                 <div key={g.id} className="flex items-center justify-between p-2.5 bg-slate-50 hover:bg-slate-100 dark:bg-slate-900/30 dark:hover:bg-slate-900/50 rounded-xl border border-slate-200/60 dark:border-slate-800/60 transition-all gap-2">
+                                  <div className="flex-shrink-0 flex items-center justify-center font-mono font-black text-[9px] h-5 min-w-[1.25rem] px-0.5 rounded bg-slate-200/60 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
+                                    {idx + 1}
+                                  </div>
                                   <div className="flex flex-col truncate flex-1 min-w-0">
                                     <span className="text-[10px] font-bold text-slate-800 dark:text-slate-200 truncate pr-1">{g.name}</span>
                                     <span className="text-[9px] text-slate-400 font-medium">{g.memberCount || 0} members • ID: {g.id}</span>
