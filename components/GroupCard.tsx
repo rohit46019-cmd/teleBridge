@@ -99,22 +99,25 @@ const GroupCard: React.FC<GroupCardProps> = ({ group, onClick, onTogglePin, inde
       {/* Colorful Accent Glow */}
       <div className={`absolute -right-8 -top-8 w-20 h-20 rounded-full blur-3xl opacity-10 group-hover:opacity-30 transition-opacity duration-500 ${theme.accent}`} />
 
-      <button 
-        onClick={(e) => onTogglePin(e, group.id)} 
-        className={`absolute top-2 left-2 p-0.5 rounded-lg transition-all shadow-sm z-20 border backdrop-blur-md
-          ${group.pinned 
-            ? 'bg-amber-400 text-white border-amber-300 scale-110 rotate-12' 
-            : 'bg-white/90 dark:bg-slate-800/90 border-slate-200 dark:border-slate-700 text-slate-400 hover:text-blue-500'}`}
-      >
-         <span className="text-[8px] leading-none">{group.pinned ? '📌' : '📍'}</span>
-      </button>
+      <div className="absolute top-2 left-2 flex flex-col items-center gap-1 z-20">
+        <button 
+          onClick={(e) => onTogglePin(e, group.id)} 
+          className={`p-0.5 rounded-lg transition-all shadow-sm border backdrop-blur-md
+            ${group.pinned 
+              ? 'bg-amber-400 text-white border-amber-300 scale-110 rotate-12' 
+              : 'bg-white/90 dark:bg-slate-800/90 border-slate-200 dark:border-slate-700 text-slate-400 hover:text-blue-500'}`}
+        >
+          <span className="text-[8px] leading-none">{group.pinned ? '📌' : '📍'}</span>
+        </button>
 
-      <div className="flex items-center gap-3 relative z-10 flex-1 min-w-0 ml-6">
         {index !== undefined && (
-          <div className="flex-shrink-0 flex items-center justify-center font-mono font-black text-[9px] h-5 min-w-[1.75rem] px-1 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200/60 dark:border-slate-700/50 group-hover:bg-blue-500/20 group-hover:text-blue-600 dark:group-hover:text-blue-400 group-hover:border-blue-500/30 transition-all duration-300 shadow-sm">
-            {String(index + 1).padStart(2, '0')}
-          </div>
+          <span className="px-1 py-0.5 rounded font-mono font-black text-[8px] leading-none tracking-tight text-white bg-blue-600 dark:bg-blue-500 border border-blue-400/40 shadow-sm shadow-blue-500/30 whitespace-nowrap">
+            #{String(index + 1).padStart(2, '0')}
+          </span>
         )}
+      </div>
+
+      <div className="flex items-center gap-3 relative z-10 flex-1 min-w-0 ml-8">
         <div className="relative">
           <div className={`absolute inset-0 blur-lg opacity-40 group-hover:opacity-60 transition-opacity duration-500 rounded-lg ${theme.accent}`} />
           <div className="w-10 h-10 rounded-lg overflow-hidden bg-slate-200 dark:bg-slate-800 flex-shrink-0 group-hover:scale-110 transition-transform duration-500 border-2 border-white/20 shadow-lg relative z-10">
