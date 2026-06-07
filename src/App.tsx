@@ -1800,102 +1800,184 @@ const App: React.FC = () => {
                   <motion.div 
                     whileHover={{ scale: 1.02, translateY: -4, boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.4)' }}
                     whileTap={{ scale: 0.98 }}
-                    className="bg-gradient-to-br from-emerald-500 to-teal-700 p-5 rounded-[2rem] border-b-4 border-teal-900 shadow-[0_15px_30px_rgba(6,78,59,0.4)] transition-all relative overflow-hidden"
+                    className="bg-white dark:bg-slate-900/40 backdrop-blur-xl p-5 md:p-6 rounded-[2.25rem] border border-slate-200/80 dark:border-slate-800/80 hover:border-emerald-500/30 dark:hover:border-emerald-500/40 shadow-sm hover:shadow-xl hover:shadow-emerald-500/5 transition-all relative overflow-hidden group"
                   >
-                    <BubbleBackground />
-                    <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-4 backdrop-blur-sm relative z-10"><Icons.Users size={20} className="text-white" strokeWidth={3} /></div>
-                    <p className="text-[10px] font-black text-emerald-100 uppercase tracking-widest mb-1 relative z-10">Total Members</p>
-                    <p className="text-3xl font-black text-white relative z-10">{totalMembers.toLocaleString()}</p>
+                    <div className="absolute -right-8 -bottom-8 w-32 h-32 bg-emerald-500/8 dark:bg-emerald-500/10 rounded-full blur-3xl group-hover:scale-125 transition-transform duration-500 pointer-events-none" />
+                    <div className="flex items-start justify-between relative z-10 mb-3">
+                      <div className="w-10 h-10 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-100 dark:border-emerald-900/30 rounded-2xl flex items-center justify-center text-emerald-600 dark:text-emerald-400 group-hover:scale-110 transition-all duration-300">
+                        <Icons.Users size={20} strokeWidth={2.5} />
+                      </div>
+                      <span className="text-[9px] bg-emerald-100/50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 font-extrabold px-2 py-0.5 rounded-full border border-emerald-500/10 uppercase tracking-widest leading-normal">
+                        SYNCED
+                      </span>
+                    </div>
+                    <div className="relative z-10">
+                      <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest leading-none">Total Members</p>
+                      <p className="text-2xl md:text-3xl font-black text-slate-800 dark:text-white mt-1.5 tracking-tight group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors duration-300">
+                        {totalMembers.toLocaleString()}
+                      </p>
+                      <p className="text-[9px] text-slate-400 dark:text-slate-500 font-bold mt-2.5 flex items-center gap-1 font-sans">
+                        <Icons.ArrowUpRight size={12} className="text-emerald-500" strokeWidth={3} /> Active across hubs
+                      </p>
+                    </div>
                  </motion.div>
 
                  <motion.div 
-                    whileHover={{ scale: 1.02, translateY: -4, boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.4)' }}
-                    whileTap={{ scale: 0.98 }}
-                    className="bg-gradient-to-br from-amber-500 to-orange-600 p-5 rounded-[2rem] border-b-4 border-orange-800 shadow-[0_15px_30px_rgba(154,52,18,0.4)] transition-all relative overflow-hidden"
+                    whileHover={{ scale: 1.015, y: -4, boxShadow: '0 20px 40px -15px rgba(245,158,11,0.12)' }}
+                    whileTap={{ scale: 0.985 }}
+                    className="bg-white dark:bg-slate-900/40 backdrop-blur-xl p-5 md:p-6 rounded-[2.25rem] border border-slate-200/80 dark:border-slate-800/80 hover:border-amber-500/30 dark:hover:border-amber-500/40 shadow-sm hover:shadow-xl hover:shadow-amber-500/5 transition-all relative overflow-hidden group"
                   >
-                    <BubbleBackground />
-                    <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-4 backdrop-blur-sm relative z-10"><Icons.Activity size={20} className="text-white" strokeWidth={3} /></div>
-                    <p className="text-[10px] font-black text-amber-50 uppercase tracking-widest mb-1 relative z-10">Joins Today</p>
-                    <p className="text-3xl font-black text-white relative z-10">{joinsTodayCount}</p>
+                    <div className="absolute -right-8 -bottom-8 w-32 h-32 bg-amber-500/8 dark:bg-amber-500/10 rounded-full blur-3xl group-hover:scale-125 transition-transform duration-500 pointer-events-none" />
+                    <div className="flex items-start justify-between relative z-10 mb-3">
+                      <div className="w-10 h-10 bg-amber-50 dark:bg-amber-950/40 border border-amber-100 dark:border-amber-900/30 rounded-2xl flex items-center justify-center text-amber-600 dark:text-amber-400 group-hover:scale-110 transition-all duration-300">
+                        <Icons.Activity size={20} strokeWidth={2.5} />
+                      </div>
+                      <span className="text-[9px] bg-amber-100/50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 font-extrabold px-2 py-0.5 rounded-full border border-amber-500/10 uppercase tracking-widest flex items-center gap-1 leading-normal">
+                        LIVE <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                      </span>
+                    </div>
+                    <div className="relative z-10">
+                      <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest leading-none">Joins Today</p>
+                      <p className="text-2xl md:text-3xl font-black text-slate-800 dark:text-white mt-1.5 tracking-tight group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors duration-300">
+                        {joinsTodayCount}
+                      </p>
+                      <p className="text-[9px] text-slate-400 dark:text-slate-500 font-bold mt-2.5 flex items-center gap-1 font-sans">
+                        <Icons.Refresh size={10} className="animate-spin text-amber-500" /> Real-time active stream
+                      </p>
+                    </div>
                  </motion.div>
 
                   <motion.div 
                     whileHover={{ scale: 1.02, translateY: -4, boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.4)' }}
                     whileTap={{ scale: 0.98 }}
-                    className="bg-gradient-to-br from-blue-600 to-indigo-700 p-5 rounded-[2rem] border-b-4 border-indigo-900 shadow-[0_15px_30px_rgba(30,58,138,0.4)] transition-all relative overflow-hidden"
+                    className="bg-white dark:bg-slate-900/40 backdrop-blur-xl p-5 md:p-6 rounded-[2.25rem] border border-slate-200/80 dark:border-slate-800/80 hover:border-blue-500/30 dark:hover:border-blue-500/40 shadow-sm hover:shadow-xl hover:shadow-blue-500/5 transition-all relative overflow-hidden group"
                   >
-                    <BubbleBackground />
-                    <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-4 backdrop-blur-sm relative z-10"><Icons.Home size={20} className="text-white" strokeWidth={3} /></div>
-                    <p className="text-[10px] font-black text-blue-100 uppercase tracking-widest mb-1 relative z-10">Batches</p>
-                    <p className="text-3xl font-black text-white relative z-10">{groups.length}</p>
+                    <div className="absolute -right-8 -bottom-8 w-32 h-32 bg-blue-500/8 dark:bg-blue-500/10 rounded-full blur-3xl group-hover:scale-125 transition-transform duration-500 pointer-events-none" />
+                    <div className="flex items-start justify-between relative z-10 mb-3">
+                      <div className="w-10 h-10 bg-blue-50 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-900/30 rounded-2xl flex items-center justify-center text-blue-600 dark:text-blue-400 group-hover:scale-110 transition-all duration-300">
+                        <Icons.Home size={20} strokeWidth={2.5} />
+                      </div>
+                      <span className="text-[9px] bg-blue-100/50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-400 font-extrabold px-2 py-0.5 rounded-full border border-blue-500/10 uppercase tracking-widest leading-normal">
+                        HUBS
+                      </span>
+                    </div>
+                    <div className="relative z-10">
+                      <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest leading-none">Batches</p>
+                      <p className="text-2xl md:text-3xl font-black text-slate-800 dark:text-white mt-1.5 tracking-tight group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors duration-300">
+                        {groups.length}
+                      </p>
+                      <p className="text-[9px] text-slate-400 dark:text-slate-500 font-bold mt-2.5 flex items-center gap-1 font-sans">
+                        <Icons.Zap size={11} className="text-blue-500" /> Active connected groups
+                      </p>
+                    </div>
                  </motion.div>
 
                  <motion.div 
                     whileHover={{ scale: 1.02, translateY: -4, boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.4)' }}
                     whileTap={{ scale: 0.98 }}
-                    className="bg-gradient-to-br from-fuchsia-600 to-purple-700 p-5 rounded-[2rem] border-b-4 border-purple-900 shadow-[0_15px_30px_rgba(107,33,168,0.4)] transition-all relative overflow-hidden"
+                    className="bg-white dark:bg-slate-900/40 backdrop-blur-xl p-5 md:p-6 rounded-[2.25rem] border border-slate-200/80 dark:border-slate-800/80 hover:border-fuchsia-500/30 dark:hover:border-fuchsia-500/40 shadow-sm hover:shadow-xl hover:shadow-fuchsia-500/5 transition-all relative overflow-hidden group"
                   >
-                    <BubbleBackground />
-                    <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-4 backdrop-blur-sm relative z-10"><Icons.Zap size={20} className="text-white" strokeWidth={3} /></div>
-                    <div className="flex flex-col gap-3 relative z-10">
-                       <div>
-                         <p className="text-[10px] font-black text-purple-100 uppercase tracking-widest mb-1">Bot Status</p>
-                         <p className="text-xl font-black text-white uppercase">{botInfo ? 'ACTIVE' : 'OFFLINE'}</p>
-                       </div>
+                    <div className="absolute -right-8 -bottom-8 w-32 h-32 bg-fuchsia-500/8 dark:bg-fuchsia-500/10 rounded-full blur-3xl group-hover:scale-125 transition-transform duration-500 pointer-events-none" />
+                    <div className="flex items-start justify-between relative z-10 mb-3">
+                      <div className="w-10 h-10 bg-fuchsia-50 dark:bg-fuchsia-950/40 border border-fuchsia-100 dark:border-fuchsia-900/30 rounded-2xl flex items-center justify-center text-fuchsia-600 dark:text-fuchsia-400 group-hover:scale-110 transition-all duration-300">
+                        <Icons.Zap size={20} strokeWidth={2.5} />
+                      </div>
+                      <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full border uppercase tracking-widest leading-normal ${botInfo ? 'bg-emerald-100/50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border-emerald-500/10' : 'bg-red-100/50 dark:bg-red-950/60 text-red-700 dark:text-red-400 border-red-500/10'}`}>
+                        {botInfo ? 'ONLINE' : 'OFFLINE'}
+                      </span>
+                    </div>
+                    <div className="relative z-10">
+                      <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest leading-none">Bot Status</p>
+                      <p className="text-xl md:text-2xl font-black text-slate-800 dark:text-white mt-1.5 uppercase tracking-wide group-hover:text-fuchsia-600 dark:group-hover:text-fuchsia-400 transition-colors duration-300">
+                        {botInfo ? 'ACTIVE' : 'OFFLINE'}
+                      </p>
+                      <p className="text-[9px] text-slate-400 dark:text-slate-500 font-bold mt-2.5 flex items-center gap-1 font-sans">
+                        <Icons.Globe size={11} className={botInfo ? "text-emerald-500 animate-pulse" : "text-red-500"} /> Webhook connection status
+                      </p>
                     </div>
                  </motion.div>
 
                  <motion.div 
                     whileHover={{ scale: 1.02, translateY: -4 }}
                     whileTap={{ scale: 0.98 }}
-                    className="bg-gradient-to-br from-rose-500 to-orange-600 p-5 rounded-[2rem] border-b-4 border-rose-800 shadow-[0_15px_30px_rgba(244,63,94,0.4)] transition-all relative overflow-hidden"
+                    className="bg-white dark:bg-slate-900/40 backdrop-blur-xl p-5 md:p-6 rounded-[2.25rem] border border-slate-200/80 dark:border-slate-800/80 hover:border-rose-500/30 dark:hover:border-rose-500/40 shadow-sm hover:shadow-xl hover:shadow-rose-500/5 transition-all relative overflow-hidden group"
                   >
-                    <BubbleBackground />
+                    <div className="absolute -right-8 -bottom-8 w-32 h-32 bg-rose-500/8 dark:bg-rose-500/10 rounded-full blur-3xl group-hover:scale-125 transition-transform duration-500 pointer-events-none" />
                     <div className="flex justify-between items-start mb-4 relative z-10">
-                      <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm"><Icons.TrendingUp size={20} className="text-white" strokeWidth={3} /></div>
+                      <div className="w-10 h-10 bg-rose-50 dark:bg-rose-950/40 border border-rose-100 dark:border-rose-900/30 rounded-2xl flex items-center justify-center text-rose-600 dark:text-rose-400 group-hover:scale-110 transition-all duration-300">
+                        <Icons.TrendingUp size={20} strokeWidth={2.5} />
+                      </div>
                       <button 
                         onClick={() => setHideRevenue(!hideRevenue)}
-                        className="p-2 hover:bg-white/10 rounded-full transition-colors"
+                        className="p-1.5 bg-slate-50 hover:bg-rose-50 dark:bg-slate-800/40 hover:dark:bg-rose-950/30 border border-slate-200 dark:border-slate-800 hover:border-rose-500/20 text-slate-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 rounded-xl transition-all shadow-sm cursor-pointer"
                         title={hideRevenue ? "Show Revenue" : "Hide Revenue"}
                       >
-                        {hideRevenue ? <Icons.EyeOff size={16} className="text-white/70" /> : <Icons.Eye size={16} className="text-white/70" />}
+                        {hideRevenue ? <Icons.EyeOff size={14} /> : <Icons.Eye size={14} />}
                       </button>
                     </div>
-                    <p className="text-[10px] font-black text-rose-100 uppercase tracking-widest mb-1 relative z-10">Today's Revenue</p>
-                    {hideRevenue ? (
-                      <p className="text-3xl font-black text-white relative z-10 text-shadow-sm blur-md select-none">₹8,888,888</p>
-                    ) : (
-                      <p className="text-3xl font-black text-white relative z-10 text-shadow-sm">₹{(joinsTodayCount * joinRate).toLocaleString()}</p>
-                    )}
-                    <p className="text-[8px] font-bold text-rose-100/60 uppercase mt-1 relative z-10">Rate: ₹{joinRate}/join</p>
+                    <div className="relative z-10">
+                      <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest leading-none">Today's Revenue</p>
+                      {hideRevenue ? (
+                        <p className="text-2xl md:text-3xl font-black text-slate-800 dark:text-white mt-1.5 tracking-tight blur-md select-none">₹88,888</p>
+                      ) : (
+                        <p className="text-2xl md:text-3xl font-black text-slate-800 dark:text-white mt-1.5 tracking-tight group-hover:text-rose-600 dark:group-hover:text-rose-400 transition-colors duration-300">
+                          ₹{(joinsTodayCount * joinRate).toLocaleString()}
+                        </p>
+                      )}
+                      <p className="text-[9px] text-slate-400 dark:text-slate-500 font-bold mt-2.5 flex items-center gap-1 font-sans">
+                        <span className="px-1.5 py-0.5 rounded bg-rose-50 dark:bg-rose-950/40 border border-rose-500/10 text-[8px] text-rose-600 dark:text-rose-400">Rate: ₹{joinRate}/join</span>
+                      </p>
+                    </div>
                  </motion.div>
 
                  <motion.button 
                     whileHover={{ scale: 1.02, translateY: -4 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={() => setActiveTab('settings')}
-                    className="bg-gradient-to-br from-cyan-500 to-blue-600 p-5 rounded-[2rem] border-b-4 border-blue-800 shadow-[0_15px_30px_rgba(6,182,212,0.4)] transition-all relative overflow-hidden text-left group"
+                    className="bg-white dark:bg-slate-900/40 backdrop-blur-xl p-5 md:p-6 rounded-[2.25rem] border border-slate-200/80 dark:border-slate-800/80 hover:border-cyan-500/30 dark:hover:border-cyan-500/40 shadow-sm hover:shadow-xl hover:shadow-cyan-500/5 transition-all relative overflow-hidden text-left group cursor-pointer"
                   >
-                    <BubbleBackground />
-                    <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-4 backdrop-blur-sm relative z-10"><Icons.BarChart3 size={20} className="text-white" strokeWidth={3} /></div>
-                    <p className="text-[10px] font-black text-cyan-50 uppercase tracking-widest mb-1 relative z-10">Analytics</p>
-                    <p className="text-xl font-black text-white relative z-10 flex items-center gap-2">
-                      VIEW GROWTH <Icons.ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
-                    </p>
+                    <div className="absolute -right-8 -bottom-8 w-32 h-32 bg-cyan-500/8 dark:bg-cyan-500/10 rounded-full blur-3xl group-hover:scale-125 transition-transform duration-500 pointer-events-none" />
+                    <div className="flex items-start justify-between relative z-10 mb-3">
+                      <div className="w-10 h-10 bg-cyan-50 dark:bg-cyan-950/40 border border-cyan-100 dark:border-cyan-900/30 rounded-2xl flex items-center justify-center text-cyan-600 dark:text-cyan-400 group-hover:scale-110 transition-all duration-300">
+                        <Icons.BarChart3 size={20} strokeWidth={2.5} />
+                      </div>
+                      <span className="text-[9px] bg-cyan-100/50 dark:bg-cyan-950/60 text-cyan-700 dark:text-cyan-400 font-extrabold px-2 py-0.5 rounded-full border border-cyan-500/10 uppercase tracking-widest leading-normal">
+                        STATS
+                      </span>
+                    </div>
+                    <div className="relative z-10">
+                      <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest leading-none">Analytics</p>
+                      <p className="text-xl md:text-2xl font-black text-slate-800 dark:text-white mt-1.5 tracking-tight group-hover:text-cyan-600 dark:group-hover:text-cyan-400 flex items-center gap-1.5 transition-colors duration-300">
+                        VIEW GROWTH <Icons.ArrowRight size={18} className="group-hover:translate-x-1 transition-transform duration-300" strokeWidth={3} />
+                      </p>
+                      <p className="text-[9px] text-slate-400 dark:text-slate-500 font-bold mt-2.5 flex items-center gap-1 font-sans">
+                        Open charts & system insights
+                      </p>
+                    </div>
                  </motion.button>
               </div>
-              <div className="relative rounded-[2.5rem] border border-white/10 p-8 shadow-2xl overflow-hidden bg-gradient-to-br from-violet-600 via-fuchsia-600 to-orange-500 text-white transform transition-all duration-300 hover:scale-[1.01] hover:shadow-fuchsia-500/20">
-                 <div className="absolute top-0 right-0 w-64 h-64 bg-white/20 rounded-full blur-3xl -mr-16 -mt-16 mix-blend-overlay pointer-events-none"></div>
-                 <div className="absolute bottom-0 left-0 w-64 h-64 bg-yellow-300/20 rounded-full blur-3xl -ml-16 -mb-16 mix-blend-overlay pointer-events-none"></div>
-                 <h2 className="text-xl font-black uppercase tracking-tight mb-4 flex items-center gap-3 relative z-10">
-                   <div className="p-3 bg-white/20 rounded-2xl backdrop-blur-sm shadow-inner border border-white/20 text-yellow-300">
-                     <Icons.Zap size={24} />
+              <div className="relative rounded-[2.25rem] border border-blue-500/30 dark:border-blue-500/20 p-6 md:p-8 shadow-2xl overflow-hidden bg-gradient-to-br from-slate-950 via-indigo-950/80 to-slate-950 text-white transform transition-all duration-300 hover:shadow-indigo-500/10">
+                 <div className="absolute top-0 right-0 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl -mr-24 -mt-24 pointer-events-none" />
+                 <div className="absolute bottom-0 left-0 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl -ml-24 -mb-24 pointer-events-none" />
+                 <h2 className="text-lg md:text-xl font-black uppercase tracking-tight mb-3 flex items-center gap-3 relative z-10 font-sans">
+                   <div className="p-3 bg-blue-500/20 text-blue-400 rounded-2xl backdrop-blur-sm shadow-inner border border-blue-500/20">
+                     <Icons.Zap size={22} className="animate-pulse" />
                    </div>
-                   <span className="bg-gradient-to-r from-white to-orange-200 bg-clip-text text-transparent drop-shadow-sm">Fast Batch Injection</span>
+                   <span className="bg-gradient-to-r from-white to-blue-200 bg-clip-text text-transparent drop-shadow-sm">Fast Batch Injection</span>
                  </h2>
                  <div className="flex flex-col sm:flex-row gap-3 relative z-10">
-                   <input type="text" placeholder="Enter Telegram Chat ID (-100...)" className="flex-1 bg-black/20 border border-white/20 px-6 py-4 rounded-2xl text-xs font-mono outline-none focus:ring-4 focus:ring-white/30 shadow-inner placeholder:text-white/50 text-white backdrop-blur-sm" value={newChatId} onChange={e => setNewChatId(e.target.value)} />
-                   <button onClick={handleAddGroupManual} disabled={isAddingGroup || !newChatId} className="px-8 py-4 bg-white text-fuchsia-900 hover:bg-fuchsia-50 rounded-2xl text-xs font-black uppercase tracking-widest shadow-[0_10px_30px_rgba(0,0,0,0.3)] active:scale-95 disabled:opacity-50 transition-all border border-white">
+                   <input 
+                     type="text" 
+                     placeholder="Enter Telegram Chat ID (-100...)" 
+                     className="flex-1 bg-black/45 border border-slate-800/80 px-6 py-4 rounded-2xl text-xs font-mono outline-none focus:ring-4 focus:ring-blue-500/30 focus:border-blue-500/50 shadow-inner placeholder:text-slate-500 text-white backdrop-blur-sm transition-all" 
+                     value={newChatId} 
+                     onChange={e => setNewChatId(e.target.value)} 
+                   />
+                   <button 
+                     onClick={handleAddGroupManual} 
+                     disabled={isAddingGroup || !newChatId} 
+                     className="px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-blue-500/20 active:scale-95 disabled:opacity-50 transition-all border border-blue-400/25 cursor-pointer font-sans min-h-[48px]"
+                   >
                      {isAddingGroup ? 'Connecting...' : 'Inject Batch(es)'}
                    </button>
                  </div>
