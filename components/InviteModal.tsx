@@ -47,6 +47,14 @@ const InviteModal: React.FC<InviteModalProps> = ({ group, onClose, botToken, onI
       setLink(realLink);
       setIsGenerating(false);
       onInteraction();
+      
+      // Auto-copy to clipboard
+      navigator.clipboard.writeText(realLink).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      }).catch(err => {
+        console.error('Auto-copy to clipboard failed', err);
+      });
 
       // 3. Save to our database in the background (Don't block the UI)
       fetch(`/api/groups/${group.id}/links`, {
