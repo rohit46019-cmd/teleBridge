@@ -18,7 +18,7 @@ const InviteModal: React.FC<InviteModalProps> = ({ group, onClose, botToken, onI
   const [error, setError] = useState<string | null>(null);
   
   const [useLimit] = useState(1);
-  const [expiration] = useState('1440'); // Default to 24 hours (1440 minutes)
+  const [expiration] = useState('0'); // Default to 0 (Unlimited Time)
 
   useEffect(() => {
     if (botToken && group) {
@@ -49,12 +49,7 @@ const InviteModal: React.FC<InviteModalProps> = ({ group, onClose, botToken, onI
       onInteraction();
       
       // Auto-copy to clipboard
-      navigator.clipboard.writeText(realLink).then(() => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-      }).catch(err => {
-        console.error('Auto-copy to clipboard failed', err);
-      });
+      performCopy(realLink);
 
       // 3. Save to our database in the background (Don't block the UI)
       fetch(`/api/groups/${group.id}/links`, {
@@ -85,18 +80,12 @@ const InviteModal: React.FC<InviteModalProps> = ({ group, onClose, botToken, onI
     }
   };
 
-  const copyToClipboard = () => {
-    if (!link) return;
-    
-    // Try standard way first, then fallback
-    navigator.clipboard.writeText(link).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }).catch(err => {
-      // Fallback: Create a temporary textarea to copy from
+  const performCopy = (textToCopy: string) => {
+    if (!textToCopy) return;
+
+    const fallbackCopy = () => {
       const textArea = document.createElement("textarea");
-      textArea.value = link;
-      // Ensure it's not visible but focusable
+      textArea.value = textToCopy;
       textArea.style.position = "fixed";
       textArea.style.left = "-9999px";
       document.body.appendChild(textArea);
@@ -112,7 +101,23 @@ const InviteModal: React.FC<InviteModalProps> = ({ group, onClose, botToken, onI
         console.error('Fallback copy failed', err);
       }
       document.body.removeChild(textArea);
-    });
+    };
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(textToCopy).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      }).catch((err) => {
+        console.error('Clipboard API failed, trying fallback', err);
+        fallbackCopy();
+      });
+    } else {
+      fallbackCopy();
+    }
+  };
+
+  const copyToClipboard = () => {
+    performCopy(link);
   };
 
   return (
@@ -184,7 +189,7 @@ const InviteModal: React.FC<InviteModalProps> = ({ group, onClose, botToken, onI
               </div>
               <div className="flex items-center gap-2">
                 <Icons.Clock size={14} className="text-slate-400" />
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Expiry: 24 Hours</span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Expiry: Unlimited</span>
               </div>
             </div>
           </div>
