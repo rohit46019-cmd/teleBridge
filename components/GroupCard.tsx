@@ -81,9 +81,9 @@ const GroupCard: React.FC<GroupCardProps> = ({ group, onClick, onTogglePin, inde
     <div 
       onClick={() => onClick(group)}
       className={`group relative rounded-xl p-3 flex items-center justify-between transition-all duration-500 cursor-pointer 
-        bg-white dark:bg-slate-900 border-2 ${theme.border}
+        bg-white dark:bg-slate-950 border-2 ${theme.border}
         hover:-translate-y-0.5 hover:shadow-[0_5px_15px_-5px_rgba(0,0,0,0.3)] 
-        dark:hover:shadow-[0_5px_15px_-5px_rgba(0,0,0,0.5)]
+        dark:hover:shadow-[0_10px_20px_-5px_rgba(0,0,0,0.7)]
         active:scale-[0.98] active:translate-y-0 overflow-hidden w-full
         before:absolute before:inset-0 before:opacity-0 hover:before:opacity-100 before:transition-opacity before:duration-500
         before:bg-gradient-to-br ${theme.gradient}
