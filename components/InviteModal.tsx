@@ -2,7 +2,6 @@
 import React, { useState, useEffect } from 'react';
 import { TelegramGroup } from '../types.ts';
 import { Icons } from '../constants.tsx';
-import { createInviteLink, revokeInviteLink } from '../services/telegramService.ts';
 
 interface InviteModalProps {
   group: TelegramGroup;
@@ -35,15 +34,23 @@ const InviteModal: React.FC<InviteModalProps> = ({ group, onClose, botToken, onI
     setIsGenerating(true);
     setError(null);
     try {
-      // 1. Call Telegram API (This is the only network wait we need)
-      const realLink = await createInviteLink(
-        botToken, 
-        group.id, 
-        useLimit, 
-        parseInt(expiration)
-      );
+      const response = await fetch(`/api/groups/${group.id}/create-link`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          token: botToken, 
+          limit: useLimit, 
+          expireMinutes: parseInt(expiration) 
+        }),
+      });
+      const data = await response.json();
       
-      // 2. Immediately show the link to the user (Milliseconds after Telegram responds)
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to generate link.');
+      }
+      
+      const realLink = data.link;
+      
       setLink(realLink);
       setIsGenerating(false);
       onInteraction();
@@ -56,10 +63,8 @@ const InviteModal: React.FC<InviteModalProps> = ({ group, onClose, botToken, onI
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ link: realLink }),
-      }).catch(err => {
-        console.error("Failed to save link to DB:", err);
-      });
-
+      }).catch(console.error);
+      
     } catch (err: any) {
       setError(err.message || 'Failed to generate link. Check bot permissions.');
       setIsGenerating(false);
@@ -68,7 +73,17 @@ const InviteModal: React.FC<InviteModalProps> = ({ group, onClose, botToken, onI
 
   const handleRevokeLink = async (linkToRevoke: string) => {
     try {
-      await revokeInviteLink(botToken, group.id, linkToRevoke);
+      const response = await fetch(`/api/revoke-link`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          token: botToken, 
+          link: linkToRevoke 
+        }),
+      });
+      const data = await response.json();
+      if (!data.success) throw new Error(data.error || 'Failed to revoke link.');
+      
       await fetch(`/api/groups/${group.id}/links`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
