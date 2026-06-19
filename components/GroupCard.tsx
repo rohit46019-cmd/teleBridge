@@ -81,9 +81,9 @@ const GroupCard: React.FC<GroupCardProps> = ({ group, onClick, onTogglePin, inde
     <div 
       onClick={() => onClick(group)}
       className={`group relative rounded-xl p-3 flex items-center justify-between transition-all duration-500 cursor-pointer 
-        bg-white dark:bg-slate-950 border-2 ${theme.border}
+        bg-white dark:bg-slate-900 border-2 ${theme.border}
         hover:-translate-y-0.5 hover:shadow-[0_5px_15px_-5px_rgba(0,0,0,0.3)] 
-        dark:hover:shadow-[0_10px_20px_-5px_rgba(0,0,0,0.7)]
+        dark:hover:shadow-[0_5px_15px_-5px_rgba(0,0,0,0.5)]
         active:scale-[0.98] active:translate-y-0 overflow-hidden w-full
         before:absolute before:inset-0 before:opacity-0 hover:before:opacity-100 before:transition-opacity before:duration-500
         before:bg-gradient-to-br ${theme.gradient}
@@ -119,8 +119,8 @@ const GroupCard: React.FC<GroupCardProps> = ({ group, onClick, onTogglePin, inde
 
       <div className="flex items-center gap-3 relative z-10 flex-1 min-w-0 ml-8">
         <div className="relative">
-          <div className={`absolute inset-0 blur-lg opacity-40 group-hover:opacity-60 transition-opacity duration-500 rounded-full ${theme.accent}`} />
-          <div className="w-10 h-10 rounded-full overflow-hidden bg-zinc-200 dark:bg-zinc-800 flex-shrink-0 group-hover:scale-110 transition-transform duration-500 border-2 border-white/20 shadow-lg relative z-10">
+          <div className={`absolute inset-0 blur-lg opacity-40 group-hover:opacity-60 transition-opacity duration-500 rounded-lg ${theme.accent}`} />
+          <div className="w-10 h-10 rounded-lg overflow-hidden bg-slate-200 dark:bg-slate-800 flex-shrink-0 group-hover:scale-110 transition-transform duration-500 border-2 border-white/20 shadow-lg relative z-10">
             <img 
               src={group.image.replace('/200', '/100')} 
               alt={group.name} 
@@ -134,7 +134,7 @@ const GroupCard: React.FC<GroupCardProps> = ({ group, onClick, onTogglePin, inde
           </div>
         </div>
         <div className="flex-1 min-w-0">
-          <h3 className="text-sm font-display font-black text-zinc-900 dark:text-white truncate leading-tight mb-0.5 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+          <h3 className="text-sm font-display font-black text-slate-900 dark:text-white truncate leading-tight mb-0.5 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
             {group.name}
           </h3>
           <div className="flex items-center gap-1.5">

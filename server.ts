@@ -2,7 +2,6 @@ import express from "express";
 import mongoose from "mongoose";
 import cors from "cors";
 import path from "path";
-import { createInviteLink, revokeInviteLink } from "./services/telegramService";
 
 const MONGODB_URI = (process.env.MONGODB_URI || "mongodb+srv://rohit46019_db_user:m5j51NXjSGxEzSrs@cluster0.b3gft5l.mongodb.net/telebridge_pro?appName=Cluster0").replace(/^['"]|['"]$/g, '');
 
@@ -655,18 +654,6 @@ async function startServer() {
     }
   });
 
-  app.post("/api/groups/:id/create-link", async (req, res) => {
-    try {
-      const groupId = req.params.id;
-      const { token, limit, expireMinutes } = req.body;
-      const link = await createInviteLink(token, groupId, limit, expireMinutes);
-      res.json({ success: true, link });
-    } catch (error: any) {
-      console.error("[POST] Failed to create link:", error);
-      res.status(500).json({ error: error.message || "Failed to create link" });
-    }
-  });
-
   app.delete("/api/groups/:id/links", async (req, res) => {
     try {
       const { link } = req.body;
@@ -696,9 +683,14 @@ async function startServer() {
       
       const chatId = inviteLinkDoc.groupId;
       
-      // Call Telegram API using service
+      // Call Telegram API
       try {
-        await revokeInviteLink(token, chatId, link);
+        const response = await fetch(`https://api.telegram.org/bot${token}/revokeChatInviteLink?chat_id=${chatId}&invite_link=${link}`);
+        const data = await response.json();
+        
+        if (!data.ok) {
+          throw new Error(data.description || "Failed to revoke link on Telegram");
+        }
       } catch (tgError: any) {
         console.error("[POST] Telegram API error:", tgError);
         return res.status(500).json({ error: "Failed to revoke link on Telegram: " + tgError.message, stage: 'tg_api' });
