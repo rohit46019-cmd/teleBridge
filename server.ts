@@ -3,6 +3,8 @@ import mongoose from "mongoose";
 import cors from "cors";
 import path from "path";
 
+console.log("Starting server.ts...");
+
 const MONGODB_URI = (process.env.MONGODB_URI || "mongodb+srv://rohit46019_db_user:m5j51NXjSGxEzSrs@cluster0.b3gft5l.mongodb.net/telebridge_pro?appName=Cluster0").replace(/^['"]|['"]$/g, '');
 
 // Define Schemas
