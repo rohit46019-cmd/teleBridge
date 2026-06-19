@@ -18,12 +18,12 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, theme, toggle
 
   return (
     <>
-      <aside className="hidden md:flex w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex-col h-screen fixed top-0 left-0 z-20 transition-all duration-500">
+      <aside className="hidden md:flex w-64 bg-zinc-50 dark:bg-zinc-950 border-r border-zinc-200 dark:border-zinc-800 flex-col h-screen fixed top-0 left-0 z-20 transition-all duration-500">
         <div className="p-8 pb-4 flex items-center gap-3">
-          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
+          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center shadow-lg shadow-blue-500/20">
             <Icons.Zap className="text-white" size={20} strokeWidth={2.5} />
           </div>
-          <span className="font-display font-bold text-xl tracking-tight text-slate-900 dark:text-white">TeleBridge</span>
+          <span className="font-display font-bold text-xl tracking-tight text-zinc-900 dark:text-white">TeleBridge</span>
         </div>
 
         <nav className="flex-1 mt-8 px-4 space-y-1.5">
@@ -31,16 +31,16 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, theme, toggle
             <button
               key={item.id}
               onClick={() => onTabChange(item.id)}
-              className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all duration-300 group relative ${
+              className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-full transition-all duration-300 group relative ${
                 activeTab === item.id
-                  ? `bg-slate-100 dark:bg-slate-800 shadow-sm border border-slate-200 dark:border-slate-700`
-                  : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/50'
+                  ? `bg-zinc-100 dark:bg-zinc-800 shadow-sm border border-zinc-200 dark:border-zinc-700`
+                  : 'text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800/50'
               }`}
             >
-              <div className={`${activeTab === item.id ? item.color : 'text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300'} transition-colors`}>
+              <div className={`${activeTab === item.id ? item.color : 'text-zinc-400 group-hover:text-zinc-600 dark:group-hover:text-zinc-300'} transition-colors`}>
                 <item.icon size={18} strokeWidth={activeTab === item.id ? 2.5 : 2} />
               </div>
-              <span className={`font-medium text-sm ${activeTab === item.id ? 'text-slate-900 dark:text-white font-semibold' : ''}`}>{item.label}</span>
+              <span className={`font-medium text-sm ${activeTab === item.id ? 'text-zinc-900 dark:text-white font-semibold' : ''}`}>{item.label}</span>
               {activeTab === item.id && (
                 <div className={`absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r-full bg-current ${item.color}`} />
               )}
@@ -61,13 +61,13 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, theme, toggle
         </div>
       </aside>
 
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex items-center justify-around p-1.5 z-50 shadow-[0_-10px_40px_rgba(0,0,0,0.1)]">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-zinc-50 dark:bg-zinc-950 border-t border-zinc-200 dark:border-zinc-800 flex items-center justify-around p-1.5 z-50 shadow-[0_-10px_40px_rgba(0,0,0,0.1)]">
         {menuItems.map((item) => (
           <button
             key={item.id}
             onClick={() => onTabChange(item.id)}
-            className={`flex flex-col items-center gap-1.5 px-4 py-2 rounded-2xl transition-all active:scale-95 relative ${
-              activeTab === item.id ? `${item.color} bg-slate-100 dark:bg-slate-800/50 shadow-inner` : 'text-slate-500'
+            className={`flex flex-col items-center gap-1.5 px-4 py-2 rounded-full transition-all active:scale-95 relative ${
+              activeTab === item.id ? `${item.color} bg-zinc-100 dark:bg-zinc-800/50 shadow-inner` : 'text-zinc-500'
             }`}
           >
             <item.icon size={20} strokeWidth={activeTab === item.id ? 2.5 : 1.5} />
