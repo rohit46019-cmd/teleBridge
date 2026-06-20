@@ -4,6 +4,7 @@ import Sidebar from '../components/Sidebar.tsx';
 import GroupCard from '../components/GroupCard.tsx';
 import InviteModal from '../components/InviteModal.tsx';
 import ConfirmationModal from '../components/ConfirmationModal.tsx';
+import { GalleryBanner } from './components/GalleryBanner.tsx';
 import { Icons } from '../constants.tsx';
 import { TelegramGroup, JoinEvent, BannedUser } from '../types.ts';
 import { verifyBotToken, getChatDetails, TelegramBotInfo, getChatMemberCount, getRecentUpdates, kickChatMember, banMember, unbanMember, deleteMessage, setWebhook, deleteWebhook } from '../services/telegramService.ts';
@@ -1796,11 +1797,12 @@ const App: React.FC = () => {
         >
           {activeTab === 'dashboard' && (
             <div className={`space-y-6 ${animationClass}`}>
+               <GalleryBanner />
                <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
                   <motion.div 
-                    whileHover={{ scale: 1.02, translateY: -4, boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.4)' }}
+                    whileHover={{ scale: 1.02, translateY: -4, boxShadow: '0 30px 60px -15px rgba(0, 0, 0, 0.5)' }}
                     whileTap={{ scale: 0.98 }}
-                    className="bg-gradient-to-br from-emerald-500 to-teal-700 p-5 rounded-[2rem] border-b-4 border-teal-900 shadow-[0_15px_30px_rgba(6,78,59,0.4)] transition-all relative overflow-hidden"
+                    className="bg-gradient-to-br from-emerald-500 to-teal-700 p-5 rounded-3xl border border-white/10 shadow-[0_20px_40px_-5px_rgba(0,0,0,0.3),inset_0_2px_4px_rgba(255,255,255,0.2)] transition-all relative overflow-hidden"
                   >
                     <BubbleBackground />
                     <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-4 backdrop-blur-sm relative z-10"><Icons.Users size={20} className="text-white" strokeWidth={3} /></div>
@@ -1820,9 +1822,9 @@ const App: React.FC = () => {
                  </motion.div>
 
                   <motion.div 
-                    whileHover={{ scale: 1.02, translateY: -4, boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.4)' }}
+                    whileHover={{ scale: 1.02, translateY: -4, boxShadow: '0 30px 60px -15px rgba(0, 0, 0, 0.5)' }}
                     whileTap={{ scale: 0.98 }}
-                    className="bg-gradient-to-br from-blue-600 to-indigo-700 p-5 rounded-[2rem] border-b-4 border-indigo-900 shadow-[0_15px_30px_rgba(30,58,138,0.4)] transition-all relative overflow-hidden"
+                    className="bg-gradient-to-br from-blue-600 to-indigo-700 p-5 rounded-3xl border border-white/10 shadow-[0_20px_40px_-5px_rgba(0,0,0,0.3),inset_0_2px_4px_rgba(255,255,255,0.2)] transition-all relative overflow-hidden"
                   >
                     <BubbleBackground />
                     <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-4 backdrop-blur-sm relative z-10"><Icons.Home size={20} className="text-white" strokeWidth={3} /></div>
