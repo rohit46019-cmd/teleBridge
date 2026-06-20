@@ -52,7 +52,7 @@ export const GalleryBanner: React.FC = () => {
   }
 
   return (
-    <div className="relative h-[250px] w-full rounded-[2rem] overflow-hidden shadow-2xl group">
+    <div className="relative h-[250px] w-full rounded-3xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.3)] border border-white/10 group">
       <AnimatePresence mode='wait'>
         <motion.img
           key={photos[currentIndex]._id}
