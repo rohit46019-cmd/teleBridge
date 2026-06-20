@@ -128,8 +128,8 @@ const InviteModal: React.FC<InviteModalProps> = ({ group, onClose, botToken, onI
         <div className="flex justify-between items-start mb-8">
            <div>
              <div className="flex items-center gap-3 mb-2">
-               <div className="w-2 h-2 rounded-full bg-[#0088cc] animate-pulse shadow-[0_0_8px_rgba(0,136,204,0.8)]" />
-               <p className="text-[10px] font-bold text-[#0088cc] uppercase tracking-widest">Secure Invite System</p>
+               <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse shadow-[0_0_8px_rgba(59,130,246,0.8)]" />
+               <p className="text-[10px] font-bold text-blue-500 uppercase tracking-widest">Secure Invite System</p>
              </div>
              <h2 className="text-2xl font-display font-bold text-slate-900 dark:text-white tracking-tight break-words max-w-[300px]">{group.name}</h2>
            </div>
@@ -148,15 +148,15 @@ const InviteModal: React.FC<InviteModalProps> = ({ group, onClose, botToken, onI
           <div className="bg-black/5 dark:bg-black/20 p-6 rounded-2xl border border-black/5 dark:border-white/5 relative group min-h-[80px] flex items-center">
             {isGenerating ? (
               <div className="flex items-center gap-4 text-slate-400 text-sm font-medium animate-pulse">
-                <div className="w-5 h-5 border-2 border-[#0088cc] border-t-transparent rounded-full animate-spin" />
+                <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
                 Encrypting link...
               </div>
             ) : link ? (
               <>
-                <div className="text-[#0088cc] dark:text-[#66c0f4] font-mono text-sm truncate mr-12 select-all font-medium">{link}</div>
+                <div className="text-blue-600 dark:text-blue-400 font-mono text-sm truncate mr-12 select-all font-medium">{link}</div>
                 <button 
                   onClick={copyToClipboard}
-                  className="absolute right-4 p-2.5 bg-white dark:bg-slate-800 hover:bg-[#0088cc] hover:text-white rounded-xl text-slate-600 dark:text-slate-200 transition-all shadow-sm active:scale-90 border border-black/5 dark:border-white/5"
+                  className="absolute right-4 p-2.5 bg-white dark:bg-slate-800 hover:bg-blue-500 hover:text-white rounded-xl text-slate-600 dark:text-slate-200 transition-all shadow-sm active:scale-90 border border-black/5 dark:border-white/5"
                 >
                   {copied ? <Icons.Check size={18} /> : <Icons.Copy size={18} />}
                 </button>
@@ -169,13 +169,13 @@ const InviteModal: React.FC<InviteModalProps> = ({ group, onClose, botToken, onI
           <div className="flex gap-3">
             <button 
               onClick={handleGenerateLink}
-              className="flex-1 py-3.5 bg-[#0088cc] hover:bg-[#0077b5] text-white rounded-xl text-sm font-black uppercase tracking-widest transition-all shadow-lg shadow-[#0088cc]/30 active:scale-95"
+              className="flex-1 py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-sm font-black uppercase tracking-widest transition-all shadow-lg shadow-blue-500/30 active:scale-95 border-b-4 border-blue-800"
             >
               Rotate Key
             </button>
             <button 
               onClick={copyToClipboard}
-              className={`flex-1 py-3.5 rounded-xl text-sm font-black uppercase tracking-widest transition-all active:scale-95 ${copied ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 shadow-sm'}`}
+              className={`flex-1 py-3.5 rounded-xl text-sm font-black uppercase tracking-widest transition-all active:scale-95 border-b-4 ${copied ? 'bg-emerald-500 text-white border-emerald-700 shadow-lg shadow-emerald-500/30' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700 shadow-sm'}`}
             >
               {copied ? 'Copied' : 'Duplicate'}
             </button>

@@ -3,8 +3,6 @@ import mongoose from "mongoose";
 import cors from "cors";
 import path from "path";
 
-console.log("Starting server.ts...");
-
 const MONGODB_URI = (process.env.MONGODB_URI || "mongodb+srv://rohit46019_db_user:m5j51NXjSGxEzSrs@cluster0.b3gft5l.mongodb.net/telebridge_pro?appName=Cluster0").replace(/^['"]|['"]$/g, '');
 
 // Define Schemas
@@ -50,18 +48,12 @@ const inviteLinkSchema = new mongoose.Schema({
   createdAt: { type: Number, default: Date.now }
 }, { timestamps: true });
 
-const galleryPhotoSchema = new mongoose.Schema({
-  imageUrl: String,
-  caption: String,
-}, { timestamps: true });
-
 // Define Models
 const JoinEvent = mongoose.models.JoinEvent || mongoose.model("JoinEvent", joinEventSchema);
 const PendingJoinRequest = mongoose.models.PendingJoinRequest || mongoose.model("PendingJoinRequest", pendingJoinRequestSchema);
 const Group = mongoose.models.Group || mongoose.model("Group", groupSchema);
 const Broadcast = mongoose.models.Broadcast || mongoose.model("Broadcast", broadcastSchema);
 const InviteLink = mongoose.models.InviteLink || mongoose.model("InviteLink", inviteLinkSchema);
-const GalleryPhoto = mongoose.models.GalleryPhoto || mongoose.model("GalleryPhoto", galleryPhotoSchema);
 
 // Global Error Handlers to prevent server crashes
 process.on('unhandledRejection', (reason, promise) => {
@@ -214,25 +206,6 @@ async function startServer() {
 
   app.get("/api/diagnostics", (req, res) => {
     res.json(webhookLogs);
-  });
-
-  app.get("/api/gallery", async (req, res) => {
-    try {
-      const photos = await GalleryPhoto.find().sort({ createdAt: -1 });
-      res.json(photos);
-    } catch (err) {
-      res.status(500).json({ error: "Failed to fetch gallery" });
-    }
-  });
-
-  app.post("/api/gallery", async (req, res) => {
-    try {
-      const photo = new GalleryPhoto(req.body);
-      await photo.save();
-      res.json(photo);
-    } catch (err) {
-      res.status(500).json({ error: "Failed to save photo" });
-    }
   });
 
   app.post("/api/webhook/:token", async (req, res) => {
