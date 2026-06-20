@@ -52,26 +52,28 @@ export const GalleryBanner: React.FC = () => {
   }
 
   return (
-    <div className="relative h-[250px] w-full rounded-3xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.3)] border border-white/10 group">
-      <AnimatePresence mode='wait'>
-        <motion.img
-          key={photos[currentIndex]._id}
-          src={photos[currentIndex].imageUrl}
-          initial={{ opacity: 0, x: 300 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -300 }}
-          transition={{ duration: 0.5 }}
-          className="absolute inset-0 w-full h-full object-cover"
-        />
-      </AnimatePresence>
-      <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-6">
-        <div className="text-white">
-          <p className="font-bold text-lg">{photos[currentIndex].caption || 'Gallery'}</p>
+    <div className="flex flex-col gap-4">
+      <div className="relative h-[250px] w-full rounded-[2rem] overflow-hidden shadow-[0_20px_50px_-10px_rgba(0,0,0,0.5)] border border-white/10 group">
+        <AnimatePresence mode='wait'>
+          <motion.img
+            key={photos[currentIndex]._id}
+            src={photos[currentIndex].imageUrl}
+            initial={{ opacity: 0, scale: 1.1 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            transition={{ duration: 0.7 }}
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+        </AnimatePresence>
+        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent flex items-end p-8">
+          <div className="text-white">
+            <p className="font-bold text-2xl tracking-tight">{photos[currentIndex].caption || 'Gallery Highlights'}</p>
+          </div>
         </div>
       </div>
-      <div className="absolute bottom-4 right-4 flex gap-2">
-        <input type="text" placeholder="Add URL" className="bg-white/20 p-2 rounded-lg text-xs text-white placeholder:text-white/50 border border-white/20" value={newUrl} onChange={e => setNewUrl(e.target.value)}/>
-        <button onClick={addPhoto} className="bg-white/20 p-2 rounded-lg text-white hover:bg-white/40"><Icons.Plus size={16} /></button>
+      <div className="flex gap-2">
+        <input type="text" placeholder="Add new banner image URL..." className="flex-1 bg-white dark:bg-slate-800 p-3 rounded-2xl text-sm border border-slate-200 dark:border-slate-700 shadow-sm" value={newUrl} onChange={e => setNewUrl(e.target.value)}/>
+        <button onClick={addPhoto} className="bg-[#0088cc] hover:bg-[#0077b5] text-white px-6 py-3 rounded-2xl text-sm font-bold shadow-lg shadow-[#0088cc]/20 transition-all flex items-center gap-2"><Icons.Plus size={16} /> Add to Banner</button>
       </div>
     </div>
   );

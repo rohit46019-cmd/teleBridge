@@ -1813,7 +1813,7 @@ const App: React.FC = () => {
                  <motion.div 
                     whileHover={{ scale: 1.02, translateY: -4, boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.4)' }}
                     whileTap={{ scale: 0.98 }}
-                    className="bg-gradient-to-br from-amber-500 to-orange-600 p-4 rounded-2xl border border-white/10 shadow-[0_10px_20px_rgba(0,0,0,0.2)] transition-all relative overflow-hidden"
+                    className="bg-gradient-to-br from-amber-500 to-orange-600 p-4 rounded-2xl border border-white/10 shadow-[0_20px_30px_-10px_rgba(0,0,0,0.4),inset_0_2px_2px_rgba(255,255,255,0.2)] transition-all relative overflow-hidden"
                   >
                     <BubbleBackground />
                     <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-4 backdrop-blur-sm relative z-10"><Icons.Activity size={20} className="text-white" strokeWidth={3} /></div>
@@ -1824,7 +1824,7 @@ const App: React.FC = () => {
                   <motion.div 
                     whileHover={{ scale: 1.02, translateY: -4, boxShadow: '0 30px 60px -15px rgba(0, 0, 0, 0.5)' }}
                     whileTap={{ scale: 0.98 }}
-                    className="bg-gradient-to-br from-blue-600 to-indigo-700 p-4 rounded-2xl border border-white/10 shadow-[0_10px_20px_rgba(0,0,0,0.2)] transition-all relative overflow-hidden"
+                    className="bg-gradient-to-br from-blue-600 to-indigo-700 p-4 rounded-2xl border border-white/10 shadow-[0_20px_30px_-10px_rgba(0,0,0,0.4),inset_0_2px_2px_rgba(255,255,255,0.2)] transition-all relative overflow-hidden"
                   >
                     <BubbleBackground />
                     <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-4 backdrop-blur-sm relative z-10"><Icons.Home size={20} className="text-white" strokeWidth={3} /></div>
@@ -1835,7 +1835,7 @@ const App: React.FC = () => {
                  <motion.div 
                     whileHover={{ scale: 1.02, translateY: -4, boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.4)' }}
                     whileTap={{ scale: 0.98 }}
-                    className="bg-gradient-to-br from-fuchsia-600 to-purple-700 p-4 rounded-2xl border border-white/10 shadow-[0_10px_20px_rgba(0,0,0,0.2)] transition-all relative overflow-hidden"
+                    className="bg-gradient-to-br from-fuchsia-600 to-purple-700 p-4 rounded-2xl border border-white/10 shadow-[0_20px_30px_-10px_rgba(0,0,0,0.4),inset_0_2px_2px_rgba(255,255,255,0.2)] transition-all relative overflow-hidden"
                   >
                     <BubbleBackground />
                     <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-4 backdrop-blur-sm relative z-10"><Icons.Zap size={20} className="text-white" strokeWidth={3} /></div>
@@ -1850,7 +1850,7 @@ const App: React.FC = () => {
                  <motion.div 
                     whileHover={{ scale: 1.02, translateY: -4 }}
                     whileTap={{ scale: 0.98 }}
-                    className="bg-gradient-to-br from-rose-500 to-orange-600 p-4 rounded-2xl border border-white/10 shadow-[0_10px_20px_rgba(0,0,0,0.2)] transition-all relative overflow-hidden"
+                    className="bg-gradient-to-br from-rose-500 to-orange-600 p-4 rounded-2xl border border-white/10 shadow-[0_20px_30px_-10px_rgba(0,0,0,0.4),inset_0_2px_2px_rgba(255,255,255,0.2)] transition-all relative overflow-hidden"
                   >
                     <BubbleBackground />
                     <div className="flex justify-between items-start mb-4 relative z-10">
