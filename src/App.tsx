@@ -1993,18 +1993,18 @@ const App: React.FC = () => {
                     </p>
                  </motion.button>
               </div>
-              <div className="relative rounded-[2.5rem] border border-white/10 p-8 shadow-2xl overflow-hidden bg-gradient-to-br from-violet-600 via-fuchsia-600 to-orange-500 text-white transform transition-all duration-300 hover:scale-[1.01] hover:shadow-fuchsia-500/20">
-                 <div className="absolute top-0 right-0 w-64 h-64 bg-white/20 rounded-full blur-3xl -mr-16 -mt-16 mix-blend-overlay pointer-events-none"></div>
-                 <div className="absolute bottom-0 left-0 w-64 h-64 bg-yellow-300/20 rounded-full blur-3xl -ml-16 -mb-16 mix-blend-overlay pointer-events-none"></div>
-                 <h2 className="text-xl font-black uppercase tracking-tight mb-4 flex items-center gap-3 relative z-10">
-                   <div className="p-3 bg-white/20 rounded-2xl backdrop-blur-sm shadow-inner border border-white/20 text-yellow-300">
-                     <Icons.Zap size={24} />
+              <div className="relative rounded-3xl border border-white/10 p-5 shadow-xl overflow-hidden bg-gradient-to-br from-violet-600 via-fuchsia-600 to-orange-500 text-white transform transition-all duration-300 hover:scale-[1.01] hover:shadow-fuchsia-500/10">
+                 <div className="absolute top-0 right-0 w-48 h-48 bg-white/20 rounded-full blur-2xl -mr-12 -mt-12 mix-blend-overlay pointer-events-none"></div>
+                 <div className="absolute bottom-0 left-0 w-48 h-48 bg-yellow-300/20 rounded-full blur-2xl -ml-12 -mb-12 mix-blend-overlay pointer-events-none"></div>
+                 <h2 className="text-sm font-black uppercase tracking-tight mb-3 flex items-center gap-2 relative z-10">
+                   <div className="p-2 bg-white/20 rounded-xl backdrop-blur-sm shadow-inner border border-white/20 text-yellow-300">
+                     <Icons.Zap size={16} />
                    </div>
                    <span className="bg-gradient-to-r from-white to-orange-200 bg-clip-text text-transparent drop-shadow-sm">Fast Batch Injection</span>
                  </h2>
-                 <div className="flex flex-col sm:flex-row gap-3 relative z-10">
-                   <input type="text" placeholder="Enter Telegram Chat ID (-100...)" className="flex-1 bg-black/20 border border-white/20 px-6 py-4 rounded-2xl text-xs font-mono outline-none focus:ring-4 focus:ring-white/30 shadow-inner placeholder:text-white/50 text-white backdrop-blur-sm" value={newChatId} onChange={e => setNewChatId(e.target.value)} />
-                   <button onClick={handleAddGroupManual} disabled={isAddingGroup || !newChatId} className="px-8 py-4 bg-white text-fuchsia-900 hover:bg-fuchsia-50 rounded-2xl text-xs font-black uppercase tracking-widest shadow-[0_10px_30px_rgba(0,0,0,0.3)] active:scale-95 disabled:opacity-50 transition-all border border-white">
+                 <div className="flex flex-col sm:flex-row gap-2 relative z-10">
+                   <input type="text" placeholder="Enter Telegram Chat ID (-100...)" className="flex-1 bg-black/20 border border-white/20 px-3.5 py-2.5 rounded-xl text-[9px] font-mono outline-none focus:ring-4 focus:ring-white/30 shadow-inner placeholder:text-white/50 text-white backdrop-blur-sm" value={newChatId} onChange={e => setNewChatId(e.target.value)} />
+                   <button onClick={handleAddGroupManual} disabled={isAddingGroup || !newChatId} className="px-4 py-2.5 bg-white text-fuchsia-900 hover:bg-fuchsia-50 rounded-xl text-[9px] font-black uppercase tracking-widest shadow-md active:scale-95 disabled:opacity-50 transition-all border border-white">
                      {isAddingGroup ? 'Connecting...' : 'Inject Batch(es)'}
                    </button>
                  </div>
@@ -2152,53 +2152,53 @@ const App: React.FC = () => {
 
               {auditSubTab === 'audit' ? (
                 <>
-                  <div className="flex flex-col md:flex-row gap-4">
-                     <div className="flex-1 bg-indigo-600 p-6 rounded-[2.5rem] border-b-4 border-indigo-900 shadow-xl text-white relative overflow-hidden active:scale-95 transition-transform">
-                        <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-1 opacity-80">Total Joined ({selectedDate})</p>
-                        <p className="text-4xl font-black">{filteredJoins.length}</p>
-                        <div className="absolute -right-4 -bottom-4 w-20 h-20 bg-white/5 rounded-full" />
+                  <div className="flex flex-col md:flex-row gap-3">
+                     <div className="flex-1 bg-indigo-600 p-4 rounded-2xl border-b-2 border-indigo-950 shadow-md text-white relative overflow-hidden active:scale-95 transition-transform">
+                        <p className="text-[9px] font-black uppercase tracking-[0.2em] mb-0.5 opacity-80">Total Joined ({selectedDate})</p>
+                        <p className="text-2xl font-black">{filteredJoins.length}</p>
+                        <div className="absolute -right-4 -bottom-4 w-12 h-12 bg-white/5 rounded-full" />
                      </div>
-                     <div className="flex-1 bg-rose-500 p-6 rounded-[2.5rem] border-b-4 border-rose-800 shadow-xl text-white relative overflow-hidden active:scale-95 transition-transform">
-                        <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-1 opacity-80">Live Audit</p>
-                        <p className="text-4xl font-black">{isScanning ? 'SYNCING...' : 'ACTIVE'}</p>
-                        <div className="absolute -right-4 -bottom-4 w-20 h-20 bg-white/5 rounded-full" />
+                     <div className="flex-1 bg-rose-500 p-4 rounded-2xl border-b-2 border-rose-950 shadow-md text-white relative overflow-hidden active:scale-95 transition-transform">
+                        <p className="text-[9px] font-black uppercase tracking-[0.2em] mb-0.5 opacity-80">Live Audit</p>
+                        <p className="text-2xl font-black">{isScanning ? 'SYNCING...' : 'ACTIVE'}</p>
+                        <div className="absolute -right-4 -bottom-4 w-12 h-12 bg-white/5 rounded-full" />
                      </div>
-                     <div className="bg-slate-900 p-6 rounded-[2.5rem] border-b-4 border-black shadow-xl flex flex-col justify-center min-w-[220px]">
-                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Window Selector</p>
-                        <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="bg-white/5 border-none text-white text-xs font-black uppercase outline-none rounded-xl p-2 w-full" />
+                     <div className="bg-slate-900 p-4 rounded-2xl border-b-2 border-black shadow-md flex flex-col justify-center min-w-[180px]">
+                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Window Selector</p>
+                        <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="bg-white/5 border-none text-white text-[9px] font-black uppercase outline-none rounded-lg p-1.5 w-full" />
                      </div>
                   </div>
 
-                  <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2.5rem] overflow-hidden shadow-2xl">
-                     <div className="overflow-y-auto max-h-[55vh] custom-scrollbar">
+                  <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-lg">
+                     <div className="overflow-y-auto max-h-[50vh] custom-scrollbar">
                        <table className="w-full text-left">
                           <thead className="sticky top-0 bg-slate-50 dark:bg-slate-950 backdrop-blur-md z-10">
                             <tr>
-                              <th className="px-1 py-2 text-[8px] font-black text-slate-400 uppercase tracking-widest text-center">SL</th>
-                              <th className="px-1 py-2 text-[8px] font-black text-slate-400 uppercase tracking-widest">Identity</th>
-                              <th className="px-1 py-2 text-[8px] font-black text-slate-400 uppercase tracking-widest">Target</th>
-                              <th className="px-1 py-2 text-[8px] font-black text-slate-400 uppercase tracking-widest">Time</th>
-                              <th className="px-1 py-2 text-[8px] font-black text-slate-400 uppercase tracking-widest text-right">Action</th>
+                              <th className="px-2 py-1.5 text-[8px] font-black text-slate-400 uppercase tracking-widest text-center">SL</th>
+                              <th className="px-2 py-1.5 text-[8px] font-black text-slate-400 uppercase tracking-widest">Identity</th>
+                              <th className="px-2 py-1.5 text-[8px] font-black text-slate-400 uppercase tracking-widest">Target</th>
+                              <th className="px-2 py-1.5 text-[8px] font-black text-slate-400 uppercase tracking-widest">Time</th>
+                              <th className="px-2 py-1.5 text-[8px] font-black text-slate-400 uppercase tracking-widest text-right">Action</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                             {filteredJoins.map((e, idx) => (
                               <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
-                                <td className="px-1 py-2 text-[9px] font-mono text-slate-500 text-center">{idx + 1}</td>
-                                <td className="px-1 py-2">
+                                <td className="px-2 py-1.5 text-[9px] font-mono text-slate-500 text-center">{idx + 1}</td>
+                                <td className="px-2 py-1.5">
                                    <div className={`inline-flex items-center px-1.5 py-0.5 rounded-full border ${ROW_COLORS[idx % ROW_COLORS.length]} font-black text-[8px] uppercase`}>
                                      {e.userName.substring(0, 8)}
                                    </div>
                                 </td>
-                                <td className="px-1 py-2 text-[8px] font-bold text-slate-500 truncate max-w-[80px]">{e.chatTitle.substring(0, 12)}</td>
-                                <td className="px-1 py-2 text-[8px] font-mono text-slate-400">{formatTime12h(e.timestamp).replace(' ', '')}</td>
-                                <td className="px-1 py-2 text-right">
+                                <td className="px-2 py-1.5 text-[9px] font-bold text-slate-500 truncate max-w-[80px]">{e.chatTitle.substring(0, 12)}</td>
+                                <td className="px-2 py-1.5 text-[9px] font-mono text-slate-400">{formatTime12h(e.timestamp).replace(' ', '')}</td>
+                                <td className="px-2 py-1.5 text-right">
                                   <div className="flex justify-end gap-1">
-                                    <button onClick={() => handleRequestKick(e)} title="Kick Member" className="p-0.5 text-orange-500 hover:bg-orange-500 hover:text-white rounded-md transition-all">
-                                      <Icons.Trash size={12}/>
+                                    <button onClick={() => handleRequestKick(e)} title="Kick Member" className="p-0.5 text-orange-500 hover:bg-orange-500 hover:text-white rounded transition-all">
+                                      <Icons.Trash size={10}/>
                                     </button>
-                                    <button onClick={() => handleRequestBan(e)} title="Permanent Ban" className="p-0.5 text-rose-600 hover:bg-rose-600 hover:text-white rounded-md transition-all">
-                                      <Icons.Ban size={12}/>
+                                    <button onClick={() => handleRequestBan(e)} title="Permanent Ban" className="p-0.5 text-rose-600 hover:bg-rose-600 hover:text-white rounded transition-all">
+                                      <Icons.Ban size={10}/>
                                     </button>
                                   </div>
                                 </td>
@@ -2288,24 +2288,24 @@ const App: React.FC = () => {
 
           {activeTab === 'settings' && (
             <div className={`max-w-xl space-y-6 ${animationClass}`}>
-              <div className="flex bg-slate-100 dark:bg-slate-800 p-1.5 rounded-[1.5rem] border border-slate-200 dark:border-slate-700 shadow-inner">
+              <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700 shadow-inner">
                 <button 
                   onClick={() => setSettingsSubTab('charts')}
-                  className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${settingsSubTab === 'charts' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-lg scale-[1.02]' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all ${settingsSubTab === 'charts' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm scale-[1.01]' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
                 >
-                  <Icons.BarChart3 size={14} /> Analytics
+                  <Icons.BarChart3 size={10} /> Analytics
                 </button>
                 <button 
                   onClick={() => setSettingsSubTab('config')}
-                  className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${settingsSubTab === 'config' ? 'bg-white dark:bg-slate-700 text-purple-600 dark:text-purple-400 shadow-lg scale-[1.02]' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all ${settingsSubTab === 'config' ? 'bg-white dark:bg-slate-700 text-purple-600 dark:text-purple-400 shadow-sm scale-[1.01]' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
                 >
-                  <Icons.Settings size={14} /> Configuration
+                  <Icons.Settings size={10} /> Configuration
                 </button>
                 <button 
                   onClick={() => setSettingsSubTab('admins')}
-                  className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${settingsSubTab === 'admins' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-lg scale-[1.02]' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all ${settingsSubTab === 'admins' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm scale-[1.01]' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
                 >
-                  <Icons.Shield size={14} /> Bot Admins
+                  <Icons.Shield size={10} /> Bot Admins
                 </button>
               </div>
 
@@ -2496,117 +2496,9 @@ const App: React.FC = () => {
 
               {settingsSubTab === 'config' && (
                 <div className="space-y-6">
-                  <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-[2rem] shadow-sm">
-                    <h3 className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-[0.4em] mb-6 flex items-center gap-2">
-                      <Icons.Zap size={14} /> Bot Gateway & Customization
-                    </h3>
-                    
-                    {/* Theme & Visual Appearance Customization */}
-                    <div className="mb-8 p-6 bg-slate-100/70 dark:bg-slate-950/80 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 shadow-md space-y-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white shadow-md">
-                            <Icons.Palette size={20} />
-                          </div>
-                          <div>
-                            <h4 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider">
-                              Theme & Visual Experience
-                            </h4>
-                            <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
-                              Select a modern theme palette to update your dashboard look instantly.
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={toggleTheme}
-                            className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
-                          >
-                            {theme === 'dark' ? <Icons.Sun size={14} className="text-amber-500" /> : <Icons.Moon size={14} className="text-indigo-600" />}
-                            <span>{theme === 'dark' ? 'Dark Mode' : 'Light Mode'}</span>
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
-                        {[
-                          { id: 'midnight', name: 'Cyber Obsidian', desc: 'Neon Indigo & Dark Glass', bg: 'from-indigo-950 via-slate-950 to-purple-950 text-white', border: 'border-indigo-500' },
-                          { id: 'quantum', name: 'Quantum Emerald', desc: 'Futuristic Tech & Teal', bg: 'from-emerald-950 via-slate-950 to-teal-950 text-white', border: 'border-emerald-500' },
-                          { id: 'violet', name: 'Violet Aura', desc: 'Magenta & Violet Glow', bg: 'from-fuchsia-950 via-slate-950 to-purple-950 text-white', border: 'border-purple-500' },
-                          { id: 'executive', name: 'Executive Light', desc: 'Crisp Slate & Minimal Light', bg: 'from-slate-100 via-white to-indigo-50 text-slate-900', border: 'border-slate-400' }
-                        ].map((t) => (
-                          <button
-                            key={t.id}
-                            onClick={() => {
-                              setColorTheme(t.id as ThemePreset);
-                              if (t.id === 'executive') setTheme('light');
-                              else setTheme('dark');
-                            }}
-                            className={`p-4 rounded-2xl border transition-all text-left flex flex-col justify-between gap-3 relative overflow-hidden ${
-                              colorTheme === t.id
-                                ? `${t.border} ring-2 ring-indigo-500/50 shadow-xl scale-[1.02]`
-                                : 'border-slate-200 dark:border-slate-800 opacity-80 hover:opacity-100'
-                            } bg-gradient-to-br ${t.bg}`}
-                          >
-                            <div className="flex items-center justify-between z-10">
-                              <span className="text-xs font-black uppercase tracking-tight">{t.name}</span>
-                              {colorTheme === t.id && (
-                                <div className="w-5 h-5 rounded-full bg-indigo-500 text-white flex items-center justify-center">
-                                  <Icons.Check size={12} strokeWidth={3} />
-                                </div>
-                              )}
-                            </div>
-                            <p className="text-[9px] font-medium opacity-75 z-10 leading-tight">{t.desc}</p>
-                          </button>
-                        ))}
-                      </div>
-
-                      {/* Font Size Scaling Options */}
-                      <div className="pt-4 border-t border-slate-200/80 dark:border-slate-800/80">
-                        <div className="flex items-center justify-between mb-3">
-                          <div>
-                            <h5 className="text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider">
-                              Typography Scale / Font Size
-                            </h5>
-                            <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
-                              Adjust text size across the whole dashboard interface.
-                            </p>
-                          </div>
-                          <span className="px-2 py-0.5 rounded-lg bg-indigo-500/10 text-indigo-500 font-mono font-black text-[10px] uppercase">
-                            Current: {fontSize === 'xs' ? 'Micro (11.5px)' : fontSize === 'small' ? 'Compact (13px)' : 'Medium (15px)'}
-                          </span>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                          {[
-                            { id: 'xs', title: 'Extra Small', size: '11.5px Base', desc: 'Ultra-dense pro view' },
-                            { id: 'small', title: 'Small / Compact', size: '13px Base', desc: 'Recommended default' },
-                            { id: 'normal', title: 'Medium', size: '15px Base', desc: 'Larger text readability' },
-                          ].map((f) => (
-                            <button
-                              key={f.id}
-                              onClick={() => setFontSize(f.id as 'xs' | 'small' | 'normal')}
-                              className={`p-3 rounded-2xl border transition-all text-left flex flex-col gap-1 ${
-                                fontSize === f.id
-                                  ? 'bg-indigo-600 text-white border-indigo-500 shadow-md scale-[1.02]'
-                                  : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-800 hover:border-indigo-400'
-                              }`}
-                            >
-                              <div className="flex items-center justify-between">
-                                <span className="text-xs font-black tracking-tight">{f.title}</span>
-                                <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded ${fontSize === f.id ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'}`}>
-                                  {f.size}
-                                </span>
-                              </div>
-                              <p className={`text-[9px] ${fontSize === f.id ? 'text-indigo-100' : 'text-slate-400'}`}>
-                                {f.desc}
-                              </p>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
+                  <h3 className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-[0.4em] mb-2 flex items-center gap-2">
+                    <Icons.Zap size={14} /> Bot Gateway & Customization
+                  </h3>
                     
                     {/* Bot Admin Quick Access Banner */}
                     <div className="mb-8 p-5 bg-gradient-to-r from-indigo-500/10 via-purple-500/5 to-indigo-500/5 rounded-[2rem] border border-indigo-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -2631,56 +2523,56 @@ const App: React.FC = () => {
                       </button>
                     </div>
 
-                    <div className="mb-8 p-6 bg-white dark:bg-black/20 rounded-[2rem] border border-slate-200 dark:border-white/5 space-y-6">
+                    <div className="mb-6 p-4 bg-white dark:bg-black/20 rounded-2xl border border-slate-200 dark:border-white/5 space-y-4">
                       <div className="flex items-center justify-between">
                         <div>
-                          <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1 flex items-center justify-between">
+                          <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-0.5 flex items-center justify-between">
                             Group Cleanup
                           </h4>
 
-                          <p className="text-[9px] text-slate-500 font-bold">Auto-delete Join/Leave messages</p>
+                          <p className="text-[8px] text-slate-500 font-bold">Auto-delete Join/Leave messages</p>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5">
                           <span className={`text-[8px] font-black ${autoCleanServiceMessages ? 'text-emerald-500' : 'text-slate-400'}`}>
                             {autoCleanServiceMessages ? 'ACTIVE' : 'OFF'}
                           </span>
                           <button 
                             onClick={() => setAutoCleanServiceMessages(!autoCleanServiceMessages)}
-                            className={`w-10 h-5 rounded-full transition-all relative ${autoCleanServiceMessages ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'}`}
+                            className={`w-8 h-4 rounded-full transition-all relative ${autoCleanServiceMessages ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'}`}
                           >
-                            <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${autoCleanServiceMessages ? 'left-6' : 'left-1'}`} />
+                            <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${autoCleanServiceMessages ? 'left-4.5' : 'left-0.5'}`} />
                           </button>
                         </div>
                       </div>
                       
-                      <div className="flex flex-col gap-2 mt-4 pt-4 border-t border-slate-200 dark:border-slate-800">
-                        <div className="flex items-center justify-between cursor-pointer py-1" onClick={() => setIsGroupListCollapsed(!isGroupListCollapsed)}>
-                          <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
-                            <Icons.Users size={12} className="text-slate-400" />
+                      <div className="flex flex-col gap-1.5 mt-3 pt-3 border-t border-slate-200 dark:border-slate-800">
+                        <div className="flex items-center justify-between cursor-pointer py-0.5" onClick={() => setIsGroupListCollapsed(!isGroupListCollapsed)}>
+                          <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1">
+                            <Icons.Users size={10} className="text-slate-400" />
                             Manage Groups ({groups.length})
                           </h4>
-                          <span className="text-[10px] font-bold text-indigo-500 dark:text-indigo-400 hover:underline">{isGroupListCollapsed ? 'Show' : 'Hide'}</span>
+                          <span className="text-[9px] font-bold text-indigo-500 dark:text-indigo-400 hover:underline">{isGroupListCollapsed ? 'Show' : 'Hide'}</span>
                         </div>
                         
                         {!isGroupListCollapsed && (
-                          <div className="mt-2 flex flex-col gap-2 max-h-[240px] overflow-y-auto pr-1">
+                          <div className="mt-1 flex flex-col gap-1.5 max-h-[200px] overflow-y-auto pr-1">
                             {groups.length === 0 ? (
-                              <div className="text-[10px] text-slate-400 text-center py-4 bg-slate-50 dark:bg-slate-900/20 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
+                              <div className="text-[9px] text-slate-400 text-center py-3 bg-slate-50 dark:bg-slate-900/20 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
                                 No groups synced yet.
                               </div>
                             ) : (
                               groups.map((g, idx) => (
-                                <div key={g.id} className="flex items-center justify-between p-2.5 bg-slate-50 hover:bg-slate-100 dark:bg-slate-900/30 dark:hover:bg-slate-900/50 rounded-xl border border-slate-200/60 dark:border-slate-800/60 transition-all gap-2">
-                                  <div className="flex-shrink-0 flex items-center justify-center font-mono font-black text-[9px] h-5 min-w-[1.25rem] px-0.5 rounded bg-slate-200/60 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
+                                <div key={g.id} className="flex items-center justify-between p-2 bg-slate-50 hover:bg-slate-100 dark:bg-slate-900/30 dark:hover:bg-slate-900/50 rounded-xl border border-slate-200/60 dark:border-slate-800/60 transition-all gap-1.5">
+                                  <div className="flex-shrink-0 flex items-center justify-center font-mono font-black text-[8px] h-4.5 min-w-[1.1rem] px-0.5 rounded bg-slate-200/60 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
                                     {idx + 1}
                                   </div>
                                   <div className="flex flex-col truncate flex-1 min-w-0">
-                                    <span className="text-[10px] font-bold text-slate-800 dark:text-slate-200 truncate pr-1">{g.name}</span>
-                                    <span className="text-[9px] text-slate-400 font-medium">{g.memberCount || 0} members • ID: {g.id}</span>
+                                    <span className="text-[9px] font-bold text-slate-800 dark:text-slate-200 truncate pr-1">{g.name}</span>
+                                    <span className="text-[8px] text-slate-400 font-medium">{g.memberCount || 0} members • ID: {g.id}</span>
                                   </div>
                                   <button 
                                     onClick={(e) => handleDeleteGroup(e, g.id)}
-                                    className="text-[9px] font-bold text-rose-500 hover:text-white bg-rose-50 hover:bg-rose-500 dark:bg-rose-950/40 dark:hover:bg-rose-600 px-2.5 py-1.5 rounded-lg border border-rose-200 dark:border-rose-900/30 transition-all cursor-pointer flex-shrink-0"
+                                    className="text-[8px] font-bold text-rose-500 hover:text-white bg-rose-50 hover:bg-rose-500 dark:bg-rose-950/40 dark:hover:bg-rose-600 px-2 py-1 rounded-lg border border-rose-200 dark:border-rose-900/30 transition-all cursor-pointer flex-shrink-0"
                                   >
                                     Remove
                                   </button>
@@ -2691,71 +2583,71 @@ const App: React.FC = () => {
                         )}
                       </div>
 
-                      <div className="flex items-center justify-between mt-4">
+                      <div className="flex items-center justify-between mt-3">
                         <div>
-                          <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1 flex items-center justify-between">
+                          <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-0.5 flex items-center justify-between">
                             Join Requests
                           </h4>
-                          <p className="text-[9px] text-slate-500 font-bold">Auto-approve all join requests</p>
+                          <p className="text-[8px] text-slate-500 font-bold">Auto-approve all join requests</p>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5">
                           <span className={`text-[8px] font-black ${autoApproveJoinRequest ? 'text-emerald-500' : 'text-slate-400'}`}>
                             {autoApproveJoinRequest ? 'ACTIVE' : 'OFF'}
                           </span>
                           <button 
                             onClick={() => setAutoApproveJoinRequest(!autoApproveJoinRequest)}
-                            className={`w-10 h-5 rounded-full transition-all relative ${autoApproveJoinRequest ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'}`}
+                            className={`w-8 h-4 rounded-full transition-all relative ${autoApproveJoinRequest ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'}`}
                           >
-                            <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${autoApproveJoinRequest ? 'left-6' : 'left-1'}`} />
+                            <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${autoApproveJoinRequest ? 'left-4.5' : 'left-0.5'}`} />
                           </button>
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-800">
+                      <div className="flex items-center justify-between pt-3 border-t border-slate-200 dark:border-slate-800">
                         <div>
-                          <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1 flex items-center justify-between">
+                          <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-0.5 flex items-center justify-between">
                             Group Welcome
                           </h4>
-                          <p className="text-[9px] text-slate-500 font-bold">5s delay, Tag user & delete after 60s</p>
+                          <p className="text-[8px] text-slate-500 font-bold">5s delay, Tag user & delete after 60s</p>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5">
                           <span className={`text-[8px] font-black ${autoWelcome ? 'text-emerald-500' : 'text-slate-400'}`}>
                             {autoWelcome ? 'ACTIVE' : 'OFF'}
                           </span>
                           <button 
                             onClick={() => setAutoWelcome(!autoWelcome)}
-                            className={`w-10 h-5 rounded-full transition-all relative ${autoWelcome ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'}`}
+                            className={`w-8 h-4 rounded-full transition-all relative ${autoWelcome ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'}`}
                           >
-                            <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${autoWelcome ? 'left-6' : 'left-1'}`} />
+                            <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${autoWelcome ? 'left-4.5' : 'left-0.5'}`} />
                           </button>
                         </div>
                       </div>
 
-                      <div className="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-100 dark:border-slate-800 mt-6 !mt-6">
-                        <p className="text-[10px] font-bold text-slate-600 dark:text-slate-400">
-                          <Icons.ShieldCheck size={14} className="inline mr-1 text-emerald-500" />
+                      <div className="p-3 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-100 dark:border-slate-800 mt-4 !mt-4">
+                        <p className="text-[8px] font-bold text-slate-600 dark:text-slate-400">
+                          <Icons.ShieldCheck size={12} className="inline mr-1 text-emerald-500" />
                           Requires bot to have <span className="text-emerald-500 underline">Delete Messages</span> permissions. If you change settings, please <b>Restart Background Worker</b> to apply them to 24/7 mode!
                         </p>
                         
-                        <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-800">
+                        <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-800">
                            <div className="flex items-center justify-between">
                              <div>
-                               <p className="text-[10px] font-black uppercase text-slate-400 mb-1">Background Worker (24/7)</p>
-                               <p className="text-[9px] text-slate-500">Enable this to run cleanup & welcome 24/7.</p>
+                               <p className="text-[9px] font-black uppercase text-slate-400 mb-0.5">Background Worker (24/7)</p>
+                               <p className="text-[8px] text-slate-500">Enable this to run cleanup & welcome 24/7.</p>
                              </div>
                              {webhookActive ? (
                                <button 
                                  onClick={handleDeleteWebhook}
                                  disabled={isProcessingWebhook}
-                                 className="px-3 py-1.5 bg-rose-500/10 text-rose-500 text-[9px] font-black uppercase rounded-lg border border-rose-500/20 hover:bg-rose-500 hover:text-white transition-all disabled:opacity-50 whitespace-nowrap ml-2"
-                               >
+                                 className="px-2 py-1 bg-rose-500/10 text-rose-500 text-[8px] font-black uppercase rounded-lg border border-rose-500/20 hover:bg-rose-500 hover:text-white transition-all disabled:opacity-50 whitespace-nowrap ml-2"
+                                >
                                  {isProcessingWebhook ? 'Working...' : 'Stop Background'}
                                </button>
                              ) : (
                                <button 
                                  onClick={handleSetWebhook}
                                  disabled={isProcessingWebhook}
-                                 className="px-3 py-1.5 bg-emerald-500/10 text-emerald-500 text-[9px] font-black uppercase rounded-lg border border-emerald-500/20 hover:bg-emerald-500 hover:text-white transition-all disabled:opacity-50 whitespace-nowrap ml-2"
+                                 className="px-2 py-1 bg-emerald-500/10 text-emerald-500 text-[8px] font-black uppercase rounded-lg border border-emerald-500/20 hover:bg-emerald-500 hover:text-white transition-all disabled:opacity-50 whitespace-nowrap ml-2"
                                >
                                  {isProcessingWebhook ? 'Working...' : 'Start Background'}
                                </button>
@@ -2765,7 +2657,7 @@ const App: React.FC = () => {
                       </div>
                     </div>
                     
-                    <div className="mb-8 p-6 bg-white dark:bg-black/20 rounded-[2rem] border border-slate-200 dark:border-white/5">
+                    <div className="mb-6 p-4 bg-white dark:bg-black/20 rounded-2xl border border-slate-200 dark:border-white/5">
                       <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2">
                         <Icons.Radio size={14} className="text-rose-500" /> Broadcast to All Hubs
                       </h4>
@@ -2840,7 +2732,7 @@ const App: React.FC = () => {
                       </button>
                     </div>
 
-                    <div className="mb-6 bg-emerald-500/5 dark:bg-emerald-500/10 p-6 rounded-[2rem] border border-emerald-500/20">
+                    <div className="mb-6 bg-emerald-500/5 dark:bg-emerald-500/10 p-4 rounded-2xl border border-emerald-500/20">
                       <h4 className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-[0.2em] mb-3 flex items-center gap-2">
                         <Icons.Search size={14} /> Auto-Discovery Help
                       </h4>
@@ -2853,7 +2745,7 @@ const App: React.FC = () => {
                       </p>
                     </div>
 
-                    <div className="mb-6 p-6 bg-white dark:bg-black/20 rounded-[2rem] border border-slate-200 dark:border-white/5">
+                    <div className="mb-6 p-4 bg-white dark:bg-black/20 rounded-2xl border border-slate-200 dark:border-white/5">
                       <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2">
                         <Icons.Link size={14} className="text-red-500" /> Revoke Invite Link
                       </h4>
@@ -2893,8 +2785,114 @@ const App: React.FC = () => {
                       </button>
                       <input type="file" ref={importFileRef} onChange={handleImport} accept=".json" className="hidden" />
                     </div>
+
+                    {/* Theme & Visual Experience card moved to absolute bottom */}
+                    <div className="p-4 bg-slate-100/50 dark:bg-slate-900/30 rounded-2xl border border-slate-200/60 dark:border-white/5 shadow-sm space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white shadow-sm flex-shrink-0">
+                            <Icons.Palette size={16} />
+                          </div>
+                          <div>
+                            <h4 className="text-[8px] font-black text-slate-900 dark:text-white uppercase tracking-wider leading-none">
+                              Theme & Visual Experience
+                            </h4>
+                            <p className="text-[8px] text-slate-500 dark:text-slate-400 font-bold leading-none mt-0.5">
+                              Select a modern theme palette to update your dashboard look instantly.
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={toggleTheme}
+                            className="px-2 py-1 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[8px] font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1 shadow-sm active:scale-95 transition-all"
+                          >
+                            {theme === 'dark' ? <Icons.Sun size={10} className="text-amber-500" /> : <Icons.Moon size={10} className="text-indigo-600" />}
+                            <span>{theme === 'dark' ? 'Dark Mode' : 'Light Mode'}</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+                        {[
+                          { id: 'midnight', name: 'Cyber Obsidian', desc: 'Neon Indigo & Dark Glass', bg: 'from-indigo-950 via-slate-950 to-purple-950 text-white', border: 'border-indigo-500' },
+                          { id: 'quantum', name: 'Quantum Emerald', desc: 'Futuristic Tech & Teal', bg: 'from-emerald-950 via-slate-950 to-teal-950 text-white', border: 'border-emerald-500' },
+                          { id: 'violet', name: 'Violet Aura', desc: 'Magenta & Violet Glow', bg: 'from-fuchsia-950 via-slate-950 to-purple-950 text-white', border: 'border-purple-500' },
+                          { id: 'executive', name: 'Executive Light', desc: 'Crisp Slate & Minimal Light', bg: 'from-slate-100 via-white to-indigo-50 text-slate-900', border: 'border-slate-400' }
+                        ].map((t) => (
+                          <button
+                            key={t.id}
+                            onClick={() => {
+                              setColorTheme(t.id as ThemePreset);
+                              if (t.id === 'executive') setTheme('light');
+                              else setTheme('dark');
+                            }}
+                            className={`p-2 rounded-xl border transition-all text-left flex flex-col justify-between gap-1.5 relative overflow-hidden ${
+                              colorTheme === t.id
+                                ? `${t.border} ring-1 ring-indigo-500/50 shadow-md scale-[1.01]`
+                                : 'border-slate-200 dark:border-slate-800 opacity-80 hover:opacity-100'
+                            } bg-gradient-to-br ${t.bg}`}
+                          >
+                            <div className="flex items-center justify-between z-10 w-full">
+                              <span className="text-[8px] font-black uppercase tracking-tight">{t.name}</span>
+                              {colorTheme === t.id && (
+                                <div className="w-3.5 h-3.5 rounded-full bg-indigo-500 text-white flex items-center justify-center">
+                                  <Icons.Check size={8} strokeWidth={3} />
+                                </div>
+                              )}
+                            </div>
+                            <p className="text-[8px] font-medium opacity-75 z-10 leading-tight">{t.desc}</p>
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Font Size Scaling Options */}
+                      <div className="pt-3 border-t border-slate-200/80 dark:border-slate-800/80">
+                        <div className="flex items-center justify-between mb-2">
+                          <div>
+                            <h5 className="text-[8px] font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider leading-none">
+                              Typography Scale / Font Size
+                            </h5>
+                            <p className="text-[8px] text-slate-500 dark:text-slate-400 font-bold leading-none mt-0.5">
+                              Adjust text size across the whole dashboard interface.
+                            </p>
+                          </div>
+                          <span className="px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-500 font-mono font-black text-[8px] uppercase">
+                            Current: {fontSize === 'xs' ? 'Micro (11.5px)' : fontSize === 'small' ? 'Compact (13px)' : 'Medium (15px)'}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
+                          {[
+                            { id: 'xs', title: 'Extra Small', size: '11.5px Base', desc: 'Ultra-dense pro view' },
+                            { id: 'small', title: 'Small / Compact', size: '13px Base', desc: 'Recommended default' },
+                            { id: 'normal', title: 'Medium', size: '15px Base', desc: 'Larger text readability' },
+                          ].map((f) => (
+                            <button
+                              key={f.id}
+                              onClick={() => setFontSize(f.id as 'xs' | 'small' | 'normal')}
+                              className={`p-2 rounded-xl border transition-all text-left flex flex-col gap-0.5 ${
+                                fontSize === f.id
+                                  ? 'bg-indigo-600 text-white border-indigo-500 shadow-sm scale-[1.01]'
+                                  : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-800 hover:border-indigo-400'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between w-full">
+                                <span className="text-[8px] font-black tracking-tight">{f.title}</span>
+                                <span className={`text-[8px] font-mono px-1 py-0.5 rounded ${fontSize === f.id ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'}`}>
+                                  {f.size}
+                                </span>
+                              </div>
+                              <p className={`text-[8px] ${fontSize === f.id ? 'text-indigo-100' : 'text-slate-400'}`}>
+                                {f.desc}
+                              </p>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                </div>
               )}
 
               {settingsSubTab === 'admins' && (

@@ -1117,6 +1117,11 @@ async function startServer() {
     }
   });
 
+  // Fallback for missing API routes - must be registered BEFORE Vite/static fallbacks!
+  app.all("/api/*all", (req, res) => {
+    res.status(404).json({ error: "API Route Not Found" });
+  });
+
   // Vite middleware for development
   let server: any;
   if (process.env.NODE_ENV !== "production") {
