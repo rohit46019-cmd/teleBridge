@@ -122,75 +122,87 @@ const InviteModal: React.FC<InviteModalProps> = ({ group, onClose, botToken, onI
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-6 animate-in fade-in duration-300">
-      <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-xl" onClick={onClose} />
+      <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-md" onClick={onClose} />
       
-      <div className="relative bg-white dark:bg-slate-900 w-full max-w-lg rounded-3xl overflow-hidden shadow-2xl flex flex-col p-8 md:p-10 animate-in zoom-in-95 duration-300 border border-slate-200 dark:border-slate-800">
-        <div className="flex justify-between items-start mb-8">
+      <div className="relative bg-white/95 dark:bg-slate-950/90 w-full max-w-md rounded-[2.2rem] overflow-hidden shadow-[0_25px_50px_-12px_rgba(99,102,241,0.25)] flex flex-col p-6 md:p-8 animate-in zoom-in-95 duration-300 border-2 border-indigo-200/50 dark:border-indigo-900/50 border-b-[6px] border-b-indigo-500/80 dark:border-b-indigo-500/50">
+        
+        {/* Dynamic Refraction Overlay */}
+        <div className="absolute inset-0 bg-gradient-to-tr from-indigo-500/5 via-transparent to-purple-500/5 opacity-50 pointer-events-none" />
+
+        <div className="flex justify-between items-start mb-6 relative z-10">
            <div>
-             <div className="flex items-center gap-3 mb-2">
-               <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse shadow-[0_0_8px_rgba(59,130,246,0.8)]" />
-               <p className="text-[10px] font-bold text-blue-500 uppercase tracking-widest">Secure Invite System</p>
+             <div className="flex items-center gap-2 mb-1.5">
+               <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse shadow-[0_0_8px_rgba(99,102,241,0.8)]" />
+               <p className="text-[8px] font-black text-indigo-500 dark:text-indigo-400 uppercase tracking-widest">TeleBridge Secure Gateway</p>
              </div>
-             <h2 className="text-2xl font-display font-bold text-slate-900 dark:text-white tracking-tight break-words max-w-[300px]">{group.name}</h2>
+             <h2 className="text-xl font-black text-slate-800 dark:text-slate-100 tracking-tight break-words max-w-[280px]">{group.name}</h2>
            </div>
-           <button onClick={onClose} className="bg-slate-100 dark:bg-slate-800 hover:bg-rose-500 hover:text-white text-slate-500 transition-all p-2.5 rounded-xl active:scale-90 border border-slate-200 dark:border-slate-700">
-             <Icons.X size={20} />
+           <button 
+             onClick={onClose} 
+             className="bg-slate-100/80 dark:bg-slate-900/80 hover:bg-rose-500 hover:text-white text-slate-400 hover:scale-105 transition-all p-1.5 rounded-xl active:scale-95 border border-slate-200/40 dark:border-slate-800/40 shadow-sm"
+           >
+             <Icons.X size={15} />
            </button>
         </div>
 
         {error && (
-          <div className="mb-6 p-4 bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 rounded-2xl text-[11px] font-bold uppercase tracking-wide">
+          <div className="mb-5 p-3.5 bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 rounded-xl text-[10px] font-black uppercase tracking-wide">
             {error}
           </div>
         )}
 
-        <div className="space-y-8">
-          <div className="bg-black/5 dark:bg-black/20 p-6 rounded-2xl border border-black/5 dark:border-white/5 relative group min-h-[80px] flex items-center">
+        <div className="space-y-6 relative z-10">
+          {/* Link Container Box */}
+          <div className="bg-slate-50/80 dark:bg-slate-900/60 backdrop-blur-sm p-4 rounded-2xl border-2 border-dashed border-indigo-200/50 dark:border-indigo-900/30 relative group min-h-[70px] flex items-center shadow-inner">
             {isGenerating ? (
-              <div className="flex items-center gap-4 text-slate-400 text-sm font-medium animate-pulse">
-                <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                Encrypting link...
+              <div className="flex items-center gap-3 text-slate-400 text-xs font-black animate-pulse">
+                <div className="w-4.5 h-4.5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                <span>GENERATING SECURE KEY...</span>
               </div>
             ) : link ? (
               <>
-                <div className="text-blue-600 dark:text-blue-400 font-mono text-sm truncate mr-12 select-all font-medium">{link}</div>
+                <div className="text-indigo-600 dark:text-indigo-400 font-mono text-xs truncate mr-10 select-all font-black uppercase tracking-wide">{link}</div>
                 <button 
                   onClick={copyToClipboard}
-                  className="absolute right-4 p-2.5 bg-white dark:bg-slate-800 hover:bg-blue-500 hover:text-white rounded-xl text-slate-600 dark:text-slate-200 transition-all shadow-sm active:scale-90 border border-black/5 dark:border-white/5"
+                  className="absolute right-3.5 p-2 bg-white dark:bg-slate-800 hover:bg-indigo-600 hover:text-white rounded-xl text-slate-500 dark:text-slate-300 transition-all shadow-sm active:scale-90 border border-slate-200/50 dark:border-slate-700/50 hover:scale-110"
                 >
-                  {copied ? <Icons.Check size={18} /> : <Icons.Copy size={18} />}
+                  {copied ? <Icons.Check size={14} className="text-emerald-500" /> : <Icons.Copy size={14} />}
                 </button>
               </>
             ) : (
-              <span className="text-slate-400 italic text-sm font-medium">Link preparation required...</span>
+              <span className="text-slate-400 italic text-xs font-medium">Link preparation required...</span>
             )}
           </div>
 
-          <div className="flex gap-3">
+          {/* Action Buttons */}
+          <div className="flex gap-2.5">
             <button 
               onClick={handleGenerateLink}
-              className="flex-1 py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-sm font-black uppercase tracking-widest transition-all shadow-lg shadow-blue-500/30 active:scale-95 border-b-4 border-blue-800"
+              className="flex-1 py-2.5 bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shadow-md shadow-indigo-500/20 active:translate-y-[2px] border-b-[4px] border-indigo-800 dark:border-indigo-950 active:border-b-[1px] hover:scale-[1.02]"
             >
-              Rotate Key
+              Rotate Link
             </button>
             <button 
               onClick={copyToClipboard}
-              className={`flex-1 py-3.5 rounded-xl text-sm font-black uppercase tracking-widest transition-all active:scale-95 border-b-4 ${copied ? 'bg-emerald-500 text-white border-emerald-700 shadow-lg shadow-emerald-500/30' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700 shadow-sm'}`}
+              className={`flex-1 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all active:translate-y-[2px] active:border-b-[1px] border-b-[4px] hover:scale-[1.02]
+                ${copied 
+                  ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white border-emerald-700 dark:border-emerald-850 shadow-md shadow-emerald-500/10' 
+                  : 'bg-slate-100/80 dark:bg-slate-900/80 text-slate-700 dark:text-slate-300 border-slate-300/80 dark:border-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-800 shadow-sm'
+                }`}
             >
-              {copied ? 'Copied' : 'Duplicate'}
+              {copied ? 'Copied Link' : 'Duplicate Link'}
             </button>
           </div>
 
-          <div className="pt-8 border-t border-black/5 dark:border-white/10 space-y-6">
-            <div className="flex justify-between items-center">
-              <div className="flex items-center gap-2">
-                <Icons.Users size={14} className="text-slate-400" />
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Limit: 1 User</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Icons.Clock size={14} className="text-slate-400" />
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Expiry: Unlimited</span>
-              </div>
+          {/* Metadata Badges */}
+          <div className="pt-4 border-t border-slate-200/40 dark:border-slate-800/40 flex justify-between items-center text-slate-400">
+            <div className="flex items-center gap-1.5">
+              <Icons.Users size={12} className="text-slate-400" />
+              <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Limit: 1 User</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Icons.Clock size={12} className="text-slate-400" />
+              <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Expiry: Permanent</span>
             </div>
           </div>
         </div>
