@@ -2028,14 +2028,14 @@ const App: React.FC = () => {
             <div className={`space-y-6 ${animationClass}`}>
                 <div className="flex gap-2">
                   <div className="relative group flex-1 min-w-0">
-                    <div className="relative flex items-center bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm focus-within:ring-4 focus-within:ring-blue-500/10 focus-within:border-blue-500/50 transition-all">
+                    <div className="relative flex items-center bg-white/70 dark:bg-slate-900/40 backdrop-blur-md border border-slate-200/60 dark:border-slate-800/60 border-b-[4px] border-b-slate-300 dark:border-b-slate-800 rounded-[1.5rem] shadow-sm focus-within:ring-4 focus-within:ring-indigo-500/10 focus-within:border-indigo-500/50 transition-all">
                       <div className="pl-4 text-slate-400">
-                        <Icons.Search size={16} />
+                        <Icons.Search size={15} />
                       </div>
                       <input 
                         type="text" 
                         placeholder="Search active batches..." 
-                        className="flex-1 bg-transparent py-3 px-3 text-xs outline-none"
+                        className="flex-1 bg-transparent py-2.5 px-3 text-xs outline-none font-bold"
                         value={searchQuery} 
                         onChange={e => setSearchQuery(e.target.value)} 
                         onFocus={() => setShowRecentSearches(true)}
@@ -2053,20 +2053,20 @@ const App: React.FC = () => {
                           onClick={() => setSearchQuery('')}
                           className="pr-4 text-slate-400 hover:text-rose-500 transition-colors"
                         >
-                          <Icons.X size={16} />
+                          <Icons.X size={15} />
                         </button>
                       )}
                     </div>
                     {showRecentSearches && recentSearches.length > 0 && (
-                      <div className="flex flex-row gap-2 overflow-x-auto py-2 mt-2 custom-scrollbar max-w-full">
-                        <span className="text-[9px] font-black text-slate-400 uppercase whitespace-nowrap self-center sticky left-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm pr-2 z-10">Recent:</span>
+                      <div className="flex flex-row gap-1.5 overflow-x-auto py-1.5 mt-2 custom-scrollbar max-w-full">
+                        <span className="text-[8px] font-black text-slate-400 uppercase whitespace-nowrap self-center sticky left-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm pr-2 z-10">Recent:</span>
                         {recentSearches.map((s, i) => {
                           const colors = [
-                            'from-pink-500/20 to-rose-500/20 text-rose-600 dark:text-rose-400',
-                            'from-blue-500/20 to-cyan-500/20 text-blue-600 dark:text-blue-400',
-                            'from-purple-500/20 to-fuchsia-500/20 text-fuchsia-600 dark:text-fuchsia-400',
-                            'from-amber-500/20 to-orange-500/20 text-amber-600 dark:text-amber-400',
-                            'from-emerald-500/20 to-teal-500/20 text-emerald-600 dark:text-emerald-400'
+                            'from-pink-500/10 to-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-200/50 dark:border-rose-900/30',
+                            'from-blue-500/10 to-cyan-500/10 text-blue-600 dark:text-blue-400 border-blue-200/50 dark:border-blue-900/30',
+                            'from-purple-500/10 to-fuchsia-500/10 text-fuchsia-600 dark:text-fuchsia-400 border-purple-200/50 dark:border-purple-900/30',
+                            'from-amber-500/10 to-orange-500/10 text-amber-600 dark:text-amber-400 border-amber-200/50 dark:border-amber-900/30',
+                            'from-emerald-500/10 to-teal-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-200/50 dark:border-emerald-900/30'
                           ];
                           const colorClass = colors[i % colors.length];
                           return (
@@ -2076,7 +2076,7 @@ const App: React.FC = () => {
                                 setSearchQuery(s);
                                 setShowRecentSearches(false);
                               }} 
-                              className={`px-4 py-1.5 rounded-full text-[10px] whitespace-nowrap transition-all font-black border border-white/10 shadow-sm hover:scale-105 active:scale-95 bg-gradient-to-r ${colorClass}`}
+                              className={`px-3 py-1 rounded-xl text-[9px] whitespace-nowrap transition-all font-black border shadow-sm hover:scale-105 active:scale-95 bg-gradient-to-r ${colorClass}`}
                             >
                               {s}
                             </button>
@@ -2089,32 +2089,35 @@ const App: React.FC = () => {
                   <div className="relative">
                     <button 
                       onClick={() => setShowFilterMenu(!showFilterMenu)} 
-                      className={`flex items-center gap-2 p-3 ${filterOption !== 'recent' ? 'bg-blue-600 text-white border-blue-500' : 'bg-white dark:bg-slate-900/50 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400'} border rounded-2xl shadow-sm hover:brightness-110 transition-all`}
+                      className={`flex items-center gap-1.5 p-2.5 rounded-[1.5rem] border shadow-sm hover:brightness-105 active:scale-95 transition-all
+                        ${filterOption !== 'recent' 
+                          ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white border-indigo-500 border-b-[4px] border-b-indigo-800' 
+                          : 'bg-white/70 dark:bg-slate-900/40 backdrop-blur-md border-slate-200/60 dark:border-slate-800/60 border-b-[4px] border-b-slate-300 dark:border-b-slate-800 text-slate-600 dark:text-slate-400'}`}
                     >
-                      <Icons.Filter size={18} />
+                      <Icons.Filter size={15} />
                       {filterOption !== 'recent' && (
-                        <span className="text-[10px] font-black uppercase tracking-widest hidden sm:inline">
+                        <span className="text-[9px] font-black uppercase tracking-widest hidden sm:inline">
                           {filterOption.replace(/([A-Z])/g, ' $1')}
                         </span>
                       )}
                     </button>
                     {showFilterMenu && (
-                      <div className="absolute right-0 top-full mt-2 w-56 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl z-20 py-2 overflow-hidden">
-                        <p className="px-4 py-1 text-[9px] font-black text-slate-400 uppercase tracking-widest bg-slate-50 dark:bg-slate-800/50 mb-1">Sort & Filter</p>
+                      <div className="absolute right-0 top-full mt-2 w-52 bg-white/95 dark:bg-slate-900/95 backdrop-blur-lg border border-slate-200/80 dark:border-slate-800/80 rounded-2xl shadow-xl z-20 py-1.5 overflow-hidden">
+                        <p className="px-3.5 py-1 text-[8px] font-black text-slate-400 uppercase tracking-widest bg-slate-50 dark:bg-slate-800/50 mb-1">Sort & Filter</p>
                         {[
-                          { id: 'recent', label: 'Last Active', icon: <Icons.Zap size={12} /> },
-                          { id: 'newAdded', label: 'Newly Added', icon: <Icons.PlusCircle size={12} /> },
-                          { id: 'activeToday', label: 'Active Today', icon: <Icons.Activity size={12} /> },
-                          { id: 'frequent', label: 'Most Frequent', icon: <Icons.BarChart size={12} /> },
-                          { id: 'mostMembers', label: 'Biggest Community', icon: <Icons.Users size={12} /> },
-                          { id: 'leastMembers', label: 'Smallest Community', icon: <Icons.User size={12} /> },
+                          { id: 'recent', label: 'Last Active', icon: <Icons.Zap size={11} /> },
+                          { id: 'newAdded', label: 'Newly Added', icon: <Icons.PlusCircle size={11} /> },
+                          { id: 'activeToday', label: 'Active Today', icon: <Icons.Activity size={11} /> },
+                          { id: 'frequent', label: 'Most Frequent', icon: <Icons.BarChart size={11} /> },
+                          { id: 'mostMembers', label: 'Biggest Community', icon: <Icons.Users size={11} /> },
+                          { id: 'leastMembers', label: 'Smallest Community', icon: <Icons.User size={11} /> },
                         ].map(opt => (
                           <button 
                             key={opt.id} 
                             onClick={() => { setFilterOption(opt.id as any); setShowFilterMenu(false); }} 
-                            className={`w-full text-left px-4 py-2.5 text-xs font-bold flex items-center gap-3 transition-colors ${filterOption === opt.id ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}
+                            className={`w-full text-left px-3.5 py-2 text-xs font-black flex items-center gap-2.5 transition-colors ${filterOption === opt.id ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-900/20' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}
                           >
-                            <span className={filterOption === opt.id ? 'text-blue-600' : 'text-slate-400'}>{opt.icon}</span>
+                            <span className={filterOption === opt.id ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400'}>{opt.icon}</span>
                             {opt.label}
                           </button>
                         ))}
@@ -2123,7 +2126,7 @@ const App: React.FC = () => {
                   </div>
                 </div>
                 
-                <div className="grid grid-cols-1 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {filteredGroups.length > 0 ? (
                     filteredGroups.map((g, index) => (
                       <GroupCard key={g.id} group={g} index={index} onClick={() => {
