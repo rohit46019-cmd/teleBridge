@@ -1813,21 +1813,21 @@ const App: React.FC = () => {
       />
 
       <main className="flex-1 md:ml-64 px-4 md:px-6 lg:px-8 pb-28 w-full max-w-[1400px] mx-auto">
-        <header className="sticky top-0 z-40 bg-white/80 dark:bg-slate-950/80 backdrop-blur-2xl -mx-4 px-4 md:-mx-6 md:px-6 lg:-mx-8 lg:px-8 py-3 mb-6 border-b border-slate-200/80 dark:border-slate-800/80 animate-in slide-in-from-top shadow-sm">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-2 h-7 bg-gradient-to-b from-indigo-500 via-purple-500 to-pink-500 rounded-full shadow-[0_0_15px_rgba(99,102,241,0.5)]" />
+        <header className="sticky top-0 z-40 bg-white/60 dark:bg-slate-950/50 backdrop-blur-xl -mx-4 px-4 md:-mx-6 md:px-6 lg:-mx-8 lg:px-8 py-2 mb-4 border-b border-slate-200/50 dark:border-slate-800/50 animate-in slide-in-from-top shadow-sm">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-1.5 h-5 bg-gradient-to-b from-indigo-500 to-purple-600 rounded-full shadow-[0_0_10px_rgba(99,102,241,0.4)]" />
               <div>
-                <h1 key={activeTab} className="text-xl md:text-2xl font-black tracking-tight capitalize animate-in fade-in bg-gradient-to-r from-slate-900 via-indigo-950 to-purple-950 dark:from-white dark:via-indigo-100 dark:to-purple-200 bg-clip-text text-transparent">
+                <h1 key={activeTab} className="text-lg md:text-xl font-black tracking-tight capitalize animate-in fade-in bg-gradient-to-r from-slate-900 via-indigo-950 to-purple-950 dark:from-white dark:via-indigo-100 dark:to-purple-200 bg-clip-text text-transparent">
                   {activeTab}
                 </h1>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest hidden sm:block">TeleBridge Control Dashboard</p>
+                <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest hidden sm:block">TeleBridge Control</p>
               </div>
             </div>
             
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               {/* Font Size Quick Selector */}
-              <div className="hidden sm:flex items-center gap-1 p-1 bg-slate-100/90 dark:bg-slate-900/90 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl">
+              <div className="hidden sm:flex items-center gap-0.5 p-0.5 bg-slate-100/80 dark:bg-slate-900/80 border border-slate-200/50 dark:border-slate-800/50 rounded-xl">
                 {[
                   { id: 'xs', label: 'Micro (11.5px)', short: 'XS' },
                   { id: 'small', label: 'Small / Compact (13px)', short: 'S' },
@@ -1837,7 +1837,7 @@ const App: React.FC = () => {
                     key={f.id}
                     onClick={() => setFontSize(f.id as 'xs' | 'small' | 'normal')}
                     title={`Font Size: ${f.label}`}
-                    className={`px-2.5 py-1 rounded-xl text-[10px] font-black tracking-tight transition-all ${
+                    className={`px-2 py-0.5 rounded-lg text-[9px] font-black tracking-tight transition-all ${
                       fontSize === f.id
                         ? 'bg-indigo-600 text-white shadow-sm scale-105'
                         : 'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
@@ -1849,7 +1849,7 @@ const App: React.FC = () => {
               </div>
 
               {/* Quick Theme Presets */}
-              <div className="hidden md:flex items-center gap-1 p-1 bg-slate-100/90 dark:bg-slate-900/90 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl">
+              <div className="hidden md:flex items-center gap-0.5 p-0.5 bg-slate-100/80 dark:bg-slate-900/80 border border-slate-200/50 dark:border-slate-800/50 rounded-xl">
                 {(['midnight', 'quantum', 'violet', 'executive'] as ThemePreset[]).map((preset) => {
                   const presetLabels: Record<ThemePreset, { name: string; color: string }> = {
                     midnight: { name: 'Cyber', color: 'bg-indigo-500' },
@@ -1865,13 +1865,13 @@ const App: React.FC = () => {
                         if (preset === 'executive') setTheme('light');
                         else setTheme('dark');
                       }}
-                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[10px] font-black uppercase transition-all ${
+                      className={`flex items-center gap-1 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase transition-all ${
                         colorTheme === preset
-                          ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm border border-slate-200 dark:border-slate-700 scale-105'
+                          ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm border border-slate-200/80 dark:border-slate-700/80 scale-105'
                           : 'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
                       }`}
                     >
-                      <span className={`w-2 h-2 rounded-full ${presetLabels[preset].color}`} />
+                      <span className={`w-1.5 h-1.5 rounded-full ${presetLabels[preset].color}`} />
                       <span>{presetLabels[preset].name}</span>
                     </button>
                   );
@@ -1881,20 +1881,20 @@ const App: React.FC = () => {
               {/* Theme mode toggle */}
               <button 
                 onClick={toggleTheme} 
-                className="p-2.5 rounded-2xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 shadow-sm hover:scale-105 active:scale-95 transition-all text-amber-500 dark:text-amber-400"
+                className="p-1.5 rounded-xl bg-white/80 dark:bg-slate-900/80 border border-slate-200/50 dark:border-slate-800/50 shadow-sm hover:scale-105 active:scale-95 transition-all text-amber-500 dark:text-amber-400"
                 title="Toggle Dark / Light Mode"
               >
-                {theme === 'dark' ? <Icons.Sun size={18} /> : <Icons.Moon size={18} className="text-indigo-600" />}
+                {theme === 'dark' ? <Icons.Sun size={15} /> : <Icons.Moon size={15} className="text-indigo-600" />}
               </button>
 
               <button 
                 onClick={() => syncAllGroupsMemberCount(token)} 
                 disabled={isScanning} 
-                className="p-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-2xl shadow-lg shadow-indigo-500/20 active:scale-95 transition-all flex items-center gap-2"
+                className="p-1.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-xl shadow-md active:scale-95 transition-all flex items-center gap-1.5"
                 title="Refresh Telegram Hubs Data"
               >
-                <Icons.Refresh size={18} className={isScanning ? 'animate-spin' : ''} />
-                <span className="text-xs font-black uppercase tracking-wider hidden lg:inline">Sync Hubs</span>
+                <Icons.Refresh size={15} className={isScanning ? 'animate-spin' : ''} />
+                <span className="text-[10px] font-black uppercase tracking-wider hidden lg:inline">Sync Hubs</span>
               </button>
             </div>
           </div>
@@ -1907,61 +1907,71 @@ const App: React.FC = () => {
             <div className={`space-y-6 ${animationClass}`}>
                <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
                   <motion.div 
-                    whileHover={{ scale: 1.02, translateY: -4, boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.4)' }}
-                    whileTap={{ scale: 0.98 }}
-                    className="bg-gradient-to-br from-emerald-500 to-teal-700 p-5 rounded-[2rem] border-b-4 border-teal-900 shadow-[0_15px_30px_rgba(6,78,59,0.4)] transition-all relative overflow-hidden"
-                  >
+                    whileHover={{ scale: 1.04, translateY: -6, rotateX: 2, rotateY: -1, boxShadow: '0 30px 60px -10px rgba(221,36,118,0.45)' }}
+                    whileTap={{ scale: 0.96, translateY: 2 }}
+                    className="bg-gradient-to-br from-[#FF512F] to-[#DD2476] p-5 rounded-[2rem] border-b-[6px] border-[#900C3F] shadow-[0_15px_35px_rgba(221,36,118,0.3),inset_0_2px_4px_rgba(255,255,255,0.35)] transition-all relative overflow-hidden"
+                   >
                     <BubbleBackground />
-                    <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-4 backdrop-blur-sm relative z-10"><Icons.Users size={20} className="text-white" strokeWidth={3} /></div>
-                    <p className="text-[10px] font-black text-emerald-100 uppercase tracking-widest mb-1 relative z-10">Total Members</p>
-                    <p className="text-3xl font-black text-white relative z-10">{totalMembers.toLocaleString()}</p>
+                    <div className="w-10 h-10 bg-gradient-to-br from-white/35 to-white/5 border border-white/30 rounded-xl flex items-center justify-center mb-4 shadow-[inset_0_1px_3px_rgba(255,255,255,0.4),0_4px_10px_rgba(0,0,0,0.15)] backdrop-blur-md relative z-10">
+                      <Icons.Users size={20} className="text-white" strokeWidth={3} />
+                    </div>
+                    <p className="text-[10px] font-black text-rose-100 uppercase tracking-widest mb-1 relative z-10">Total Members</p>
+                    <p className="text-3xl font-black text-white relative z-10 drop-shadow-sm">{totalMembers.toLocaleString()}</p>
                  </motion.div>
 
                  <motion.div 
-                    whileHover={{ scale: 1.02, translateY: -4, boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.4)' }}
-                    whileTap={{ scale: 0.98 }}
-                    className="bg-gradient-to-br from-amber-500 to-orange-600 p-5 rounded-[2rem] border-b-4 border-orange-800 shadow-[0_15px_30px_rgba(154,52,18,0.4)] transition-all relative overflow-hidden"
+                    whileHover={{ scale: 1.04, translateY: -6, rotateX: 2, rotateY: 1, boxShadow: '0 30px 60px -10px rgba(142,84,233,0.45)' }}
+                    whileTap={{ scale: 0.96, translateY: 2 }}
+                    className="bg-gradient-to-br from-[#4776E6] to-[#8E54E9] p-5 rounded-[2rem] border-b-[6px] border-[#3F1B85] shadow-[0_15px_35px_rgba(142,84,233,0.3),inset_0_2px_4px_rgba(255,255,255,0.35)] transition-all relative overflow-hidden"
                   >
                     <BubbleBackground />
-                    <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-4 backdrop-blur-sm relative z-10"><Icons.Activity size={20} className="text-white" strokeWidth={3} /></div>
-                    <p className="text-[10px] font-black text-amber-50 uppercase tracking-widest mb-1 relative z-10">Joins Today</p>
-                    <p className="text-3xl font-black text-white relative z-10">{joinsTodayCount}</p>
+                    <div className="w-10 h-10 bg-gradient-to-br from-white/35 to-white/5 border border-white/30 rounded-xl flex items-center justify-center mb-4 shadow-[inset_0_1px_3px_rgba(255,255,255,0.4),0_4px_10px_rgba(0,0,0,0.15)] backdrop-blur-md relative z-10">
+                      <Icons.Activity size={20} className="text-white" strokeWidth={3} />
+                    </div>
+                    <p className="text-[10px] font-black text-indigo-100 uppercase tracking-widest mb-1 relative z-10">Joins Today</p>
+                    <p className="text-3xl font-black text-white relative z-10 drop-shadow-sm">{joinsTodayCount}</p>
                  </motion.div>
 
                   <motion.div 
-                    whileHover={{ scale: 1.02, translateY: -4, boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.4)' }}
-                    whileTap={{ scale: 0.98 }}
-                    className="bg-gradient-to-br from-blue-600 to-indigo-700 p-5 rounded-[2rem] border-b-4 border-indigo-900 shadow-[0_15px_30px_rgba(30,58,138,0.4)] transition-all relative overflow-hidden"
+                    whileHover={{ scale: 1.04, translateY: -6, rotateX: -2, rotateY: -1, boxShadow: '0 30px 60px -10px rgba(17,153,142,0.45)' }}
+                    whileTap={{ scale: 0.96, translateY: 2 }}
+                    className="bg-gradient-to-br from-[#11998e] to-[#38ef7d] p-5 rounded-[2rem] border-b-[6px] border-[#0a5c54] shadow-[0_15px_35px_rgba(56,239,125,0.3),inset_0_2px_4px_rgba(255,255,255,0.35)] transition-all relative overflow-hidden"
                   >
                     <BubbleBackground />
-                    <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-4 backdrop-blur-sm relative z-10"><Icons.Home size={20} className="text-white" strokeWidth={3} /></div>
-                    <p className="text-[10px] font-black text-blue-100 uppercase tracking-widest mb-1 relative z-10">Batches</p>
-                    <p className="text-3xl font-black text-white relative z-10">{groups.length}</p>
+                    <div className="w-10 h-10 bg-gradient-to-br from-white/35 to-white/5 border border-white/30 rounded-xl flex items-center justify-center mb-4 shadow-[inset_0_1px_3px_rgba(255,255,255,0.4),0_4px_10px_rgba(0,0,0,0.15)] backdrop-blur-md relative z-10">
+                      <Icons.Home size={20} className="text-white" strokeWidth={3} />
+                    </div>
+                    <p className="text-[10px] font-black text-emerald-50 uppercase tracking-widest mb-1 relative z-10">Batches</p>
+                    <p className="text-3xl font-black text-white relative z-10 drop-shadow-sm">{groups.length}</p>
                  </motion.div>
 
                  <motion.div 
-                    whileHover={{ scale: 1.02, translateY: -4, boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.4)' }}
-                    whileTap={{ scale: 0.98 }}
-                    className="bg-gradient-to-br from-fuchsia-600 to-purple-700 p-5 rounded-[2rem] border-b-4 border-purple-900 shadow-[0_15px_30px_rgba(107,33,168,0.4)] transition-all relative overflow-hidden"
+                    whileHover={{ scale: 1.04, translateY: -6, rotateX: -2, rotateY: 1, boxShadow: '0 30px 60px -10px rgba(233,64,87,0.45)' }}
+                    whileTap={{ scale: 0.96, translateY: 2 }}
+                    className="bg-gradient-to-br from-[#8A2387] via-[#E94057] to-[#F27121] p-5 rounded-[2rem] border-b-[6px] border-[#701a2c] shadow-[0_15px_35px_rgba(233,64,87,0.3),inset_0_2px_4px_rgba(255,255,255,0.35)] transition-all relative overflow-hidden"
                   >
                     <BubbleBackground />
-                    <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-4 backdrop-blur-sm relative z-10"><Icons.Zap size={20} className="text-white" strokeWidth={3} /></div>
+                    <div className="w-10 h-10 bg-gradient-to-br from-white/35 to-white/5 border border-white/30 rounded-xl flex items-center justify-center mb-4 shadow-[inset_0_1px_3px_rgba(255,255,255,0.4),0_4px_10px_rgba(0,0,0,0.15)] backdrop-blur-md relative z-10">
+                      <Icons.Zap size={20} className="text-white" strokeWidth={3} />
+                    </div>
                     <div className="flex flex-col gap-3 relative z-10">
                        <div>
-                         <p className="text-[10px] font-black text-purple-100 uppercase tracking-widest mb-1">Bot Status</p>
-                         <p className="text-xl font-black text-white uppercase">{botInfo ? 'ACTIVE' : 'OFFLINE'}</p>
+                         <p className="text-[10px] font-black text-rose-100 uppercase tracking-widest mb-1">Bot Status</p>
+                         <p className="text-xl font-black text-white uppercase drop-shadow-sm">{botInfo ? 'ACTIVE' : 'OFFLINE'}</p>
                        </div>
                     </div>
                  </motion.div>
 
                  <motion.div 
-                    whileHover={{ scale: 1.02, translateY: -4 }}
-                    whileTap={{ scale: 0.98 }}
-                    className="bg-gradient-to-br from-rose-500 to-orange-600 p-5 rounded-[2rem] border-b-4 border-rose-800 shadow-[0_15px_30px_rgba(244,63,94,0.4)] transition-all relative overflow-hidden"
+                    whileHover={{ scale: 1.04, translateY: -6, rotateX: 2, rotateY: -1, boxShadow: '0 30px 60px -10px rgba(245,175,25,0.45)' }}
+                    whileTap={{ scale: 0.96, translateY: 2 }}
+                    className="bg-gradient-to-br from-[#f12711] to-[#f5af19] p-5 rounded-[2rem] border-b-[6px] border-[#8b1408] shadow-[0_15px_35px_rgba(245,175,25,0.3),inset_0_2px_4px_rgba(255,255,255,0.35)] transition-all relative overflow-hidden"
                   >
                     <BubbleBackground />
                     <div className="flex justify-between items-start mb-4 relative z-10">
-                      <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm"><Icons.TrendingUp size={20} className="text-white" strokeWidth={3} /></div>
+                      <div className="w-10 h-10 bg-gradient-to-br from-white/35 to-white/5 border border-white/30 rounded-xl flex items-center justify-center shadow-[inset_0_1px_3px_rgba(255,255,255,0.4),0_4px_10px_rgba(0,0,0,0.15)] backdrop-blur-md">
+                        <Icons.TrendingUp size={20} className="text-white" strokeWidth={3} />
+                      </div>
                       <button 
                         onClick={() => setHideRevenue(!hideRevenue)}
                         className="p-2 hover:bg-white/10 rounded-full transition-colors"
@@ -1970,26 +1980,28 @@ const App: React.FC = () => {
                         {hideRevenue ? <Icons.EyeOff size={16} className="text-white/70" /> : <Icons.Eye size={16} className="text-white/70" />}
                       </button>
                     </div>
-                    <p className="text-[10px] font-black text-rose-100 uppercase tracking-widest mb-1 relative z-10">Today's Revenue</p>
+                    <p className="text-[10px] font-black text-orange-100 uppercase tracking-widest mb-1 relative z-10">Today's Revenue</p>
                     {hideRevenue ? (
                       <p className="text-3xl font-black text-white relative z-10 text-shadow-sm blur-md select-none">₹8,888,888</p>
                     ) : (
                       <p className="text-3xl font-black text-white relative z-10 text-shadow-sm">₹{(joinsTodayCount * joinRate).toLocaleString()}</p>
                     )}
-                    <p className="text-[8px] font-bold text-rose-100/60 uppercase mt-1 relative z-10">Rate: ₹{joinRate}/join</p>
+                    <p className="text-[8px] font-bold text-orange-100/60 uppercase mt-1 relative z-10">Rate: ₹{joinRate}/join</p>
                  </motion.div>
 
                  <motion.button 
-                    whileHover={{ scale: 1.02, translateY: -4 }}
-                    whileTap={{ scale: 0.98 }}
+                    whileHover={{ scale: 1.04, translateY: -6, rotateX: 2, rotateY: 2, boxShadow: '0 30px 60px -10px rgba(99,102,241,0.4)' }}
+                    whileTap={{ scale: 0.96, translateY: 2 }}
                     onClick={() => setActiveTab('settings')}
-                    className="bg-gradient-to-br from-cyan-500 to-blue-600 p-5 rounded-[2rem] border-b-4 border-blue-800 shadow-[0_15px_30px_rgba(6,182,212,0.4)] transition-all relative overflow-hidden text-left group"
+                    className="bg-gradient-to-br from-indigo-900 via-slate-900 to-black p-5 rounded-[2rem] border-b-[6px] border-[#0c1020] shadow-[0_15px_35px_rgba(0,0,0,0.4),inset_0_1.5px_3px_rgba(255,255,255,0.15)] border border-white/5 transition-all relative overflow-hidden text-left group"
                   >
                     <BubbleBackground />
-                    <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-4 backdrop-blur-sm relative z-10"><Icons.BarChart3 size={20} className="text-white" strokeWidth={3} /></div>
-                    <p className="text-[10px] font-black text-cyan-50 uppercase tracking-widest mb-1 relative z-10">Analytics</p>
+                    <div className="w-10 h-10 bg-gradient-to-br from-white/15 to-white/5 border border-white/10 rounded-xl flex items-center justify-center mb-4 shadow-[inset_0_1px_3px_rgba(255,255,255,0.2),0_4px_10px_rgba(0,0,0,0.3)] backdrop-blur-md relative z-10">
+                      <Icons.BarChart3 size={20} className="text-indigo-400" strokeWidth={3} />
+                    </div>
+                    <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1 relative z-10">Analytics</p>
                     <p className="text-xl font-black text-white relative z-10 flex items-center gap-2">
-                      VIEW GROWTH <Icons.ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+                      VIEW GROWTH <Icons.ArrowRight size={20} className="group-hover:translate-x-1.5 transition-transform text-indigo-400" />
                     </p>
                  </motion.button>
               </div>
