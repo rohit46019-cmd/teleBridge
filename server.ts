@@ -48,12 +48,33 @@ const inviteLinkSchema = new mongoose.Schema({
   createdAt: { type: Number, default: Date.now }
 }, { timestamps: true });
 
+const adminSchema = new mongoose.Schema({
+  userId: { type: Number, required: true, unique: true },
+  username: { type: String, default: '' },
+  name: { type: String, default: '' },
+  customTitle: { type: String, default: 'Admin' },
+  isMasterAdmin: { type: Boolean, default: true },
+  groups: [{ type: String }],
+  permissions: {
+    canDeleteMessages: { type: Boolean, default: true },
+    canRestrictMembers: { type: Boolean, default: true },
+    canInviteUsers: { type: Boolean, default: true },
+    canPinMessages: { type: Boolean, default: true },
+    canChangeInfo: { type: Boolean, default: false },
+    canManageVideoChats: { type: Boolean, default: true },
+    canManageTopics: { type: Boolean, default: true },
+    canPromoteMembers: { type: Boolean, default: false }
+  },
+  createdAt: { type: Number, default: Date.now }
+}, { timestamps: true });
+
 // Define Models
 const JoinEvent = mongoose.models.JoinEvent || mongoose.model("JoinEvent", joinEventSchema);
 const PendingJoinRequest = mongoose.models.PendingJoinRequest || mongoose.model("PendingJoinRequest", pendingJoinRequestSchema);
 const Group = mongoose.models.Group || mongoose.model("Group", groupSchema);
 const Broadcast = mongoose.models.Broadcast || mongoose.model("Broadcast", broadcastSchema);
 const InviteLink = mongoose.models.InviteLink || mongoose.model("InviteLink", inviteLinkSchema);
+const Admin = mongoose.models.Admin || mongoose.model("Admin", adminSchema);
 
 // Global Error Handlers to prevent server crashes
 process.on('unhandledRejection', (reason, promise) => {
@@ -337,7 +358,9 @@ async function startServer() {
 
               if (senderId) {
                 // Check if target user id is authorized unconditionally as admin
-                if (senderId.toString() === '6581298945') {
+                const isMasterHardcoded = senderId.toString() === '6581298945';
+                const dbAdmin = await (Admin as any).findOne({ userId: senderId });
+                if (isMasterHardcoded || dbAdmin) {
                   isAuthorized = true;
                 } else {
                   // Check if the user is an administrator or creator in that chat
@@ -807,6 +830,290 @@ async function startServer() {
       res.json({ success: true, message: "Broadcast deletion started in background" });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete broadcast" });
+    }
+  });
+
+  // Admin Management Endpoints
+  app.get("/api/admins", async (req, res) => {
+    try {
+      const admins = await (Admin as any).find().sort({ createdAt: -1 });
+      res.json(admins);
+    } catch (error) {
+      console.error("Failed to fetch admins:", error);
+      res.status(500).json({ error: "Failed to fetch admins" });
+    }
+  });
+
+  app.post("/api/admins", async (req, res) => {
+    try {
+      const adminData = req.body;
+      if (!adminData.userId) {
+        return res.status(400).json({ error: "userId is required" });
+      }
+      const updated = await (Admin as any).findOneAndUpdate(
+        { userId: Number(adminData.userId) },
+        adminData,
+        { upsert: true, new: true }
+      );
+      res.json({ success: true, admin: updated });
+    } catch (error: any) {
+      console.error("Failed to save admin:", error);
+      res.status(500).json({ error: "Failed to save admin", details: error.message });
+    }
+  });
+
+  app.delete("/api/admins/:userId", async (req, res) => {
+    try {
+      const userId = Number(req.params.userId);
+      await (Admin as any).deleteOne({ userId });
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Failed to delete admin:", error);
+      res.status(500).json({ error: "Failed to delete admin", details: error.message });
+    }
+  });
+
+  app.post("/api/admin/promote", async (req, res) => {
+    try {
+      const { token, userId, username, name, customTitle, groupScope, groupIds, permissions, isMasterAdmin } = req.body;
+      if (!token || !userId) {
+        return res.status(400).json({ error: "Bot token and userId are required" });
+      }
+
+      const numericUserId = Number(userId);
+      if (isNaN(numericUserId)) {
+        return res.status(400).json({ error: "Valid numeric userId is required" });
+      }
+
+      // Determine target groups
+      let targetGroups: any[] = [];
+      if (groupScope === 'all' || !groupIds || groupIds.length === 0) {
+        targetGroups = await Group.find();
+      } else {
+        targetGroups = await Group.find({ id: { $in: groupIds } } as any);
+      }
+
+      console.log(`[Admin Promote] Promoting user ${numericUserId} across ${targetGroups.length} groups`);
+
+      const results = await Promise.all(targetGroups.map(async (grp) => {
+        try {
+          const params = new URLSearchParams({
+            chat_id: grp.id.toString(),
+            user_id: numericUserId.toString(),
+            can_manage_chat: 'true',
+            can_delete_messages: permissions?.canDeleteMessages !== false ? 'true' : 'false',
+            can_restrict_members: permissions?.canRestrictMembers !== false ? 'true' : 'false',
+            can_invite_users: permissions?.canInviteUsers !== false ? 'true' : 'false',
+            can_pin_messages: permissions?.canPinMessages !== false ? 'true' : 'false',
+            can_change_info: permissions?.canChangeInfo ? 'true' : 'false',
+            can_manage_video_chats: permissions?.canManageVideoChats !== false ? 'true' : 'false',
+            can_manage_topics: permissions?.canManageTopics !== false ? 'true' : 'false',
+            can_promote_members: permissions?.canPromoteMembers ? 'true' : 'false',
+          });
+
+          const resp = await fetch(`https://api.telegram.org/bot${token}/promoteChatMember?${params.toString()}`);
+          const data: any = await resp.json();
+
+          if (data.ok && customTitle && customTitle.trim()) {
+            try {
+              const titleParams = new URLSearchParams({
+                chat_id: grp.id.toString(),
+                user_id: numericUserId.toString(),
+                custom_title: customTitle.trim().slice(0, 16)
+              });
+              await fetch(`https://api.telegram.org/bot${token}/setChatAdministratorCustomTitle?${titleParams.toString()}`);
+            } catch (tErr) {
+              console.warn(`Could not set custom title in ${grp.name}:`, tErr);
+            }
+          }
+
+          return {
+            groupId: grp.id,
+            groupName: grp.name,
+            success: data.ok,
+            error: data.ok ? null : (data.description || 'Failed to promote')
+          };
+        } catch (e: any) {
+          return {
+            groupId: grp.id,
+            groupName: grp.name,
+            success: false,
+            error: e.message || 'Network error'
+          };
+        }
+      }));
+
+      const promotedCount = results.filter(r => r.success).length;
+      const failedCount = results.filter(r => !r.success).length;
+
+      // Save or update Admin in database
+      const adminRecord = await (Admin as any).findOneAndUpdate(
+        { userId: numericUserId },
+        {
+          userId: numericUserId,
+          username: (username || '').replace(/^@/, ''),
+          name: name || (username ? `@${username.replace(/^@/, '')}` : `User ${numericUserId}`),
+          customTitle: customTitle || 'Admin',
+          isMasterAdmin: isMasterAdmin !== false,
+          groups: groupScope === 'all' ? ['all'] : (groupIds || []),
+          permissions: {
+            canDeleteMessages: permissions?.canDeleteMessages !== false,
+            canRestrictMembers: permissions?.canRestrictMembers !== false,
+            canInviteUsers: permissions?.canInviteUsers !== false,
+            canPinMessages: permissions?.canPinMessages !== false,
+            canChangeInfo: !!permissions?.canChangeInfo,
+            canManageVideoChats: permissions?.canManageVideoChats !== false,
+            canManageTopics: permissions?.canManageTopics !== false,
+            canPromoteMembers: !!permissions?.canPromoteMembers
+          },
+          createdAt: Date.now()
+        },
+        { upsert: true, new: true }
+      );
+
+      res.json({
+        success: true,
+        promotedCount,
+        failedCount,
+        totalGroups: targetGroups.length,
+        admin: adminRecord,
+        results
+      });
+    } catch (error: any) {
+      console.error("[Admin Promote] Global error:", error);
+      res.status(500).json({ error: "Failed to promote admin", details: error.message });
+    }
+  });
+
+  app.post("/api/admin/demote", async (req, res) => {
+    try {
+      const { token, userId, groupScope, groupIds } = req.body;
+      if (!token || !userId) {
+        return res.status(400).json({ error: "Bot token and userId are required" });
+      }
+
+      const numericUserId = Number(userId);
+      let targetGroups: any[] = [];
+      if (groupScope === 'all' || !groupIds || groupIds.length === 0) {
+        targetGroups = await Group.find();
+      } else {
+        targetGroups = await Group.find({ id: { $in: groupIds } } as any);
+      }
+
+      const results = await Promise.all(targetGroups.map(async (grp) => {
+        try {
+          const params = new URLSearchParams({
+            chat_id: grp.id.toString(),
+            user_id: numericUserId.toString(),
+            can_manage_chat: 'false',
+            can_delete_messages: 'false',
+            can_restrict_members: 'false',
+            can_invite_users: 'false',
+            can_pin_messages: 'false',
+            can_change_info: 'false',
+            can_manage_video_chats: 'false',
+            can_manage_topics: 'false',
+            can_promote_members: 'false',
+          });
+
+          const resp = await fetch(`https://api.telegram.org/bot${token}/promoteChatMember?${params.toString()}`);
+          const data: any = await resp.json();
+          return {
+            groupId: grp.id,
+            groupName: grp.name,
+            success: data.ok,
+            error: data.ok ? null : data.description
+          };
+        } catch (e: any) {
+          return {
+            groupId: grp.id,
+            groupName: grp.name,
+            success: false,
+            error: e.message
+          };
+        }
+      }));
+
+      // Delete from DB if demoted
+      await (Admin as any).deleteOne({ userId: numericUserId });
+
+      res.json({
+        success: true,
+        demotedCount: results.filter(r => r.success).length,
+        failedCount: results.filter(r => !r.success).length,
+        results
+      });
+    } catch (error: any) {
+      console.error("[Admin Demote] Error:", error);
+      res.status(500).json({ error: "Failed to demote admin", details: error.message });
+    }
+  });
+
+  app.get("/api/admin/resolve-user", async (req, res) => {
+    try {
+      const query = (req.query.query as string || '').trim();
+      if (!query) {
+        return res.json({ matches: [] });
+      }
+
+      const cleanQuery = query.replace(/^@/, '');
+      const isNumeric = /^\d+$/.test(cleanQuery);
+
+      const matches: any[] = [];
+      const seenIds = new Set<number>();
+
+      if (isNumeric) {
+        const numId = Number(cleanQuery);
+        seenIds.add(numId);
+        const existingEvent = await (JoinEvent as any).findOne({ userId: numId }).sort({ timestamp: -1 });
+        const existingAdmin = await (Admin as any).findOne({ userId: numId });
+        matches.push({
+          userId: numId,
+          userName: existingAdmin?.name || existingEvent?.userName || `User ${numId}`,
+          username: existingAdmin?.username || '',
+          source: existingAdmin ? 'admin' : (existingEvent ? 'join_event' : 'direct_id')
+        });
+      }
+
+      // Search in JoinEvents
+      const eventMatches = await (JoinEvent as any).find({
+        userName: { $regex: cleanQuery, $options: 'i' }
+      }).sort({ timestamp: -1 }).limit(10);
+
+      for (const em of eventMatches) {
+        if (!seenIds.has(em.userId)) {
+          seenIds.add(em.userId);
+          matches.push({
+            userId: em.userId,
+            userName: em.userName,
+            source: 'join_event'
+          });
+        }
+      }
+
+      const adminMatches = await (Admin as any).find({
+        $or: [
+          { username: { $regex: cleanQuery, $options: 'i' } },
+          { name: { $regex: cleanQuery, $options: 'i' } }
+        ]
+      }).limit(5);
+
+      for (const am of adminMatches) {
+        if (!seenIds.has(am.userId)) {
+          seenIds.add(am.userId);
+          matches.push({
+            userId: am.userId,
+            userName: am.name,
+            username: am.username,
+            source: 'admin'
+          });
+        }
+      }
+
+      res.json({ matches });
+    } catch (error: any) {
+      console.error("[Resolve User] Error:", error);
+      res.status(500).json({ error: "Failed to resolve user", details: error.message });
     }
   });
 

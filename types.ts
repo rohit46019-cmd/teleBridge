@@ -61,6 +61,29 @@ export interface BotState {
   apiHash: string;
 }
 
+export interface AdminPermissions {
+  canDeleteMessages: boolean;
+  canRestrictMembers: boolean;
+  canInviteUsers: boolean;
+  canPinMessages: boolean;
+  canChangeInfo: boolean;
+  canManageVideoChats: boolean;
+  canManageTopics: boolean;
+  canPromoteMembers: boolean;
+}
+
+export interface AdminUser {
+  _id?: string;
+  userId: number;
+  username?: string;
+  name?: string;
+  customTitle?: string;
+  isMasterAdmin?: boolean;
+  groups?: string[]; // group IDs or ['all']
+  permissions: AdminPermissions;
+  createdAt: number;
+}
+
 export interface GeminiInsight {
   title: string;
   summary: string;

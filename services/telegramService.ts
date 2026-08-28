@@ -174,3 +174,98 @@ export async function deleteWebhook(token: string): Promise<boolean> {
   if (!data.ok) throw new Error(data.description || 'Failed to delete webhook');
   return true;
 }
+
+export interface PromoteChatMemberOptions {
+  canDeleteMessages?: boolean;
+  canRestrictMembers?: boolean;
+  canInviteUsers?: boolean;
+  canPinMessages?: boolean;
+  canChangeInfo?: boolean;
+  canManageVideoChats?: boolean;
+  canManageTopics?: boolean;
+  canPromoteMembers?: boolean;
+}
+
+export async function promoteChatMember(
+  token: string,
+  chatId: string | number,
+  userId: number,
+  options?: PromoteChatMemberOptions
+): Promise<boolean> {
+  const params = new URLSearchParams({
+    chat_id: chatId.toString(),
+    user_id: userId.toString(),
+    can_manage_chat: 'true',
+    can_delete_messages: options?.canDeleteMessages !== false ? 'true' : 'false',
+    can_restrict_members: options?.canRestrictMembers !== false ? 'true' : 'false',
+    can_invite_users: options?.canInviteUsers !== false ? 'true' : 'false',
+    can_pin_messages: options?.canPinMessages !== false ? 'true' : 'false',
+    can_change_info: options?.canChangeInfo ? 'true' : 'false',
+    can_manage_video_chats: options?.canManageVideoChats !== false ? 'true' : 'false',
+    can_manage_topics: options?.canManageTopics !== false ? 'true' : 'false',
+    can_promote_members: options?.canPromoteMembers ? 'true' : 'false',
+  });
+
+  const response = await fetchWithTimeout(`${BASE_URL}${token}/promoteChatMember?${params.toString()}`);
+  const data = await response.json();
+  if (!data.ok) throw new Error(data.description || 'Failed to promote member');
+  return true;
+}
+
+export async function setChatAdminCustomTitle(
+  token: string,
+  chatId: string | number,
+  userId: number,
+  customTitle: string
+): Promise<boolean> {
+  if (!customTitle || !customTitle.trim()) return true;
+  try {
+    const params = new URLSearchParams({
+      chat_id: chatId.toString(),
+      user_id: userId.toString(),
+      custom_title: customTitle.trim().slice(0, 16)
+    });
+    const response = await fetchWithTimeout(`${BASE_URL}${token}/setChatAdministratorCustomTitle?${params.toString()}`);
+    const data = await response.json();
+    return data.ok;
+  } catch (err) {
+    console.warn("Failed to set admin custom title:", err);
+    return false;
+  }
+}
+
+export async function demoteChatMember(
+  token: string,
+  chatId: string | number,
+  userId: number
+): Promise<boolean> {
+  const params = new URLSearchParams({
+    chat_id: chatId.toString(),
+    user_id: userId.toString(),
+    can_manage_chat: 'false',
+    can_delete_messages: 'false',
+    can_restrict_members: 'false',
+    can_invite_users: 'false',
+    can_pin_messages: 'false',
+    can_change_info: 'false',
+    can_manage_video_chats: 'false',
+    can_manage_topics: 'false',
+    can_promote_members: 'false',
+  });
+
+  const response = await fetchWithTimeout(`${BASE_URL}${token}/promoteChatMember?${params.toString()}`);
+  const data = await response.json();
+  if (!data.ok) throw new Error(data.description || 'Failed to demote member');
+  return true;
+}
+
+export async function getChatAdministrators(
+  token: string,
+  chatId: string | number
+): Promise<any[]> {
+  const response = await fetchWithTimeout(`${BASE_URL}${token}/getChatAdministrators?chat_id=${chatId}`);
+  const data = await response.json();
+  if (!data.ok) throw new Error(data.description || 'Failed to fetch administrators');
+  return data.result || [];
+}
+

@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import Sidebar from '../components/Sidebar.tsx';
+import Sidebar, { ThemePreset } from '../components/Sidebar.tsx';
 import GroupCard from '../components/GroupCard.tsx';
 import InviteModal from '../components/InviteModal.tsx';
 import ConfirmationModal from '../components/ConfirmationModal.tsx';
+import { AdminManager } from '../components/AdminManager.tsx';
 import { Icons } from '../constants.tsx';
 import { TelegramGroup, JoinEvent, BannedUser } from '../types.ts';
 import { verifyBotToken, getChatDetails, TelegramBotInfo, getChatMemberCount, getRecentUpdates, kickChatMember, banMember, unbanMember, deleteMessage, setWebhook, deleteWebhook } from '../services/telegramService.ts';
@@ -194,8 +195,36 @@ const App: React.FC = () => {
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const saved = localStorage.getItem('theme');
     if (saved) return saved as 'light' | 'dark';
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    return 'dark';
   });
+  const [colorTheme, setColorTheme] = useState<ThemePreset>(() => {
+    const saved = localStorage.getItem('color_theme');
+    if (saved) return saved as ThemePreset;
+    return 'midnight';
+  });
+  const [fontSize, setFontSize] = useState<'xs' | 'small' | 'normal'>(() => {
+    const saved = localStorage.getItem('font_size');
+    if (saved) return saved as 'xs' | 'small' | 'normal';
+    return 'small';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('theme', theme);
+    localStorage.setItem('color_theme', colorTheme);
+    localStorage.setItem('font_size', fontSize);
+
+    const root = document.documentElement;
+    root.classList.remove('light', 'dark', 'theme-midnight', 'theme-quantum', 'theme-violet', 'theme-executive', 'font-xs', 'font-small', 'font-normal');
+
+    if (theme === 'dark') {
+      root.classList.add('dark');
+    } else {
+      root.classList.add('light');
+    }
+
+    root.classList.add(`theme-${colorTheme}`);
+    root.classList.add(`font-${fontSize}`);
+  }, [theme, colorTheme, fontSize]);
   
   const [token, setToken] = useState(localStorage.getItem('tg_bot_token') || DEFAULT_TOKEN);
   const [autoCleanServiceMessages, setAutoCleanServiceMessages] = useState(() => {
@@ -295,7 +324,7 @@ const App: React.FC = () => {
   const [analysisEndDate, setAnalysisEndDate] = useState<string>('');
   const [isGroupListCollapsed, setIsGroupListCollapsed] = useState(true);
   const [selectedGroupToDelete, setSelectedGroupToDelete] = useState('');
-  const [settingsSubTab, setSettingsSubTab] = useState<'charts' | 'config'>('charts');
+  const [settingsSubTab, setSettingsSubTab] = useState<'charts' | 'config' | 'admins'>('charts');
   const [revenueOption, setRevenueOption] = useState<number | { month: number, year: number }>(14);
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
@@ -1770,22 +1799,102 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col md:flex-row font-sans transition-all duration-300">
-      <Sidebar activeTab={activeTab} onTabChange={handleTabChange} theme={theme} toggleTheme={toggleTheme} />
+      <Sidebar
+        activeTab={activeTab}
+        onTabChange={handleTabChange}
+        theme={theme}
+        toggleTheme={toggleTheme}
+        colorTheme={colorTheme}
+        onColorThemeChange={(preset) => {
+          setColorTheme(preset);
+          if (preset === 'executive') setTheme('light');
+          else setTheme('dark');
+        }}
+      />
 
       <main className="flex-1 md:ml-64 px-4 md:px-6 lg:px-8 pb-28 w-full max-w-[1400px] mx-auto">
-        <header className="sticky top-0 z-40 bg-slate-50/80 dark:bg-slate-950/80 backdrop-blur-xl -mx-4 px-4 md:-mx-6 md:px-6 lg:-mx-8 lg:px-8 py-2.5 mb-4 border-b border-slate-200 dark:border-white/5 animate-in slide-in-from-top">
+        <header className="sticky top-0 z-40 bg-white/80 dark:bg-slate-950/80 backdrop-blur-2xl -mx-4 px-4 md:-mx-6 md:px-6 lg:-mx-8 lg:px-8 py-3 mb-6 border-b border-slate-200/80 dark:border-slate-800/80 animate-in slide-in-from-top shadow-sm">
           <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2.5">
-              <div className="w-1.5 h-6 bg-blue-600 rounded-full shadow-[0_0_20px_rgba(37,99,235,0.6)]" />
-              <h1 key={activeTab} className="text-xl md:text-2xl font-black tracking-tighter capitalize animate-in fade-in">{activeTab}</h1>
+            <div className="flex items-center gap-3">
+              <div className="w-2 h-7 bg-gradient-to-b from-indigo-500 via-purple-500 to-pink-500 rounded-full shadow-[0_0_15px_rgba(99,102,241,0.5)]" />
+              <div>
+                <h1 key={activeTab} className="text-xl md:text-2xl font-black tracking-tight capitalize animate-in fade-in bg-gradient-to-r from-slate-900 via-indigo-950 to-purple-950 dark:from-white dark:via-indigo-100 dark:to-purple-200 bg-clip-text text-transparent">
+                  {activeTab}
+                </h1>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest hidden sm:block">TeleBridge Control Dashboard</p>
+              </div>
             </div>
             
-            <div className="flex items-center gap-1.5">
-              <button onClick={toggleTheme} className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm active:scale-90 transition-all">
-                {theme === 'dark' ? <Icons.Sun size={16} className="text-amber-500" /> : <Icons.Moon size={16} className="text-blue-600" />}
+            <div className="flex items-center gap-2">
+              {/* Font Size Quick Selector */}
+              <div className="hidden sm:flex items-center gap-1 p-1 bg-slate-100/90 dark:bg-slate-900/90 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl">
+                {[
+                  { id: 'xs', label: 'Micro (11.5px)', short: 'XS' },
+                  { id: 'small', label: 'Small / Compact (13px)', short: 'S' },
+                  { id: 'normal', label: 'Medium (15px)', short: 'M' },
+                ].map((f) => (
+                  <button
+                    key={f.id}
+                    onClick={() => setFontSize(f.id as 'xs' | 'small' | 'normal')}
+                    title={`Font Size: ${f.label}`}
+                    className={`px-2.5 py-1 rounded-xl text-[10px] font-black tracking-tight transition-all ${
+                      fontSize === f.id
+                        ? 'bg-indigo-600 text-white shadow-sm scale-105'
+                        : 'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    <span>{f.short}</span>
+                  </button>
+                ))}
+              </div>
+
+              {/* Quick Theme Presets */}
+              <div className="hidden md:flex items-center gap-1 p-1 bg-slate-100/90 dark:bg-slate-900/90 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl">
+                {(['midnight', 'quantum', 'violet', 'executive'] as ThemePreset[]).map((preset) => {
+                  const presetLabels: Record<ThemePreset, { name: string; color: string }> = {
+                    midnight: { name: 'Cyber', color: 'bg-indigo-500' },
+                    quantum: { name: 'Emerald', color: 'bg-emerald-500' },
+                    violet: { name: 'Violet', color: 'bg-purple-500' },
+                    executive: { name: 'Slate', color: 'bg-slate-600' }
+                  };
+                  return (
+                    <button
+                      key={preset}
+                      onClick={() => {
+                        setColorTheme(preset);
+                        if (preset === 'executive') setTheme('light');
+                        else setTheme('dark');
+                      }}
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[10px] font-black uppercase transition-all ${
+                        colorTheme === preset
+                          ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm border border-slate-200 dark:border-slate-700 scale-105'
+                          : 'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                      }`}
+                    >
+                      <span className={`w-2 h-2 rounded-full ${presetLabels[preset].color}`} />
+                      <span>{presetLabels[preset].name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Theme mode toggle */}
+              <button 
+                onClick={toggleTheme} 
+                className="p-2.5 rounded-2xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 shadow-sm hover:scale-105 active:scale-95 transition-all text-amber-500 dark:text-amber-400"
+                title="Toggle Dark / Light Mode"
+              >
+                {theme === 'dark' ? <Icons.Sun size={18} /> : <Icons.Moon size={18} className="text-indigo-600" />}
               </button>
-              <button onClick={() => syncAllGroupsMemberCount(token)} disabled={isScanning} className="p-2 bg-blue-600 text-white rounded-xl shadow-lg active:scale-90 transition-all">
-                <Icons.Refresh size={16} className={isScanning ? 'animate-spin' : ''} />
+
+              <button 
+                onClick={() => syncAllGroupsMemberCount(token)} 
+                disabled={isScanning} 
+                className="p-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-2xl shadow-lg shadow-indigo-500/20 active:scale-95 transition-all flex items-center gap-2"
+                title="Refresh Telegram Hubs Data"
+              >
+                <Icons.Refresh size={18} className={isScanning ? 'animate-spin' : ''} />
+                <span className="text-xs font-black uppercase tracking-wider hidden lg:inline">Sync Hubs</span>
               </button>
             </div>
           </div>
@@ -2192,6 +2301,12 @@ const App: React.FC = () => {
                 >
                   <Icons.Settings size={14} /> Configuration
                 </button>
+                <button 
+                  onClick={() => setSettingsSubTab('admins')}
+                  className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${settingsSubTab === 'admins' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-lg scale-[1.02]' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                >
+                  <Icons.Shield size={14} /> Bot Admins
+                </button>
               </div>
 
               {settingsSubTab === 'charts' && (
@@ -2383,15 +2498,146 @@ const App: React.FC = () => {
                 <div className="space-y-6">
                   <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-[2rem] shadow-sm">
                     <h3 className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-[0.4em] mb-6 flex items-center gap-2">
-                      <Icons.Zap size={14} /> Bot Gateway
+                      <Icons.Zap size={14} /> Bot Gateway & Customization
                     </h3>
                     
+                    {/* Theme & Visual Appearance Customization */}
+                    <div className="mb-8 p-6 bg-slate-100/70 dark:bg-slate-950/80 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 shadow-md space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white shadow-md">
+                            <Icons.Palette size={20} />
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider">
+                              Theme & Visual Experience
+                            </h4>
+                            <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                              Select a modern theme palette to update your dashboard look instantly.
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={toggleTheme}
+                            className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
+                          >
+                            {theme === 'dark' ? <Icons.Sun size={14} className="text-amber-500" /> : <Icons.Moon size={14} className="text-indigo-600" />}
+                            <span>{theme === 'dark' ? 'Dark Mode' : 'Light Mode'}</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+                        {[
+                          { id: 'midnight', name: 'Cyber Obsidian', desc: 'Neon Indigo & Dark Glass', bg: 'from-indigo-950 via-slate-950 to-purple-950 text-white', border: 'border-indigo-500' },
+                          { id: 'quantum', name: 'Quantum Emerald', desc: 'Futuristic Tech & Teal', bg: 'from-emerald-950 via-slate-950 to-teal-950 text-white', border: 'border-emerald-500' },
+                          { id: 'violet', name: 'Violet Aura', desc: 'Magenta & Violet Glow', bg: 'from-fuchsia-950 via-slate-950 to-purple-950 text-white', border: 'border-purple-500' },
+                          { id: 'executive', name: 'Executive Light', desc: 'Crisp Slate & Minimal Light', bg: 'from-slate-100 via-white to-indigo-50 text-slate-900', border: 'border-slate-400' }
+                        ].map((t) => (
+                          <button
+                            key={t.id}
+                            onClick={() => {
+                              setColorTheme(t.id as ThemePreset);
+                              if (t.id === 'executive') setTheme('light');
+                              else setTheme('dark');
+                            }}
+                            className={`p-4 rounded-2xl border transition-all text-left flex flex-col justify-between gap-3 relative overflow-hidden ${
+                              colorTheme === t.id
+                                ? `${t.border} ring-2 ring-indigo-500/50 shadow-xl scale-[1.02]`
+                                : 'border-slate-200 dark:border-slate-800 opacity-80 hover:opacity-100'
+                            } bg-gradient-to-br ${t.bg}`}
+                          >
+                            <div className="flex items-center justify-between z-10">
+                              <span className="text-xs font-black uppercase tracking-tight">{t.name}</span>
+                              {colorTheme === t.id && (
+                                <div className="w-5 h-5 rounded-full bg-indigo-500 text-white flex items-center justify-center">
+                                  <Icons.Check size={12} strokeWidth={3} />
+                                </div>
+                              )}
+                            </div>
+                            <p className="text-[9px] font-medium opacity-75 z-10 leading-tight">{t.desc}</p>
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Font Size Scaling Options */}
+                      <div className="pt-4 border-t border-slate-200/80 dark:border-slate-800/80">
+                        <div className="flex items-center justify-between mb-3">
+                          <div>
+                            <h5 className="text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider">
+                              Typography Scale / Font Size
+                            </h5>
+                            <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                              Adjust text size across the whole dashboard interface.
+                            </p>
+                          </div>
+                          <span className="px-2 py-0.5 rounded-lg bg-indigo-500/10 text-indigo-500 font-mono font-black text-[10px] uppercase">
+                            Current: {fontSize === 'xs' ? 'Micro (11.5px)' : fontSize === 'small' ? 'Compact (13px)' : 'Medium (15px)'}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                          {[
+                            { id: 'xs', title: 'Extra Small', size: '11.5px Base', desc: 'Ultra-dense pro view' },
+                            { id: 'small', title: 'Small / Compact', size: '13px Base', desc: 'Recommended default' },
+                            { id: 'normal', title: 'Medium', size: '15px Base', desc: 'Larger text readability' },
+                          ].map((f) => (
+                            <button
+                              key={f.id}
+                              onClick={() => setFontSize(f.id as 'xs' | 'small' | 'normal')}
+                              className={`p-3 rounded-2xl border transition-all text-left flex flex-col gap-1 ${
+                                fontSize === f.id
+                                  ? 'bg-indigo-600 text-white border-indigo-500 shadow-md scale-[1.02]'
+                                  : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-800 hover:border-indigo-400'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-black tracking-tight">{f.title}</span>
+                                <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded ${fontSize === f.id ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'}`}>
+                                  {f.size}
+                                </span>
+                              </div>
+                              <p className={`text-[9px] ${fontSize === f.id ? 'text-indigo-100' : 'text-slate-400'}`}>
+                                {f.desc}
+                              </p>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Bot Admin Quick Access Banner */}
+                    <div className="mb-8 p-5 bg-gradient-to-r from-indigo-500/10 via-purple-500/5 to-indigo-500/5 rounded-[2rem] border border-indigo-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-2xl bg-indigo-600 flex items-center justify-center text-white shadow-md flex-shrink-0">
+                          <Icons.Shield size={20} />
+                        </div>
+                        <div>
+                          <h4 className="text-xs font-black text-slate-800 dark:text-white uppercase tracking-wider flex items-center gap-1.5">
+                            Bot Admin Management
+                          </h4>
+                          <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                            Add co-admins by Username/ID & promote across all Telegram groups.
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setSettingsSubTab('admins')}
+                        className="w-full sm:w-auto px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-[10px] font-black uppercase tracking-widest rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5 flex-shrink-0 cursor-pointer"
+                      >
+                        <Icons.UserPlus size={14} /> Open Admin Manager
+                      </button>
+                    </div>
+
                     <div className="mb-8 p-6 bg-white dark:bg-black/20 rounded-[2rem] border border-slate-200 dark:border-white/5 space-y-6">
                       <div className="flex items-center justify-between">
                         <div>
                           <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1 flex items-center justify-between">
                             Group Cleanup
                           </h4>
+
                           <p className="text-[9px] text-slate-500 font-bold">Auto-delete Join/Leave messages</p>
                         </div>
                         <div className="flex items-center gap-2">
@@ -2650,10 +2896,19 @@ const App: React.FC = () => {
                   </div>
                 </div>
               )}
+
+              {settingsSubTab === 'admins' && (
+                <AdminManager
+                  botToken={token}
+                  groups={groups}
+                  onShowNotification={showNotification}
+                />
+              )}
             </div>
           )}
         </div>
       </main>
+
 
       {selectedGroup && (
         <InviteModal group={selectedGroup} onClose={() => setSelectedGroup(null)} botToken={token} onInteraction={() => handleGroupInteraction(selectedGroup.id)} />
