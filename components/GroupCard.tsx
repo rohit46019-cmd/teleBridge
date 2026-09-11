@@ -102,6 +102,8 @@ const GroupCard: React.FC<GroupCardProps> = ({ group, onClick, onTogglePin, inde
     : Math.abs(group.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)) % UNIQUE_THEMES.length;
   const theme = UNIQUE_THEMES[themeIndex];
 
+  const isNew = group.createdAt ? (Date.now() - group.createdAt < 72 * 60 * 60 * 1000) : false;
+
   const copyId = (e: React.MouseEvent) => {
     e.stopPropagation();
     navigator.clipboard.writeText(group.id);
@@ -175,6 +177,11 @@ const GroupCard: React.FC<GroupCardProps> = ({ group, onClick, onTogglePin, inde
               {group.memberCount} MEMBERS
             </div>
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_6px_rgba(16,185,129,0.8)]" />
+            {isNew && (
+              <span className="px-1.5 py-0.5 rounded-md text-[7px] font-black uppercase tracking-widest bg-gradient-to-r from-rose-500 to-pink-600 text-white animate-pulse shadow-sm shadow-rose-500/50">
+                ✨ NEW
+              </span>
+            )}
           </div>
         </div>
       </div>

@@ -1813,7 +1813,7 @@ const App: React.FC = () => {
       />
 
       <main className="flex-1 md:ml-64 px-4 md:px-6 lg:px-8 pb-28 w-full max-w-[1400px] mx-auto">
-        <header className="sticky top-0 z-40 bg-white/60 dark:bg-slate-950/50 backdrop-blur-xl -mx-4 px-4 md:-mx-6 md:px-6 lg:-mx-8 lg:px-8 py-2 mb-4 border-b border-slate-200/50 dark:border-slate-800/50 animate-in slide-in-from-top shadow-sm">
+        <header className="sticky top-0 z-40 bg-gradient-to-r from-indigo-50/90 via-purple-50/50 to-white/90 dark:from-slate-950/90 dark:via-indigo-950/50 dark:to-slate-950/90 backdrop-blur-xl -mx-4 px-4 md:-mx-6 md:px-6 lg:-mx-8 lg:px-8 py-2.5 mb-4 border-b border-indigo-200/60 dark:border-indigo-900/40 animate-in slide-in-from-top shadow-md">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5">
               <div className="w-1.5 h-5 bg-gradient-to-b from-indigo-500 to-purple-600 rounded-full shadow-[0_0_10px_rgba(99,102,241,0.4)]" />

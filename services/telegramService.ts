@@ -59,17 +59,30 @@ export async function getChatMemberCount(token: string, chatId: string | number)
 }
 
 export async function getRecentUpdates(token: string, offset: number = 0): Promise<any[]> {
-  const response = await fetchWithTimeout(`${BASE_URL}${token}/getUpdates`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      offset: offset,
-      allowed_updates: ["message", "chat_member", "my_chat_member", "chat_join_request", "channel_post"]
-    })
-  });
-  const data = await response.json();
-  if (!data.ok) throw new Error(data.description || 'Failed to fetch updates');
-  return data.result;
+  try {
+    const response = await fetchWithTimeout(`${BASE_URL}${token}/getUpdates`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        offset: offset,
+        allowed_updates: ["message", "chat_member", "my_chat_member", "chat_join_request", "channel_post"]
+      })
+    });
+    const data = await response.json();
+    if (!data.ok) {
+      if (data.description?.includes('Conflict')) {
+        return [];
+      }
+      throw new Error(data.description || 'Failed to fetch updates');
+    }
+    return data.result || [];
+  } catch (error: any) {
+    if (error.message?.includes('Could not reach Telegram') || error.message?.includes('Failed to fetch') || error.name === 'AbortError') {
+      console.warn("Telegram polling network notice (offline / sandbox mode):", error.message);
+      return [];
+    }
+    throw error;
+  }
 }
 
 export async function createInviteLink(
