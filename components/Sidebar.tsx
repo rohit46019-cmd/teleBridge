@@ -10,6 +10,7 @@ interface SidebarProps {
   toggleTheme: () => void;
   colorTheme?: ThemePreset;
   onColorThemeChange?: (preset: ThemePreset) => void;
+  hideMobileNav?: boolean;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({
@@ -19,12 +20,14 @@ const Sidebar: React.FC<SidebarProps> = ({
   toggleTheme,
   colorTheme = 'midnight',
   onColorThemeChange,
+  hideMobileNav = false,
 }) => {
   const menuItems = [
-    { id: 'dashboard', label: 'Overview', icon: Icons.Home, color: 'text-indigo-400' },
-    { id: 'groups', label: 'Hubs', icon: Icons.Users, color: 'text-blue-400' },
-    { id: 'analysis', label: 'Audit', icon: Icons.Activity, color: 'text-emerald-400' },
-    { id: 'settings', label: 'Settings', icon: Icons.Settings, color: 'text-purple-400' },
+    { id: 'dashboard', label: 'Home', icon: Icons.Home, color: 'text-indigo-400' },
+    { id: 'groups', label: 'Hubs', icon: Icons.Database, color: 'text-blue-400' },
+    { id: 'folders', label: 'Folders', icon: Icons.Folder, color: 'text-amber-400' },
+    { id: 'analysis', label: 'Audit', icon: Icons.TrendingUp, color: 'text-emerald-400' },
+    { id: 'settings', label: 'Settings', icon: Icons.Sliders, color: 'text-purple-400' },
   ];
 
   const presets: { id: ThemePreset; name: string; bg: string; border: string }[] = [
@@ -131,21 +134,33 @@ const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </aside>
 
-      {/* Mobile Nav */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900/95 dark:bg-slate-950/95 border-t border-slate-800 flex items-center justify-around p-2 z-50 backdrop-blur-xl shadow-2xl">
-        {menuItems.map((item) => (
-          <button
-            key={item.id}
-            onClick={() => onTabChange(item.id)}
-            className={`flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl transition-all active:scale-95 ${
-              activeTab === item.id ? `${item.color} bg-indigo-500/20 text-white font-bold` : 'text-slate-400'
-            }`}
-          >
-            <item.icon size={18} strokeWidth={activeTab === item.id ? 2.5 : 1.5} />
-            <span className="text-[9px] font-black uppercase tracking-wider">{item.label}</span>
-          </button>
-        ))}
-      </nav>
+      {/* Mobile Nav - Creative Floating Dock Design */}
+      {!hideMobileNav && (
+        <nav className="md:hidden fixed bottom-5 left-1/2 -translate-x-1/2 w-[92%] max-w-sm bg-white/80 dark:bg-slate-900/80 border border-slate-200/50 dark:border-white/10 rounded-full flex items-center justify-between py-2 px-3 z-50 backdrop-blur-2xl shadow-[0_20px_40px_-10px_rgba(0,0,0,0.15)] dark:shadow-[0_20px_40px_-10px_rgba(0,0,0,0.5)]">
+          {menuItems.map((item) => {
+            const isActive = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => onTabChange(item.id)}
+                className={`relative flex items-center justify-center w-12 h-12 rounded-full transition-all duration-500 group ${
+                  isActive
+                    ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-xl scale-110 -translate-y-2'
+                    : 'text-slate-400 hover:text-slate-800 dark:hover:text-white'
+                }`}
+              >
+                <item.icon size={isActive ? 20 : 22} strokeWidth={isActive ? 2.5 : 2} className="relative z-10" />
+                {isActive && (
+                  <div className="absolute inset-0 bg-gradient-to-tr from-indigo-500/20 to-purple-500/20 rounded-full blur-md animate-pulse"></div>
+                )}
+                <span className={`absolute -bottom-4 text-[8px] font-black uppercase tracking-widest transition-opacity duration-300 ${isActive ? 'opacity-100 text-slate-900 dark:text-white' : 'opacity-0'}`}>
+                  {item.label}
+                </span>
+              </button>
+            );
+          })}
+        </nav>
+      )}
     </>
   );
 };

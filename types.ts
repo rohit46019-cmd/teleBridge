@@ -89,3 +89,11 @@ export interface GeminiInsight {
   summary: string;
   suggestion: string;
 }
+
+export interface BatchFolder {
+  id: string;
+  name: string;
+  color: string;
+  batchIds: string[];
+  createdAt: number;
+}

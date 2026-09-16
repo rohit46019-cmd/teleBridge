@@ -6,7 +6,7 @@ import InviteModal from '../components/InviteModal.tsx';
 import ConfirmationModal from '../components/ConfirmationModal.tsx';
 import { AdminManager } from '../components/AdminManager.tsx';
 import { Icons } from '../constants.tsx';
-import { TelegramGroup, JoinEvent, BannedUser } from '../types.ts';
+import { TelegramGroup, JoinEvent, BannedUser, BatchFolder } from '../types.ts';
 import { verifyBotToken, getChatDetails, TelegramBotInfo, getChatMemberCount, getRecentUpdates, kickChatMember, banMember, unbanMember, deleteMessage, setWebhook, deleteWebhook } from '../services/telegramService.ts';
 import { 
   AreaChart, 
@@ -167,7 +167,7 @@ const DEFAULT_GROUPS: TelegramGroup[] = [
   { "id": "-1003839638841", "name": "Bhutesh sir math parmar ssc", "memberCount": 4, "description": "Auto Discovered Hub", "category": "Telegram", "image": "https://picsum.photos/seed/-1003839638841/100", "lastInteraction": 1775504050623 }
 ];
 
-const TABS = ['dashboard', 'groups', 'analysis', 'settings'];
+const TABS = ['dashboard', 'groups', 'folders', 'analysis', 'settings'];
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState(() => {
@@ -247,6 +247,30 @@ const App: React.FC = () => {
       return [];
     }
   });
+
+  const [folders, setFolders] = useState<BatchFolder[]>(() => {
+    try {
+      const saved = localStorage.getItem('telebridge_batch_folders');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {}
+    return [
+      { id: 'f-1', name: 'VIP Batches 📂', color: 'from-indigo-600 to-blue-600', batchIds: [], createdAt: Date.now() },
+      { id: 'f-2', name: 'Active Hubs 📂', color: 'from-emerald-600 to-teal-600', batchIds: [], createdAt: Date.now() }
+    ];
+  });
+  const [newFolderName, setNewFolderName] = useState('');
+  const [newFolderIcon, setNewFolderIcon] = useState('📂');
+  const [newFolderColor, setNewFolderColor] = useState('from-indigo-600 to-blue-600');
+  const [isCreateFolderModalOpen, setIsCreateFolderModalOpen] = useState(false);
+  const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
+  const [folderSearchQuery, setFolderSearchQuery] = useState('');
+
+  useEffect(() => {
+    localStorage.setItem('telebridge_batch_folders', JSON.stringify(folders));
+  }, [folders]);
 
   const [botInfo, setBotInfo] = useState<TelegramBotInfo | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
@@ -914,7 +938,66 @@ const App: React.FC = () => {
     return () => clearTimeout(timer);
   }, [syncStatus, pendingJoins, pendingGroups]);
 
-  const handleTabChange = (newTab: string) => {
+  // Mobile Phone System Back Button & Browser History Management
+  useEffect(() => {
+    // Initialize or replace baseline state so back always has a known root
+    if (!window.history.state || typeof window.history.state !== 'object' || !window.history.state.tab) {
+      window.history.replaceState({ tab: activeTab, folderId: activeFolderId, modal: null }, '');
+    }
+
+    const handlePopState = (event: PopStateEvent) => {
+      const state = event.state;
+
+      // 1. Modals priority: dismiss modals if state no longer contains them
+      if (!state || state.modal !== 'group') {
+        setSelectedGroup(null);
+      } else if (state.modal === 'group' && state.groupId) {
+        const foundGroup = groups.find(g => g.id === state.groupId);
+        if (foundGroup) setSelectedGroup(foundGroup);
+      }
+
+      if (!state || state.modal !== 'createFolder') {
+        setIsCreateFolderModalOpen(false);
+      } else if (state.modal === 'createFolder') {
+        setIsCreateFolderModalOpen(true);
+      }
+
+      if (!state || state.modal !== 'confirm') {
+        setConfirmationModalConfig(prev => prev.isOpen ? { ...prev, isOpen: false } : prev);
+      }
+
+      // 2. Folder detail sub-page:
+      if (state && state.folderId !== undefined) {
+        setActiveFolderId(state.folderId);
+      } else {
+        setActiveFolderId(null);
+      }
+
+      // 3. Tab / Page navigation:
+      const targetTab = state?.tab || 'dashboard';
+      if (targetTab !== activeTab) {
+        const currentIndex = TABS.indexOf(activeTab);
+        const newIndex = TABS.indexOf(targetTab);
+        if (newIndex > currentIndex) {
+          setAnimationDirection('right');
+        } else if (newIndex < currentIndex) {
+          setAnimationDirection('left');
+        }
+        setActiveTab(targetTab);
+        localStorage.setItem('activeTab', targetTab);
+        if (targetTab === 'analysis') {
+          setAuditSubTab('audit');
+        }
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [activeTab, activeFolderId, groups]);
+
+  const handleTabChange = (newTab: string, pushToHistory = true) => {
+    if (activeTab === newTab && activeFolderId === null && !selectedGroup && !isCreateFolderModalOpen) return;
+
     const currentIndex = TABS.indexOf(activeTab);
     const newIndex = TABS.indexOf(newTab);
     
@@ -923,12 +1006,91 @@ const App: React.FC = () => {
     } else if (newIndex < currentIndex) {
       setAnimationDirection('left');
     }
+
+    setSelectedGroup(null);
+    setIsCreateFolderModalOpen(false);
+    if (activeFolderId !== null && newTab !== 'folders') {
+      setActiveFolderId(null);
+    }
+
+    if (pushToHistory) {
+      window.history.pushState({ tab: newTab, folderId: null, modal: null }, '');
+    }
     
     if (currentIndex !== newIndex) {
       setActiveTab(newTab);
+      localStorage.setItem('activeTab', newTab);
       if (newTab === 'analysis') {
         setAuditSubTab('audit');
       }
+    }
+  };
+
+  const handleOpenGroupModal = (group: TelegramGroup) => {
+    window.history.pushState({ tab: activeTab, folderId: activeFolderId, modal: 'group', groupId: group.id }, '');
+    setSelectedGroup(group);
+  };
+
+  const handleCloseGroupModal = () => {
+    if (window.history.state?.modal === 'group') {
+      window.history.back();
+    } else {
+      setSelectedGroup(null);
+    }
+  };
+
+  const handleOpenFolder = (folderId: string) => {
+    window.history.pushState({ tab: 'folders', folderId: folderId, modal: null }, '');
+    setActiveFolderId(folderId);
+  };
+
+  const handleCloseFolder = () => {
+    if (window.history.state?.folderId) {
+      window.history.back();
+    } else {
+      setActiveFolderId(null);
+    }
+  };
+
+  const handleOpenCreateFolderModal = () => {
+    window.history.pushState({ tab: 'folders', folderId: activeFolderId, modal: 'createFolder' }, '');
+    setIsCreateFolderModalOpen(true);
+  };
+
+  const handleCloseCreateFolderModal = () => {
+    if (window.history.state?.modal === 'createFolder') {
+      window.history.back();
+    } else {
+      setIsCreateFolderModalOpen(false);
+    }
+  };
+
+  const handleOpenConfirmModal = (config: {
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }) => {
+    window.history.pushState({ tab: activeTab, folderId: activeFolderId, modal: 'confirm' }, '');
+    setConfirmationModalConfig({
+      isOpen: true,
+      title: config.title,
+      message: config.message,
+      onConfirm: () => {
+        config.onConfirm();
+        if (window.history.state?.modal === 'confirm') {
+          window.history.back();
+        } else {
+          setConfirmationModalConfig(prev => ({ ...prev, isOpen: false }));
+        }
+      }
+    });
+  };
+
+  const handleCloseConfirmModal = () => {
+    if (window.history.state?.modal === 'confirm') {
+      window.history.back();
+    } else {
+      setConfirmationModalConfig(prev => ({ ...prev, isOpen: false }));
     }
   };
   
@@ -1394,8 +1556,7 @@ const App: React.FC = () => {
   };
 
   const handleRequestKick = (joinEvent: JoinEvent) => {
-    setConfirmationModalConfig({
-      isOpen: true,
+    handleOpenConfirmModal({
       title: `Confirm Removal`,
       message: `Are you sure you want to remove ${joinEvent.userName} from ${joinEvent.chatTitle}? They will be able to rejoin if they have a valid link.`,
       onConfirm: () => handleExecuteKick(joinEvent.chatId, joinEvent.userId, `${joinEvent.userId}-${joinEvent.timestamp}`),
@@ -1403,8 +1564,7 @@ const App: React.FC = () => {
   };
 
   const handleRequestBan = (joinEvent: JoinEvent) => {
-    setConfirmationModalConfig({
-      isOpen: true,
+    handleOpenConfirmModal({
       title: `Confirm Permanent Ban`,
       message: `Are you sure you want to permanently BAN ${joinEvent.userName} from ${joinEvent.chatTitle}? They will NOT be able to rejoin even with a valid link.`,
       onConfirm: () => handleExecuteBan(joinEvent.chatId, joinEvent.userId, `${joinEvent.userId}-${joinEvent.timestamp}`),
@@ -1527,8 +1687,7 @@ const App: React.FC = () => {
   const handleDeleteGroup = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     
-    setConfirmationModalConfig({
-      isOpen: true,
+    handleOpenConfirmModal({
       title: 'Remove Group',
       message: 'Are you sure you want to remove this group? This action will permanently remove it from the synced hub.',
       onConfirm: async () => {
@@ -1546,7 +1705,6 @@ const App: React.FC = () => {
         // OPTIMISTIC UPDATE: Remove group from UI immediately
         setGroups(prev => prev.filter(g => g.id !== id));
         setSelectedGroupToDelete('');
-        setConfirmationModalConfig(prev => ({ ...prev, isOpen: false }));
         showNotification("Group removed successfully", 'success');
         
         try {
@@ -1810,36 +1968,57 @@ const App: React.FC = () => {
           if (preset === 'executive') setTheme('light');
           else setTheme('dark');
         }}
+        hideMobileNav={false}
       />
 
-      <main className="flex-1 md:ml-64 px-4 md:px-6 lg:px-8 pb-28 w-full max-w-[1400px] mx-auto">
-        <header className="sticky top-0 z-40 bg-gradient-to-r from-indigo-50/90 via-purple-50/50 to-white/90 dark:from-slate-950/90 dark:via-indigo-950/50 dark:to-slate-950/90 backdrop-blur-xl -mx-4 px-4 md:-mx-6 md:px-6 lg:-mx-8 lg:px-8 py-2.5 mb-4 border-b border-indigo-200/60 dark:border-indigo-900/40 animate-in slide-in-from-top shadow-md">
+      <main className="flex-1 transition-all duration-300 md:ml-64 px-4 md:px-6 lg:px-8 pb-28 w-full max-w-[1400px] mx-auto">
+        <header className="sticky top-0 z-40 bg-white/75 dark:bg-slate-950/80 backdrop-blur-2xl -mx-4 px-4 md:-mx-6 md:px-6 lg:-mx-8 lg:px-8 py-3 mb-5 border-b border-slate-200/80 dark:border-slate-800/80 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] dark:shadow-[0_4px_25px_-4px_rgba(0,0,0,0.4)] transition-all">
           <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5">
-              <div className="w-1.5 h-5 bg-gradient-to-b from-indigo-500 to-purple-600 rounded-full shadow-[0_0_10px_rgba(99,102,241,0.4)]" />
-              <div>
-                <h1 key={activeTab} className="text-lg md:text-xl font-black tracking-tight capitalize animate-in fade-in bg-gradient-to-r from-slate-900 via-indigo-950 to-purple-950 dark:from-white dark:via-indigo-100 dark:to-purple-200 bg-clip-text text-transparent">
-                  {activeTab}
-                </h1>
-                <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest hidden sm:block">TeleBridge Control</p>
+            {/* Left: Tab Title & Icon with Status Glow */}
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 via-purple-600 to-pink-500 p-0.5 shadow-md shadow-indigo-500/20 flex-shrink-0 flex items-center justify-center text-white text-lg font-black">
+                {activeTab === 'dashboard' && '⚡'}
+                {activeTab === 'groups' && '👥'}
+                {activeTab === 'folders' && '📂'}
+                {activeTab === 'analysis' && '🛡️'}
+                {activeTab === 'settings' && '⚙️'}
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <h1 key={activeTab} className="text-base md:text-xl font-black tracking-tight text-slate-900 dark:text-white capitalize truncate animate-in fade-in">
+                    {activeTab === 'dashboard' ? 'Home' : activeTab === 'groups' ? 'Batches & Hubs' : activeTab === 'folders' ? 'Batch Folders' : activeTab === 'analysis' ? 'Audit & Security' : 'Bot Settings'}
+                  </h1>
+                  <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-[9px] font-black uppercase tracking-wider">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                    Live
+                  </span>
+                </div>
+                <p className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 truncate">
+                  {activeTab === 'dashboard' && 'Real-time hub metrics & join monitors'}
+                  {activeTab === 'groups' && `${groups.length} Telegram groups connected`}
+                  {activeTab === 'folders' && `${folders.length} organized batch folders`}
+                  {activeTab === 'analysis' && 'Security audit & unauthorized joins'}
+                  {activeTab === 'settings' && 'Bot token & configuration'}
+                </p>
               </div>
             </div>
-            
-            <div className="flex items-center gap-1.5">
+              
+            {/* Right: Controls & Actions */}
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
               {/* Font Size Quick Selector */}
-              <div className="hidden sm:flex items-center gap-0.5 p-0.5 bg-slate-100/80 dark:bg-slate-900/80 border border-slate-200/50 dark:border-slate-800/50 rounded-xl">
+              <div className="hidden lg:flex items-center gap-0.5 p-1 bg-slate-100/90 dark:bg-slate-900/90 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl shadow-inner">
                 {[
-                  { id: 'xs', label: 'Micro (11.5px)', short: 'XS' },
-                  { id: 'small', label: 'Small / Compact (13px)', short: 'S' },
-                  { id: 'normal', label: 'Medium (15px)', short: 'M' },
+                  { id: 'xs', label: 'Micro', short: 'XS' },
+                  { id: 'small', label: 'Small', short: 'S' },
+                  { id: 'normal', label: 'Medium', short: 'M' },
                 ].map((f) => (
                   <button
                     key={f.id}
                     onClick={() => setFontSize(f.id as 'xs' | 'small' | 'normal')}
                     title={`Font Size: ${f.label}`}
-                    className={`px-2 py-0.5 rounded-lg text-[9px] font-black tracking-tight transition-all ${
+                    className={`px-2.5 py-1 rounded-xl text-[10px] font-black tracking-tight transition-all ${
                       fontSize === f.id
-                        ? 'bg-indigo-600 text-white shadow-sm scale-105'
+                        ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-sm scale-105'
                         : 'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
                     }`}
                   >
@@ -1848,8 +2027,8 @@ const App: React.FC = () => {
                 ))}
               </div>
 
-              {/* Quick Theme Presets */}
-              <div className="hidden md:flex items-center gap-0.5 p-0.5 bg-slate-100/80 dark:bg-slate-900/80 border border-slate-200/50 dark:border-slate-800/50 rounded-xl">
+              {/* Quick Theme Presets (Desktop) */}
+              <div className="hidden xl:flex items-center gap-0.5 p-1 bg-slate-100/90 dark:bg-slate-900/90 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl shadow-inner">
                 {(['midnight', 'quantum', 'violet', 'executive'] as ThemePreset[]).map((preset) => {
                   const presetLabels: Record<ThemePreset, { name: string; color: string }> = {
                     midnight: { name: 'Cyber', color: 'bg-indigo-500' },
@@ -1865,7 +2044,7 @@ const App: React.FC = () => {
                         if (preset === 'executive') setTheme('light');
                         else setTheme('dark');
                       }}
-                      className={`flex items-center gap-1 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase transition-all ${
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[9px] font-black uppercase transition-all ${
                         colorTheme === preset
                           ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm border border-slate-200/80 dark:border-slate-700/80 scale-105'
                           : 'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
@@ -1881,20 +2060,21 @@ const App: React.FC = () => {
               {/* Theme mode toggle */}
               <button 
                 onClick={toggleTheme} 
-                className="p-1.5 rounded-xl bg-white/80 dark:bg-slate-900/80 border border-slate-200/50 dark:border-slate-800/50 shadow-sm hover:scale-105 active:scale-95 transition-all text-amber-500 dark:text-amber-400"
+                className="w-9 h-9 rounded-2xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-center text-slate-600 dark:text-amber-400 hover:scale-105 active:scale-95 transition-all"
                 title="Toggle Dark / Light Mode"
               >
-                {theme === 'dark' ? <Icons.Sun size={15} /> : <Icons.Moon size={15} className="text-indigo-600" />}
+                {theme === 'dark' ? <Icons.Sun size={16} /> : <Icons.Moon size={16} className="text-indigo-600" />}
               </button>
 
+              {/* Sync Hubs Button */}
               <button 
                 onClick={() => syncAllGroupsMemberCount(token)} 
                 disabled={isScanning} 
-                className="p-1.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-xl shadow-md active:scale-95 transition-all flex items-center gap-1.5"
+                className="h-9 px-3 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-500 hover:to-pink-500 text-white rounded-2xl shadow-md shadow-indigo-500/20 active:scale-95 transition-all flex items-center gap-2 font-bold text-xs"
                 title="Refresh Telegram Hubs Data"
               >
-                <Icons.Refresh size={15} className={isScanning ? 'animate-spin' : ''} />
-                <span className="text-[10px] font-black uppercase tracking-wider hidden lg:inline">Sync Hubs</span>
+                <Icons.Refresh size={14} className={isScanning ? 'animate-spin' : ''} />
+                <span className="text-[11px] font-black tracking-wide hidden sm:inline">Sync Hubs</span>
               </button>
             </div>
           </div>
@@ -1992,7 +2172,7 @@ const App: React.FC = () => {
                  <motion.button 
                     whileHover={{ scale: 1.04, translateY: -6, rotateX: 2, rotateY: 2, boxShadow: '0 30px 60px -10px rgba(99,102,241,0.4)' }}
                     whileTap={{ scale: 0.96, translateY: 2 }}
-                    onClick={() => setActiveTab('settings')}
+                    onClick={() => handleTabChange('settings')}
                     className="bg-gradient-to-br from-indigo-900 via-slate-900 to-black p-5 rounded-[2rem] border-b-[6px] border-[#0c1020] shadow-[0_15px_35px_rgba(0,0,0,0.4),inset_0_1.5px_3px_rgba(255,255,255,0.15)] border border-white/5 transition-all relative overflow-hidden text-left group"
                   >
                     <BubbleBackground />
@@ -2130,7 +2310,7 @@ const App: React.FC = () => {
                   {filteredGroups.length > 0 ? (
                     filteredGroups.map((g, index) => (
                       <GroupCard key={g.id} group={g} index={index} onClick={() => {
-                        setSelectedGroup(g);
+                        handleOpenGroupModal(g);
                         if (searchQuery.trim()) {
                           const trimmed = searchQuery.trim();
                           setRecentSearches(prev => [trimmed, ...prev.filter(s => s !== trimmed)].slice(0, 10));
@@ -2145,6 +2325,506 @@ const App: React.FC = () => {
                     </div>
                   )}
                 </div>
+            </div>
+          )}
+
+          {activeTab === 'folders' && (
+            <div className={`space-y-6 ${animationClass}`}>
+              {activeFolderId === null ? (
+                /* 1. Main Folder List View (No outer container box, compact folder cards, large prominent icon) */
+                <div className="relative">
+                  <div className="flex flex-row items-center justify-between gap-2 mb-5 px-1">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5 mb-0.5">
+                        <span className="text-base sm:text-lg">📂</span>
+                        <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-amber-500 truncate">Organized Batch Vault</p>
+                      </div>
+                      <h2 className="text-lg sm:text-2xl font-black tracking-tight text-slate-900 dark:text-white truncate">Batch Folders</h2>
+                    </div>
+
+                    <button
+                      onClick={handleOpenCreateFolderModal}
+                      className="flex-shrink-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-2 sm:px-4 sm:py-2.5 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:to-orange-700 text-white rounded-xl shadow-md shadow-amber-500/25 active:scale-95 transition-all text-xs font-black tracking-wide whitespace-nowrap"
+                    >
+                      <span className="text-sm sm:text-base leading-none font-bold">+</span>
+                      <span>Create Folder</span>
+                    </button>
+                  </div>
+
+                  {/* Create Folder Modal */}
+                  {isCreateFolderModalOpen && (
+                    <div 
+                      className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-950/80 backdrop-blur-md overflow-hidden animate-in fade-in duration-200"
+                      onClick={handleCloseCreateFolderModal}
+                    >
+                      <div 
+                        className="relative w-full max-w-lg bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-t-[2.25rem] sm:rounded-3xl shadow-2xl flex flex-col max-h-[92dvh] sm:max-h-[88vh] animate-in slide-in-from-bottom-6 sm:zoom-in-95 duration-200 overflow-hidden"
+                        onClick={e => e.stopPropagation()}
+                      >
+                        {/* Mobile Pull Bar */}
+                        <div className="pt-2.5 pb-1 flex justify-center sm:hidden">
+                          <div className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-slate-700" />
+                        </div>
+
+                        {/* Sticky Modal Header */}
+                        <div className="flex items-center justify-between px-5 py-3.5 sm:py-4 border-b border-slate-100 dark:border-slate-800/80 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md shrink-0">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-10 h-10 rounded-2xl bg-gradient-to-br ${newFolderColor} flex items-center justify-center text-white shadow-md text-xl flex-shrink-0 transition-all duration-300`}>
+                              {newFolderIcon}
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-1.5">
+                                <h3 className="text-sm sm:text-base font-black text-slate-900 dark:text-white leading-tight">Create Batch Vault</h3>
+                                <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 text-[9px] font-black uppercase tracking-wider">New</span>
+                              </div>
+                              <p className="text-[11px] text-slate-400 font-medium">Categorize & group your telegram batches</p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={handleCloseCreateFolderModal}
+                            className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                          >
+                            <Icons.X size={16} />
+                          </button>
+                        </div>
+
+                        {/* Scrollable Content Body */}
+                        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4.5 overscroll-contain">
+                          
+                          {/* 1. Live Folder Preview Card */}
+                          <div className="relative overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-gradient-to-b from-slate-50 to-white dark:from-slate-950 dark:to-slate-900 p-4 shadow-sm">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Live Preview</span>
+                              <span className="text-[10px] font-bold text-amber-500 flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                                Ready to organize
+                              </span>
+                            </div>
+                            
+                            <div className="flex items-center gap-3.5 p-3 rounded-xl bg-white dark:bg-slate-800/80 border border-slate-100 dark:border-slate-700/60 shadow-sm">
+                              <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${newFolderColor} flex items-center justify-center text-white text-2xl shadow-md flex-shrink-0 transition-all duration-300`}>
+                                {newFolderIcon}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <h4 className="font-black text-sm text-slate-900 dark:text-white truncate">
+                                  {newFolderName.trim() ? `${newFolderName.trim()} ${newFolderIcon}` : `Untitled Folder ${newFolderIcon}`}
+                                </h4>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  <span className="text-[10px] font-bold text-slate-400">0 Batches linked</span>
+                                  <span className="text-slate-300 dark:text-slate-600">•</span>
+                                  <span className="text-[10px] font-semibold text-emerald-500">Active Vault</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* 2. Folder Name Input */}
+                          <div>
+                            <div className="flex items-center justify-between mb-1.5">
+                              <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                                Folder Name *
+                              </label>
+                              <span className="text-[10px] text-slate-400">{newFolderName.length}/40</span>
+                            </div>
+                            <div className="relative">
+                              <input
+                                type="text"
+                                maxLength={40}
+                                placeholder="e.g. UPSC Batches, VIP Students, Daily Hub..."
+                                value={newFolderName}
+                                onChange={e => setNewFolderName(e.target.value)}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter' && newFolderName.trim()) {
+                                    const cleanName = newFolderName.trim().replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '').trim();
+                                    const newFolder: BatchFolder = {
+                                      id: 'folder-' + Date.now(),
+                                      name: `${cleanName || 'My Folder'} ${newFolderIcon}`,
+                                      color: newFolderColor,
+                                      batchIds: [],
+                                      createdAt: Date.now()
+                                    };
+                                    setFolders(prev => [newFolder, ...prev]);
+                                    setNewFolderName('');
+                                    handleCloseCreateFolderModal();
+                                    showNotification('Folder created successfully 📂', 'success');
+                                  }
+                                }}
+                                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 px-3.5 py-3 rounded-2xl text-xs font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all placeholder:text-slate-400 pr-10 shadow-inner"
+                                autoFocus
+                              />
+                              {newFolderName && (
+                                <button
+                                  type="button"
+                                  onClick={() => setNewFolderName('')}
+                                  className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-500 hover:text-slate-900 dark:hover:text-white flex items-center justify-center text-xs"
+                                >
+                                  ×
+                                </button>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* 3. Quick Suggestion Templates */}
+                          <div>
+                            <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">
+                              Quick Suggestions
+                            </label>
+                            <div className="flex flex-wrap gap-1.5">
+                              {[
+                                { name: 'UPSC Aspirants', icon: '📚', color: 'from-amber-500 to-orange-600' },
+                                { name: 'VIP Paid Hub', icon: '💎', color: 'from-purple-600 to-pink-600' },
+                                { name: 'Daily Alerts', icon: '⚡', color: 'from-indigo-600 to-blue-600' },
+                                { name: 'Tech Batches', icon: '🚀', color: 'from-cyan-600 to-blue-600' },
+                                { name: 'Test Series', icon: '🎯', color: 'from-emerald-600 to-teal-600' }
+                              ].map(idea => (
+                                <button
+                                  key={idea.name}
+                                  type="button"
+                                  onClick={() => {
+                                    setNewFolderName(idea.name);
+                                    setNewFolderIcon(idea.icon);
+                                    setNewFolderColor(idea.color);
+                                  }}
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-slate-800/80 hover:bg-amber-500/10 hover:text-amber-500 text-slate-600 dark:text-slate-300 text-[11px] font-bold border border-slate-200/60 dark:border-slate-700/60 transition-all active:scale-95"
+                                >
+                                  <span>{idea.icon}</span>
+                                  <span>{idea.name}</span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* 4. Choose Folder Icon (Emoji Picker) */}
+                          <div>
+                            <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1.5">
+                              Folder Icon
+                            </label>
+                            <div className="grid grid-cols-6 sm:grid-cols-8 gap-2">
+                              {['📂', '📁', '💎', '📚', '⚡', '🚀', '🎯', '💼', '🔥', '🏆', '⭐', '🏷️'].map(emoji => (
+                                <button
+                                  key={emoji}
+                                  type="button"
+                                  onClick={() => setNewFolderIcon(emoji)}
+                                  className={`h-10 rounded-xl flex items-center justify-center text-lg transition-all active:scale-90 ${
+                                    newFolderIcon === emoji
+                                      ? 'bg-amber-500/20 border-2 border-amber-500 shadow-sm scale-105'
+                                      : 'bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800'
+                                  }`}
+                                >
+                                  {emoji}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* 5. Color Theme Gradient Picker */}
+                          <div>
+                            <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1.5">
+                              Color Gradient Theme
+                            </label>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                              {[
+                                { label: 'Indigo Blue', value: 'from-indigo-600 to-blue-600' },
+                                { label: 'Emerald Teal', value: 'from-emerald-600 to-teal-600' },
+                                { label: 'Purple Pink', value: 'from-purple-600 to-pink-600' },
+                                { label: 'Amber Orange', value: 'from-amber-500 to-orange-600' },
+                                { label: 'Rose Flame', value: 'from-rose-600 to-red-600' },
+                                { label: 'Cyan Sky', value: 'from-cyan-600 to-blue-600' }
+                              ].map(themeOpt => (
+                                <button
+                                  key={themeOpt.value}
+                                  type="button"
+                                  onClick={() => setNewFolderColor(themeOpt.value)}
+                                  className={`p-2.5 rounded-xl border flex items-center gap-2 transition-all ${
+                                    newFolderColor === themeOpt.value 
+                                      ? 'border-amber-500 bg-amber-500/10 shadow-sm ring-2 ring-amber-500/30' 
+                                      : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 hover:bg-slate-100 dark:hover:bg-slate-800/80'
+                                  }`}
+                                >
+                                  <div className={`w-4 h-4 rounded-full bg-gradient-to-r ${themeOpt.value} flex-shrink-0 shadow-sm`} />
+                                  <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300 truncate">{themeOpt.label}</span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                        </div>
+
+                        {/* Sticky Modal Footer (Never cut off) */}
+                        <div className="px-5 py-3.5 bg-slate-50/95 dark:bg-slate-950/95 backdrop-blur-md border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-3 shrink-0 pb-[max(0.9rem,env(safe-area-inset-bottom))]">
+                          <button
+                            type="button"
+                            onClick={handleCloseCreateFolderModal}
+                            className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-500 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors"
+                          >
+                            Cancel
+                          </button>
+                          
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!newFolderName.trim()) {
+                                showNotification('Please enter folder name', 'alert');
+                                return;
+                              }
+                              const cleanName = newFolderName.trim().replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '').trim();
+                              const newFolder: BatchFolder = {
+                                id: 'folder-' + Date.now(),
+                                name: `${cleanName || 'My Folder'} ${newFolderIcon}`,
+                                color: newFolderColor,
+                                batchIds: [],
+                                createdAt: Date.now()
+                              };
+                              setFolders(prev => [newFolder, ...prev]);
+                              setNewFolderName('');
+                              handleCloseCreateFolderModal();
+                              showNotification(`Folder created with icon ${newFolderIcon}`, 'success');
+                            }}
+                            className="px-5 py-2.5 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:to-orange-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-lg shadow-amber-500/25 active:scale-95 flex items-center gap-1.5"
+                          >
+                            <span>+</span>
+                            <span>Create Vault</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Compact Folders List (Small boxes with large prominent folder icon) */}
+                  {folders.length > 0 ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pb-24">
+                      {folders.map(folder => {
+                        const count = folder.batchIds.length;
+                        return (
+                          <div
+                            key={folder.id}
+                            onClick={() => handleOpenFolder(folder.id)}
+                            className="bg-white hover:bg-slate-50 dark:bg-slate-900/80 dark:hover:bg-slate-900 border border-slate-200 dark:border-slate-800/80 rounded-xl p-3.5 shadow-sm hover:shadow-md cursor-pointer transition-all flex items-center justify-between group"
+                          >
+                            <div className="flex items-center gap-3 truncate">
+                              <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${folder.color} flex items-center justify-center text-white shadow-md flex-shrink-0 group-hover:scale-105 transition-transform text-2xl`}>
+                                📂
+                              </div>
+                              <div className="truncate">
+                                <h3 className="text-xs font-extrabold text-slate-900 dark:text-white truncate group-hover:text-amber-500 transition-colors">{folder.name}</h3>
+                                <p className="text-[10px] text-slate-400 font-bold">{count} {count === 1 ? 'batch' : 'batches'}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1.5 relative z-20">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                  handleOpenConfirmModal({
+                                    title: 'Delete Folder',
+                                    message: `Are you sure you want to delete folder "${folder.name}"?`,
+                                    onConfirm: () => {
+                                      setFolders(prev => prev.filter(f => f.id !== folder.id));
+                                      showNotification('Folder deleted successfully', 'info');
+                                    }
+                                  });
+                                }}
+                                onTouchEnd={(e) => {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                  handleOpenConfirmModal({
+                                    title: 'Delete Folder',
+                                    message: `Are you sure you want to delete folder "${folder.name}"?`,
+                                    onConfirm: () => {
+                                      setFolders(prev => prev.filter(f => f.id !== folder.id));
+                                      showNotification('Folder deleted successfully', 'info');
+                                    }
+                                  });
+                                }}
+                                className="p-2.5 text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 rounded-xl transition-all cursor-pointer"
+                                title="Delete Folder"
+                              >
+                                <Icons.Trash size={16} />
+                              </button>
+                              <span className="text-slate-400 group-hover:translate-x-1 transition-transform">→</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="text-center py-16 px-4 text-slate-400 text-xs bg-white dark:bg-slate-900/30 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 mb-20 flex flex-col items-center justify-center gap-3">
+                      <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center text-2xl">
+                        📂
+                      </div>
+                      <div>
+                        <p className="font-bold text-slate-700 dark:text-slate-300 text-sm">No Folders Created Yet</p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">Click "Create Folder" at the top to organize your batches</p>
+                      </div>
+                      <button
+                        onClick={handleOpenCreateFolderModal}
+                        className="mt-1 px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white rounded-xl text-xs font-bold shadow-md shadow-amber-500/20 active:scale-95 transition-all"
+                      >
+                        + Create Your First Folder
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* 2. Folder Detail Sub-Page (Shows Batches inside this folder) */
+                (() => {
+                  const currentFolder = folders.find(f => f.id === activeFolderId);
+                  if (!currentFolder) {
+                    handleCloseFolder();
+                    return null;
+                  }
+                  const folderBatches = groups.filter(g => currentFolder.batchIds.includes(g.id));
+                  return (
+                    <div className="relative">
+                      {/* Back button & Folder Header */}
+                      <div className="flex flex-row items-center justify-between gap-2 mb-4 px-1">
+                        <div className="flex items-center gap-2.5">
+                          <button
+                            onClick={handleCloseFolder}
+                            className="w-8 h-8 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors shadow-sm shrink-0"
+                            title="Back to Folders"
+                          >
+                            ←
+                          </button>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1 mb-0.5">
+                              <span className="text-xs">📂</span>
+                              <span className="text-[8px] font-black uppercase tracking-widest text-amber-500 hidden sm:inline">Folder View</span>
+                            </div>
+                            <h2 className="text-base md:text-lg font-black tracking-tight text-slate-900 dark:text-white truncate max-w-[140px] sm:max-w-xs">{currentFolder.name}</h2>
+                          </div>
+                        </div>
+
+                        {/* Folder Delete Action */}
+                        <div className="flex items-center shrink-0">
+                          <button
+                            onClick={() => {
+                              handleOpenConfirmModal({
+                                title: 'Delete Folder',
+                                message: `Are you sure you want to delete folder "${currentFolder.name}"?`,
+                                onConfirm: () => {
+                                  setFolders(prev => prev.filter(f => f.id !== currentFolder.id));
+                                  handleCloseFolder();
+                                  showNotification('Folder deleted successfully', 'info');
+                                }
+                              });
+                            }}
+                            className="px-3 py-1.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 hover:bg-rose-100 text-rose-600 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5 shadow-sm whitespace-nowrap"
+                            title="Delete Folder"
+                          >
+                            <Icons.Trash size={12} />
+                            <span>Delete</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Searchable Add Batch to Folder Section */}
+                      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-2.5 mb-4 shadow-sm space-y-2">
+                        <div className="flex items-center justify-between gap-2.5">
+                          <div className="flex items-center gap-1.5 flex-1 bg-slate-50 dark:bg-slate-950 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800">
+                            <Icons.Search size={12} className="text-slate-400" />
+                            <input
+                              type="text"
+                              placeholder="Search batches to add..."
+                              value={folderSearchQuery}
+                              onChange={e => setFolderSearchQuery(e.target.value)}
+                              className="w-full bg-transparent text-[10px] font-bold outline-none text-slate-900 dark:text-white"
+                            />
+                          </div>
+                          <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest hidden sm:inline shrink-0">
+                            {groups.filter(g => !currentFolder.batchIds.includes(g.id) && g.name.toLowerCase().includes(folderSearchQuery.toLowerCase())).length} Avail
+                          </span>
+                        </div>
+
+                        {folderSearchQuery.trim() && (
+                          <div className="max-h-40 overflow-y-auto space-y-1 pt-1.5 border-t border-slate-100 dark:border-slate-800">
+                            {groups
+                              .filter(g => !currentFolder.batchIds.includes(g.id) && g.name.toLowerCase().includes(folderSearchQuery.toLowerCase()))
+                              .map(group => (
+                                <div key={group.id} className="flex items-center justify-between p-1.5 bg-slate-50 dark:bg-slate-950 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-950/30 transition-colors">
+                                  <div className="flex items-center gap-2 truncate">
+                                    <img src={group.image} alt="" className="w-5 h-5 rounded-md object-cover" />
+                                    <div className="truncate">
+                                      <p className="text-[10px] font-bold text-slate-900 dark:text-white truncate">{group.name}</p>
+                                      <p className="text-[8px] text-slate-400 leading-none">{group.memberCount} members</p>
+                                    </div>
+                                  </div>
+                                  <button
+                                    onClick={() => {
+                                      setFolders(prev => prev.map(f => f.id === currentFolder.id ? { ...f, batchIds: [...f.batchIds, group.id] } : f));
+                                      showNotification(`Added "${group.name}" to folder 📂`, 'success');
+                                    }}
+                                    className="px-2 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md text-[9px] font-black uppercase tracking-wider transition-all shadow-sm"
+                                  >
+                                    + Add
+                                  </button>
+                                </div>
+                              ))}
+                            {groups.filter(g => !currentFolder.batchIds.includes(g.id) && g.name.toLowerCase().includes(folderSearchQuery.toLowerCase())).length === 0 && (
+                              <p className="text-center py-3 text-[10px] text-slate-400 italic">No matching batches found.</p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* 3D Decorated Batches List inside this folder */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {folderBatches.length > 0 ? (
+                          folderBatches.map(batch => (
+                            <div
+                              key={batch.id}
+                              onClick={() => handleOpenGroupModal(batch)}
+                              className="bg-gradient-to-br from-white via-white to-slate-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-950/90 border border-slate-200/90 dark:border-slate-800/90 rounded-[14px] p-2.5 shadow-md hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer flex items-center justify-between group relative overflow-hidden ring-1 ring-slate-900/5 dark:ring-white/5"
+                              title="Click to Generate Telegram Link"
+                            >
+                              <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-amber-500 via-orange-500 to-indigo-600 opacity-90" />
+                              <div className="flex items-center gap-2.5 truncate relative z-10">
+                                <div className="relative">
+                                  <img src={batch.image} alt="" className="w-9 h-9 rounded-lg object-cover flex-shrink-0 shadow-sm ring-1 ring-white dark:ring-slate-800 group-hover:scale-105 transition-transform" />
+                                  <span className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-emerald-500 text-white rounded-full text-[8px] flex items-center justify-center font-black shadow-sm">✓</span>
+                                </div>
+                                <div className="truncate">
+                                  <h4 className="text-[11px] font-black text-slate-900 dark:text-white truncate group-hover:text-amber-500 transition-colors leading-tight mb-0.5">{batch.name}</h4>
+                                  <p className="text-[9px] text-slate-500 dark:text-slate-400 font-bold flex items-center gap-1.5 leading-none">
+                                    <span>👥 {batch.memberCount.toLocaleString()} members</span>
+                                    <span>•</span>
+                                    <span className="text-amber-600 dark:text-amber-400">⚡ Link</span>
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center flex-shrink-0 relative z-10 ml-1">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    e.preventDefault();
+                                    handleOpenConfirmModal({
+                                      title: 'Remove Batch',
+                                      message: `Are you sure you want to remove "${batch.name}" from this folder?`,
+                                      onConfirm: () => {
+                                        setFolders(prev => prev.map(f => f.id === currentFolder.id ? { ...f, batchIds: f.batchIds.filter(id => id !== batch.id) } : f));
+                                        showNotification('Batch removed from folder', 'info');
+                                      }
+                                    });
+                                  }}
+                                  className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-all"
+                                  title="Remove from folder"
+                                >
+                                  <Icons.X size={12} />
+                                </button>
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="col-span-full text-center py-16 text-slate-400 text-xs italic bg-white dark:bg-slate-900/30 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
+                            No batches assigned to this folder yet. Use the dropdown above to add batches!
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()
+              )}
             </div>
           )}
 
@@ -2924,7 +3604,7 @@ const App: React.FC = () => {
 
 
       {selectedGroup && (
-        <InviteModal group={selectedGroup} onClose={() => setSelectedGroup(null)} botToken={token} onInteraction={() => handleGroupInteraction(selectedGroup.id)} />
+        <InviteModal group={selectedGroup} onClose={handleCloseGroupModal} botToken={token} onInteraction={() => handleGroupInteraction(selectedGroup.id)} />
       )}
 
       {confirmationModalConfig.isOpen && (
@@ -2932,7 +3612,7 @@ const App: React.FC = () => {
           title={confirmationModalConfig.title}
           message={confirmationModalConfig.message}
           onConfirm={confirmationModalConfig.onConfirm}
-          onClose={() => setConfirmationModalConfig(prev => ({ ...prev, isOpen: false }))}
+          onClose={handleCloseConfirmModal}
         />
       )}
 

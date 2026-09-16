@@ -102,7 +102,10 @@ const GroupCard: React.FC<GroupCardProps> = ({ group, onClick, onTogglePin, inde
     : Math.abs(group.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)) % UNIQUE_THEMES.length;
   const theme = UNIQUE_THEMES[themeIndex];
 
-  const isNew = group.createdAt ? (Date.now() - group.createdAt < 72 * 60 * 60 * 1000) : false;
+  // For past added groups that might not have createdAt, fallback to lastInteraction if available.
+  const timeCreated = group.createdAt || group.lastInteraction || 0;
+  // 74 hours in milliseconds
+  const isNew = timeCreated > 0 && (Date.now() - timeCreated < 74 * 60 * 60 * 1000);
 
   const copyId = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -172,14 +175,14 @@ const GroupCard: React.FC<GroupCardProps> = ({ group, onClick, onTogglePin, inde
           <h3 className="text-xs md:text-sm font-extrabold text-slate-800 dark:text-slate-100 truncate leading-tight mb-0.5 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">
             {group.name}
           </h3>
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 flex-wrap">
             <div className={`px-1.5 py-0.5 rounded-md text-[8px] font-black text-white uppercase tracking-wider shadow-sm ${theme.accent} shadow-[0_1px_4px_${theme.glow}]`}>
               {group.memberCount} MEMBERS
             </div>
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_6px_rgba(16,185,129,0.8)]" />
             {isNew && (
-              <span className="px-1.5 py-0.5 rounded-md text-[7px] font-black uppercase tracking-widest bg-gradient-to-r from-rose-500 to-pink-600 text-white animate-pulse shadow-sm shadow-rose-500/50">
-                ✨ NEW
+              <span className="px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-widest bg-gradient-to-r from-rose-500 to-pink-600 text-white animate-bounce shadow-md shadow-rose-500/50 border border-white/40">
+                ⭐ NEW
               </span>
             )}
           </div>
