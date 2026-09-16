@@ -2351,86 +2351,76 @@ const App: React.FC = () => {
                     </button>
                   </div>
 
-                  {/* Create Folder Modal */}
+                  {/* Create Folder Full Screen Page (Simple & Compact Single-Page UI) */}
                   {isCreateFolderModalOpen && (
                     <div 
-                      className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-950/80 backdrop-blur-md overflow-hidden animate-in fade-in duration-200"
-                      onClick={handleCloseCreateFolderModal}
+                      className="fixed inset-0 z-[120] bg-slate-50 dark:bg-slate-950 flex flex-col h-[100dvh] w-full overflow-hidden animate-in fade-in duration-150"
                     >
-                      <div 
-                        className="relative w-full max-w-lg bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-t-[2.25rem] sm:rounded-3xl shadow-2xl flex flex-col max-h-[92dvh] sm:max-h-[88vh] animate-in slide-in-from-bottom-6 sm:zoom-in-95 duration-200 overflow-hidden"
-                        onClick={e => e.stopPropagation()}
-                      >
-                        {/* Mobile Pull Bar */}
-                        <div className="pt-2.5 pb-1 flex justify-center sm:hidden">
-                          <div className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-slate-700" />
-                        </div>
-
-                        {/* Sticky Modal Header */}
-                        <div className="flex items-center justify-between px-5 py-3.5 sm:py-4 border-b border-slate-100 dark:border-slate-800/80 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md shrink-0">
-                          <div className="flex items-center gap-3">
-                            <div className={`w-10 h-10 rounded-2xl bg-gradient-to-br ${newFolderColor} flex items-center justify-center text-white shadow-md text-xl flex-shrink-0 transition-all duration-300`}>
-                              {newFolderIcon}
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-1.5">
-                                <h3 className="text-sm sm:text-base font-black text-slate-900 dark:text-white leading-tight">Create Batch Vault</h3>
-                                <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 text-[9px] font-black uppercase tracking-wider">New</span>
-                              </div>
-                              <p className="text-[11px] text-slate-400 font-medium">Categorize & group your telegram batches</p>
-                            </div>
-                          </div>
+                      {/* Compact Top Navigation Header */}
+                      <header className="px-4 py-2.5 sm:px-6 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800/80 flex items-center justify-between shrink-0 shadow-sm">
+                        <div className="flex items-center gap-2.5">
                           <button
                             onClick={handleCloseCreateFolderModal}
-                            className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs transition-all active:scale-95 shadow-sm"
+                            title="Back to Folders"
                           >
-                            <Icons.X size={16} />
+                            <Icons.ArrowLeft size={14} />
+                            <span>Back</span>
                           </button>
+
+                          <div className="h-4 w-px bg-slate-200 dark:bg-slate-800" />
+
+                          <div className="flex items-center gap-2">
+                            <div className={`w-7 h-7 rounded-lg bg-gradient-to-br ${newFolderColor} flex items-center justify-center text-white shadow-sm text-sm flex-shrink-0`}>
+                              {newFolderIcon}
+                            </div>
+                            <h2 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white leading-tight">Create Batch Folder</h2>
+                          </div>
                         </div>
 
-                        {/* Scrollable Content Body */}
-                        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4.5 overscroll-contain">
+                        <button
+                          onClick={handleCloseCreateFolderModal}
+                          className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                          title="Close"
+                        >
+                          <Icons.X size={15} />
+                        </button>
+                      </header>
+
+                      {/* Main Single-Page Simple Content Body */}
+                      <div className="flex-1 overflow-y-auto px-4 py-3 sm:py-4 flex flex-col justify-start">
+                        <div className="max-w-lg mx-auto w-full space-y-3 pb-4">
                           
-                          {/* 1. Live Folder Preview Card */}
-                          <div className="relative overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-gradient-to-b from-slate-50 to-white dark:from-slate-950 dark:to-slate-900 p-4 shadow-sm">
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Live Preview</span>
-                              <span className="text-[10px] font-bold text-amber-500 flex items-center gap-1">
-                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-                                Ready to organize
-                              </span>
+                          {/* 1. Sleek Live Preview Bar */}
+                          <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 flex items-center gap-3 shadow-sm">
+                            <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${newFolderColor} flex items-center justify-center text-white text-base shadow-sm flex-shrink-0 transition-all`}>
+                              {newFolderIcon}
                             </div>
-                            
-                            <div className="flex items-center gap-3.5 p-3 rounded-xl bg-white dark:bg-slate-800/80 border border-slate-100 dark:border-slate-700/60 shadow-sm">
-                              <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${newFolderColor} flex items-center justify-center text-white text-2xl shadow-md flex-shrink-0 transition-all duration-300`}>
-                                {newFolderIcon}
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <h4 className="font-black text-sm text-slate-900 dark:text-white truncate">
-                                  {newFolderName.trim() ? `${newFolderName.trim()} ${newFolderIcon}` : `Untitled Folder ${newFolderIcon}`}
-                                </h4>
-                                <div className="flex items-center gap-2 mt-0.5">
-                                  <span className="text-[10px] font-bold text-slate-400">0 Batches linked</span>
-                                  <span className="text-slate-300 dark:text-slate-600">•</span>
-                                  <span className="text-[10px] font-semibold text-emerald-500">Active Vault</span>
-                                </div>
-                              </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Preview</p>
+                              <h3 className="font-black text-xs text-slate-900 dark:text-white truncate">
+                                {newFolderName.trim() ? `${newFolderName.trim()} ${newFolderIcon}` : `My Batch Folder ${newFolderIcon}`}
+                              </h3>
                             </div>
+                            <span className="px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-500 text-[10px] font-bold">
+                              Ready
+                            </span>
                           </div>
 
-                          {/* 2. Folder Name Input */}
-                          <div>
-                            <div className="flex items-center justify-between mb-1.5">
-                              <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                          {/* 2. Folder Name Input Field */}
+                          <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl p-3 shadow-sm space-y-2">
+                            <div className="flex items-center justify-between">
+                              <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                                 Folder Name *
                               </label>
-                              <span className="text-[10px] text-slate-400">{newFolderName.length}/40</span>
+                              <span className="text-[10px] font-medium text-slate-400">{newFolderName.length}/40</span>
                             </div>
+
                             <div className="relative">
                               <input
                                 type="text"
                                 maxLength={40}
-                                placeholder="e.g. UPSC Batches, VIP Students, Daily Hub..."
+                                placeholder="e.g. UPSC Batches, VIP Students..."
                                 value={newFolderName}
                                 onChange={e => setNewFolderName(e.target.value)}
                                 onKeyDown={e => {
@@ -2446,30 +2436,25 @@ const App: React.FC = () => {
                                     setFolders(prev => [newFolder, ...prev]);
                                     setNewFolderName('');
                                     handleCloseCreateFolderModal();
-                                    showNotification('Folder created successfully 📂', 'success');
+                                    showNotification(`Folder created with icon ${newFolderIcon}`, 'success');
                                   }
                                 }}
-                                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 px-3.5 py-3 rounded-2xl text-xs font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all placeholder:text-slate-400 pr-10 shadow-inner"
+                                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 px-3 py-2 rounded-xl text-xs font-bold text-slate-900 dark:text-white outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 transition-all placeholder:text-slate-400 pr-8"
                                 autoFocus
                               />
                               {newFolderName && (
                                 <button
                                   type="button"
                                   onClick={() => setNewFolderName('')}
-                                  className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-500 hover:text-slate-900 dark:hover:text-white flex items-center justify-center text-xs"
+                                  className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-500 hover:text-slate-900 dark:hover:text-white flex items-center justify-center text-[10px] font-bold"
                                 >
                                   ×
                                 </button>
                               )}
                             </div>
-                          </div>
 
-                          {/* 3. Quick Suggestion Templates */}
-                          <div>
-                            <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">
-                              Quick Suggestions
-                            </label>
-                            <div className="flex flex-wrap gap-1.5">
+                            {/* Quick Presets (Small Chips) */}
+                            <div className="flex flex-wrap gap-1.5 pt-0.5">
                               {[
                                 { name: 'UPSC Aspirants', icon: '📚', color: 'from-amber-500 to-orange-600' },
                                 { name: 'VIP Paid Hub', icon: '💎', color: 'from-purple-600 to-pink-600' },
@@ -2485,7 +2470,7 @@ const App: React.FC = () => {
                                     setNewFolderIcon(idea.icon);
                                     setNewFolderColor(idea.color);
                                   }}
-                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-slate-800/80 hover:bg-amber-500/10 hover:text-amber-500 text-slate-600 dark:text-slate-300 text-[11px] font-bold border border-slate-200/60 dark:border-slate-700/60 transition-all active:scale-95"
+                                  className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-amber-500/10 hover:text-amber-500 text-slate-600 dark:text-slate-300 text-[10px] font-bold border border-slate-200/50 dark:border-slate-700/50 transition-all active:scale-95"
                                 >
                                   <span>{idea.icon}</span>
                                   <span>{idea.name}</span>
@@ -2494,20 +2479,20 @@ const App: React.FC = () => {
                             </div>
                           </div>
 
-                          {/* 4. Choose Folder Icon (Emoji Picker) */}
-                          <div>
-                            <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1.5">
-                              Folder Icon
+                          {/* 3. Choose Icon (Small Compact Grid) */}
+                          <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl p-3 shadow-sm space-y-2">
+                            <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 block">
+                              Select Icon
                             </label>
-                            <div className="grid grid-cols-6 sm:grid-cols-8 gap-2">
-                              {['📂', '📁', '💎', '📚', '⚡', '🚀', '🎯', '💼', '🔥', '🏆', '⭐', '🏷️'].map(emoji => (
+                            <div className="grid grid-cols-8 gap-1.5">
+                              {['📂', '📁', '💎', '📚', '⚡', '🚀', '🎯', '💼', '🔥', '🏆', '⭐', '🏷️', '🎓', '🔒', '📊', '🌟'].map(emoji => (
                                 <button
                                   key={emoji}
                                   type="button"
                                   onClick={() => setNewFolderIcon(emoji)}
-                                  className={`h-10 rounded-xl flex items-center justify-center text-lg transition-all active:scale-90 ${
+                                  className={`h-8 rounded-lg flex items-center justify-center text-sm transition-all active:scale-90 ${
                                     newFolderIcon === emoji
-                                      ? 'bg-amber-500/20 border-2 border-amber-500 shadow-sm scale-105'
+                                      ? 'bg-amber-500/20 border border-amber-500 shadow-sm scale-105'
                                       : 'bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800'
                                   }`}
                                 >
@@ -2517,12 +2502,12 @@ const App: React.FC = () => {
                             </div>
                           </div>
 
-                          {/* 5. Color Theme Gradient Picker */}
-                          <div>
-                            <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1.5">
-                              Color Gradient Theme
+                          {/* 4. Color Gradient Swatches (Compact) */}
+                          <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl p-3 shadow-sm space-y-2">
+                            <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 block">
+                              Color Accent
                             </label>
-                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                            <div className="grid grid-cols-3 gap-1.5">
                               {[
                                 { label: 'Indigo Blue', value: 'from-indigo-600 to-blue-600' },
                                 { label: 'Emerald Teal', value: 'from-emerald-600 to-teal-600' },
@@ -2535,13 +2520,13 @@ const App: React.FC = () => {
                                   key={themeOpt.value}
                                   type="button"
                                   onClick={() => setNewFolderColor(themeOpt.value)}
-                                  className={`p-2.5 rounded-xl border flex items-center gap-2 transition-all ${
+                                  className={`p-2 rounded-lg border flex items-center gap-2 transition-all ${
                                     newFolderColor === themeOpt.value 
-                                      ? 'border-amber-500 bg-amber-500/10 shadow-sm ring-2 ring-amber-500/30' 
+                                      ? 'border-amber-500 bg-amber-500/10 shadow-sm' 
                                       : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 hover:bg-slate-100 dark:hover:bg-slate-800/80'
                                   }`}
                                 >
-                                  <div className={`w-4 h-4 rounded-full bg-gradient-to-r ${themeOpt.value} flex-shrink-0 shadow-sm`} />
+                                  <div className={`w-3.5 h-3.5 rounded-full bg-gradient-to-r ${themeOpt.value} flex-shrink-0 shadow-sm`} />
                                   <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300 truncate">{themeOpt.label}</span>
                                 </button>
                               ))}
@@ -2549,13 +2534,15 @@ const App: React.FC = () => {
                           </div>
 
                         </div>
+                      </div>
 
-                        {/* Sticky Modal Footer (Never cut off) */}
-                        <div className="px-5 py-3.5 bg-slate-50/95 dark:bg-slate-950/95 backdrop-blur-md border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-3 shrink-0 pb-[max(0.9rem,env(safe-area-inset-bottom))]">
+                      {/* Compact Bottom Action Bar */}
+                      <footer className="px-4 py-2.5 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200/80 dark:border-slate-800 shrink-0">
+                        <div className="max-w-lg mx-auto w-full flex items-center justify-between gap-3">
                           <button
                             type="button"
                             onClick={handleCloseCreateFolderModal}
-                            className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-500 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors"
+                            className="px-3.5 py-1.5 rounded-lg text-xs font-bold text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                           >
                             Cancel
                           </button>
@@ -2580,13 +2567,13 @@ const App: React.FC = () => {
                               handleCloseCreateFolderModal();
                               showNotification(`Folder created with icon ${newFolderIcon}`, 'success');
                             }}
-                            className="px-5 py-2.5 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:to-orange-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-lg shadow-amber-500/25 active:scale-95 flex items-center gap-1.5"
+                            className="px-4 py-2 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:to-orange-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-amber-500/25 active:scale-95 flex items-center gap-1.5"
                           >
                             <span>+</span>
-                            <span>Create Vault</span>
+                            <span>Create Folder</span>
                           </button>
                         </div>
-                      </div>
+                      </footer>
                     </div>
                   )}
 
