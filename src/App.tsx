@@ -270,6 +270,18 @@ const App: React.FC = () => {
 
   useEffect(() => {
     localStorage.setItem('telebridge_batch_folders', JSON.stringify(folders));
+    
+    // Sync to MongoDB in background
+    const syncFolders = async () => {
+      try {
+        // We could do bulk but let's just ensure we have them. 
+        // For production, a more sophisticated sync is better.
+        // For now, we'll just handle explicit creation/deletion in their respective handlers.
+      } catch (e) {
+        console.error("Failed to sync folders to DB:", e);
+      }
+    };
+    syncFolders();
   }, [folders]);
 
   const [botInfo, setBotInfo] = useState<TelegramBotInfo | null>(null);
@@ -662,9 +674,10 @@ const App: React.FC = () => {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 15000); 
 
-        const [groupsRes, eventsRes] = await Promise.all([
+        const [groupsRes, eventsRes, foldersRes] = await Promise.all([
           fetch('/api/groups', { signal: controller.signal, headers: { 'Accept': 'application/json' } }),
-          fetch('/api/events', { signal: controller.signal, headers: { 'Accept': 'application/json' } })
+          fetch('/api/events', { signal: controller.signal, headers: { 'Accept': 'application/json' } }),
+          fetch('/api/folders', { signal: controller.signal, headers: { 'Accept': 'application/json' } })
         ]);
         
         clearTimeout(timeoutId);
@@ -712,6 +725,23 @@ const App: React.FC = () => {
           });
           return merged;
         });
+
+        // Sync Folders
+        if (foldersRes.ok) {
+          const serverFolders: BatchFolder[] = await foldersRes.json();
+          if (Array.isArray(serverFolders) && serverFolders.length > 0) {
+            setFolders(prev => {
+              // Merge folders: server data wins, but keep local folders if not on server
+              const merged = [...serverFolders];
+              prev.forEach(localF => {
+                if (!merged.find(sf => sf.id === localF.id)) {
+                  merged.push(localF);
+                }
+              });
+              return merged;
+            });
+          }
+        }
         
         setSyncStatus('connected');
         setDbError(null);
@@ -1968,11 +1998,11 @@ const App: React.FC = () => {
           if (preset === 'executive') setTheme('light');
           else setTheme('dark');
         }}
-        hideMobileNav={false}
+        hideMobileNav={isCreateFolderModalOpen || !!selectedGroup}
       />
 
       <main className="flex-1 transition-all duration-300 md:ml-64 px-4 md:px-6 lg:px-8 pb-28 w-full max-w-[1400px] mx-auto">
-        <header className="sticky top-0 z-40 bg-white/75 dark:bg-slate-950/80 backdrop-blur-2xl -mx-4 px-4 md:-mx-6 md:px-6 lg:-mx-8 lg:px-8 py-3 mb-5 border-b border-slate-200/80 dark:border-slate-800/80 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] dark:shadow-[0_4px_25px_-4px_rgba(0,0,0,0.4)] transition-all">
+        <header className="sticky top-0 z-40 bg-white/80 dark:bg-slate-950/85 backdrop-blur-2xl -mx-4 px-4 md:-mx-6 md:px-6 lg:-mx-8 lg:px-8 py-3 mb-5 border-b border-slate-200/80 dark:border-slate-800/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.1)] transition-all rounded-b-[2rem] md:rounded-b-[3rem]">
           <div className="flex items-center justify-between gap-3">
             {/* Left: Tab Title & Icon with Status Glow */}
             <div className="flex items-center gap-3 min-w-0">
@@ -2351,232 +2381,6 @@ const App: React.FC = () => {
                     </button>
                   </div>
 
-                  {/* Create Folder Full Screen Page (Simple & Compact Single-Page UI) */}
-                  {isCreateFolderModalOpen && (
-                    <div 
-                      className="fixed inset-0 z-[120] bg-slate-50 dark:bg-slate-950 flex flex-col h-[100dvh] w-full overflow-hidden animate-in fade-in duration-150"
-                    >
-                      {/* Compact Top Navigation Header */}
-                      <header className="px-4 py-2.5 sm:px-6 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800/80 flex items-center justify-between shrink-0 shadow-sm">
-                        <div className="flex items-center gap-2.5">
-                          <button
-                            onClick={handleCloseCreateFolderModal}
-                            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs transition-all active:scale-95 shadow-sm"
-                            title="Back to Folders"
-                          >
-                            <Icons.ArrowLeft size={14} />
-                            <span>Back</span>
-                          </button>
-
-                          <div className="h-4 w-px bg-slate-200 dark:bg-slate-800" />
-
-                          <div className="flex items-center gap-2">
-                            <div className={`w-7 h-7 rounded-lg bg-gradient-to-br ${newFolderColor} flex items-center justify-center text-white shadow-sm text-sm flex-shrink-0`}>
-                              {newFolderIcon}
-                            </div>
-                            <h2 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white leading-tight">Create Batch Folder</h2>
-                          </div>
-                        </div>
-
-                        <button
-                          onClick={handleCloseCreateFolderModal}
-                          className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-                          title="Close"
-                        >
-                          <Icons.X size={15} />
-                        </button>
-                      </header>
-
-                      {/* Main Single-Page Simple Content Body */}
-                      <div className="flex-1 overflow-y-auto px-4 py-3 sm:py-4 flex flex-col justify-start">
-                        <div className="max-w-lg mx-auto w-full space-y-3 pb-4">
-                          
-                          {/* 1. Sleek Live Preview Bar */}
-                          <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 flex items-center gap-3 shadow-sm">
-                            <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${newFolderColor} flex items-center justify-center text-white text-base shadow-sm flex-shrink-0 transition-all`}>
-                              {newFolderIcon}
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Preview</p>
-                              <h3 className="font-black text-xs text-slate-900 dark:text-white truncate">
-                                {newFolderName.trim() ? `${newFolderName.trim()} ${newFolderIcon}` : `My Batch Folder ${newFolderIcon}`}
-                              </h3>
-                            </div>
-                            <span className="px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-500 text-[10px] font-bold">
-                              Ready
-                            </span>
-                          </div>
-
-                          {/* 2. Folder Name Input Field */}
-                          <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl p-3 shadow-sm space-y-2">
-                            <div className="flex items-center justify-between">
-                              <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                                Folder Name *
-                              </label>
-                              <span className="text-[10px] font-medium text-slate-400">{newFolderName.length}/40</span>
-                            </div>
-
-                            <div className="relative">
-                              <input
-                                type="text"
-                                maxLength={40}
-                                placeholder="e.g. UPSC Batches, VIP Students..."
-                                value={newFolderName}
-                                onChange={e => setNewFolderName(e.target.value)}
-                                onKeyDown={e => {
-                                  if (e.key === 'Enter' && newFolderName.trim()) {
-                                    const cleanName = newFolderName.trim().replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '').trim();
-                                    const newFolder: BatchFolder = {
-                                      id: 'folder-' + Date.now(),
-                                      name: `${cleanName || 'My Folder'} ${newFolderIcon}`,
-                                      color: newFolderColor,
-                                      batchIds: [],
-                                      createdAt: Date.now()
-                                    };
-                                    setFolders(prev => [newFolder, ...prev]);
-                                    setNewFolderName('');
-                                    handleCloseCreateFolderModal();
-                                    showNotification(`Folder created with icon ${newFolderIcon}`, 'success');
-                                  }
-                                }}
-                                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 px-3 py-2 rounded-xl text-xs font-bold text-slate-900 dark:text-white outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 transition-all placeholder:text-slate-400 pr-8"
-                                autoFocus
-                              />
-                              {newFolderName && (
-                                <button
-                                  type="button"
-                                  onClick={() => setNewFolderName('')}
-                                  className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-500 hover:text-slate-900 dark:hover:text-white flex items-center justify-center text-[10px] font-bold"
-                                >
-                                  ×
-                                </button>
-                              )}
-                            </div>
-
-                            {/* Quick Presets (Small Chips) */}
-                            <div className="flex flex-wrap gap-1.5 pt-0.5">
-                              {[
-                                { name: 'UPSC Aspirants', icon: '📚', color: 'from-amber-500 to-orange-600' },
-                                { name: 'VIP Paid Hub', icon: '💎', color: 'from-purple-600 to-pink-600' },
-                                { name: 'Daily Alerts', icon: '⚡', color: 'from-indigo-600 to-blue-600' },
-                                { name: 'Tech Batches', icon: '🚀', color: 'from-cyan-600 to-blue-600' },
-                                { name: 'Test Series', icon: '🎯', color: 'from-emerald-600 to-teal-600' }
-                              ].map(idea => (
-                                <button
-                                  key={idea.name}
-                                  type="button"
-                                  onClick={() => {
-                                    setNewFolderName(idea.name);
-                                    setNewFolderIcon(idea.icon);
-                                    setNewFolderColor(idea.color);
-                                  }}
-                                  className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-amber-500/10 hover:text-amber-500 text-slate-600 dark:text-slate-300 text-[10px] font-bold border border-slate-200/50 dark:border-slate-700/50 transition-all active:scale-95"
-                                >
-                                  <span>{idea.icon}</span>
-                                  <span>{idea.name}</span>
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-
-                          {/* 3. Choose Icon (Small Compact Grid) */}
-                          <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl p-3 shadow-sm space-y-2">
-                            <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 block">
-                              Select Icon
-                            </label>
-                            <div className="grid grid-cols-8 gap-1.5">
-                              {['📂', '📁', '💎', '📚', '⚡', '🚀', '🎯', '💼', '🔥', '🏆', '⭐', '🏷️', '🎓', '🔒', '📊', '🌟'].map(emoji => (
-                                <button
-                                  key={emoji}
-                                  type="button"
-                                  onClick={() => setNewFolderIcon(emoji)}
-                                  className={`h-8 rounded-lg flex items-center justify-center text-sm transition-all active:scale-90 ${
-                                    newFolderIcon === emoji
-                                      ? 'bg-amber-500/20 border border-amber-500 shadow-sm scale-105'
-                                      : 'bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800'
-                                  }`}
-                                >
-                                  {emoji}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-
-                          {/* 4. Color Gradient Swatches (Compact) */}
-                          <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl p-3 shadow-sm space-y-2">
-                            <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 block">
-                              Color Accent
-                            </label>
-                            <div className="grid grid-cols-3 gap-1.5">
-                              {[
-                                { label: 'Indigo Blue', value: 'from-indigo-600 to-blue-600' },
-                                { label: 'Emerald Teal', value: 'from-emerald-600 to-teal-600' },
-                                { label: 'Purple Pink', value: 'from-purple-600 to-pink-600' },
-                                { label: 'Amber Orange', value: 'from-amber-500 to-orange-600' },
-                                { label: 'Rose Flame', value: 'from-rose-600 to-red-600' },
-                                { label: 'Cyan Sky', value: 'from-cyan-600 to-blue-600' }
-                              ].map(themeOpt => (
-                                <button
-                                  key={themeOpt.value}
-                                  type="button"
-                                  onClick={() => setNewFolderColor(themeOpt.value)}
-                                  className={`p-2 rounded-lg border flex items-center gap-2 transition-all ${
-                                    newFolderColor === themeOpt.value 
-                                      ? 'border-amber-500 bg-amber-500/10 shadow-sm' 
-                                      : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 hover:bg-slate-100 dark:hover:bg-slate-800/80'
-                                  }`}
-                                >
-                                  <div className={`w-3.5 h-3.5 rounded-full bg-gradient-to-r ${themeOpt.value} flex-shrink-0 shadow-sm`} />
-                                  <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300 truncate">{themeOpt.label}</span>
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-
-                        </div>
-                      </div>
-
-                      {/* Compact Bottom Action Bar */}
-                      <footer className="px-4 py-2.5 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200/80 dark:border-slate-800 shrink-0">
-                        <div className="max-w-lg mx-auto w-full flex items-center justify-between gap-3">
-                          <button
-                            type="button"
-                            onClick={handleCloseCreateFolderModal}
-                            className="px-3.5 py-1.5 rounded-lg text-xs font-bold text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                          >
-                            Cancel
-                          </button>
-                          
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (!newFolderName.trim()) {
-                                showNotification('Please enter folder name', 'alert');
-                                return;
-                              }
-                              const cleanName = newFolderName.trim().replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '').trim();
-                              const newFolder: BatchFolder = {
-                                id: 'folder-' + Date.now(),
-                                name: `${cleanName || 'My Folder'} ${newFolderIcon}`,
-                                color: newFolderColor,
-                                batchIds: [],
-                                createdAt: Date.now()
-                              };
-                              setFolders(prev => [newFolder, ...prev]);
-                              setNewFolderName('');
-                              handleCloseCreateFolderModal();
-                              showNotification(`Folder created with icon ${newFolderIcon}`, 'success');
-                            }}
-                            className="px-4 py-2 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:to-orange-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-amber-500/25 active:scale-95 flex items-center gap-1.5"
-                          >
-                            <span>+</span>
-                            <span>Create Folder</span>
-                          </button>
-                        </div>
-                      </footer>
-                    </div>
-                  )}
-
                   {/* Compact Folders List (Small boxes with large prominent folder icon) */}
                   {folders.length > 0 ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pb-24">
@@ -2608,6 +2412,8 @@ const App: React.FC = () => {
                                     message: `Are you sure you want to delete folder "${folder.name}"?`,
                                     onConfirm: () => {
                                       setFolders(prev => prev.filter(f => f.id !== folder.id));
+                                      fetch(`/api/folders/${folder.id}`, { method: 'DELETE' })
+                                        .catch(e => console.error("Failed to delete folder from DB:", e));
                                       showNotification('Folder deleted successfully', 'info');
                                     }
                                   });
@@ -2620,6 +2426,8 @@ const App: React.FC = () => {
                                     message: `Are you sure you want to delete folder "${folder.name}"?`,
                                     onConfirm: () => {
                                       setFolders(prev => prev.filter(f => f.id !== folder.id));
+                                      fetch(`/api/folders/${folder.id}`, { method: 'DELETE' })
+                                        .catch(e => console.error("Failed to delete folder from DB:", e));
                                       showNotification('Folder deleted successfully', 'info');
                                     }
                                   });
@@ -2692,6 +2500,8 @@ const App: React.FC = () => {
                                 message: `Are you sure you want to delete folder "${currentFolder.name}"?`,
                                 onConfirm: () => {
                                   setFolders(prev => prev.filter(f => f.id !== currentFolder.id));
+                                  fetch(`/api/folders/${currentFolder.id}`, { method: 'DELETE' })
+                                    .catch(e => console.error("Failed to delete folder from DB:", e));
                                   handleCloseFolder();
                                   showNotification('Folder deleted successfully', 'info');
                                 }
@@ -2739,7 +2549,18 @@ const App: React.FC = () => {
                                   </div>
                                   <button
                                     onClick={() => {
-                                      setFolders(prev => prev.map(f => f.id === currentFolder.id ? { ...f, batchIds: [...f.batchIds, group.id] } : f));
+                                      setFolders(prev => {
+                                        const updated = prev.map(f => f.id === currentFolder.id ? { ...f, batchIds: [...f.batchIds, group.id] } : f);
+                                        const updatedFolder = updated.find(f => f.id === currentFolder.id);
+                                        if (updatedFolder) {
+                                          fetch('/api/folders', {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify(updatedFolder)
+                                          }).catch(e => console.error("Failed to sync folder update to DB:", e));
+                                        }
+                                        return updated;
+                                      });
                                       showNotification(`Added "${group.name}" to folder 📂`, 'success');
                                     }}
                                     className="px-2 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md text-[9px] font-black uppercase tracking-wider transition-all shadow-sm"
@@ -2789,7 +2610,18 @@ const App: React.FC = () => {
                                       title: 'Remove Batch',
                                       message: `Are you sure you want to remove "${batch.name}" from this folder?`,
                                       onConfirm: () => {
-                                        setFolders(prev => prev.map(f => f.id === currentFolder.id ? { ...f, batchIds: f.batchIds.filter(id => id !== batch.id) } : f));
+                                        setFolders(prev => {
+                                        const updated = prev.map(f => f.id === currentFolder.id ? { ...f, batchIds: f.batchIds.filter(id => id !== batch.id) } : f);
+                                        const updatedFolder = updated.find(f => f.id === currentFolder.id);
+                                        if (updatedFolder) {
+                                          fetch('/api/folders', {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify(updatedFolder)
+                                          }).catch(e => console.error("Failed to sync folder update to DB:", e));
+                                        }
+                                        return updated;
+                                      });
                                         showNotification('Batch removed from folder', 'info');
                                       }
                                     });
@@ -2817,131 +2649,190 @@ const App: React.FC = () => {
 
           {activeTab === 'analysis' && (
             <div className={`space-y-6 ${animationClass}`}>
-              <div className="flex bg-slate-100 dark:bg-slate-800 p-1.5 rounded-[1.5rem] border border-slate-200 dark:border-slate-700 shadow-inner mb-6">
+              <div className="flex bg-slate-100/80 dark:bg-slate-800/80 p-1.5 rounded-[2rem] border border-slate-200/80 dark:border-slate-700/80 shadow-inner mb-8">
                 <button 
                   onClick={() => setAuditSubTab('audit')}
-                  className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${auditSubTab === 'audit' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-lg scale-[1.02]' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                  className={`flex-1 flex items-center justify-center gap-2.5 py-3 rounded-[1.5rem] text-[10px] font-black uppercase tracking-widest transition-all ${auditSubTab === 'audit' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-xl scale-[1.02] border border-indigo-500/10' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
                 >
-                  <Icons.Activity size={14} /> Audit Log
+                  <Icons.Activity size={15} strokeWidth={2.5} /> Live Audit
                 </button>
                 <button 
                   onClick={() => setAuditSubTab('blocked')}
-                  className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${auditSubTab === 'blocked' ? 'bg-white dark:bg-slate-700 text-rose-600 dark:text-rose-400 shadow-lg scale-[1.02]' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                  className={`flex-1 flex items-center justify-center gap-2.5 py-3 rounded-[1.5rem] text-[10px] font-black uppercase tracking-widest transition-all ${auditSubTab === 'blocked' ? 'bg-white dark:bg-slate-700 text-rose-600 dark:text-rose-400 shadow-xl scale-[1.02] border border-rose-500/10' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
                 >
-                  <Icons.Ban size={14} /> Block List
+                  <Icons.Shield size={15} strokeWidth={2.5} /> Block List
                 </button>
               </div>
 
               {auditSubTab === 'audit' ? (
                 <>
-                  <div className="flex flex-col md:flex-row gap-3">
-                     <div className="flex-1 bg-indigo-600 p-4 rounded-2xl border-b-2 border-indigo-950 shadow-md text-white relative overflow-hidden active:scale-95 transition-transform">
-                        <p className="text-[9px] font-black uppercase tracking-[0.2em] mb-0.5 opacity-80">Total Joined ({selectedDate})</p>
-                        <p className="text-2xl font-black">{filteredJoins.length}</p>
-                        <div className="absolute -right-4 -bottom-4 w-12 h-12 bg-white/5 rounded-full" />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                     <div className="bg-gradient-to-br from-indigo-600 to-indigo-700 p-5 rounded-[2rem] shadow-lg shadow-indigo-500/20 text-white relative overflow-hidden active:scale-95 transition-all group">
+                        <div className="flex items-center justify-between mb-2">
+                           <p className="text-[10px] font-black uppercase tracking-widest opacity-80">Total Joins</p>
+                           <Icons.Activity size={18} className="opacity-50 group-hover:opacity-100 transition-opacity" />
+                        </div>
+                        <p className="text-3xl font-black tracking-tighter">{filteredJoins.length}</p>
+                        <p className="text-[10px] font-bold mt-1 opacity-70">Captured for {selectedDate}</p>
+                        <div className="absolute -right-6 -bottom-6 w-24 h-24 bg-white/10 rounded-full blur-2xl group-hover:scale-125 transition-transform" />
                      </div>
-                     <div className="flex-1 bg-rose-500 p-4 rounded-2xl border-b-2 border-rose-950 shadow-md text-white relative overflow-hidden active:scale-95 transition-transform">
-                        <p className="text-[9px] font-black uppercase tracking-[0.2em] mb-0.5 opacity-80">Live Audit</p>
-                        <p className="text-2xl font-black">{isScanning ? 'SYNCING...' : 'ACTIVE'}</p>
-                        <div className="absolute -right-4 -bottom-4 w-12 h-12 bg-white/5 rounded-full" />
+
+                     <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 p-5 rounded-[2rem] shadow-lg shadow-emerald-500/20 text-white relative overflow-hidden active:scale-95 transition-all group">
+                        <div className="flex items-center justify-between mb-2">
+                           <p className="text-[10px] font-black uppercase tracking-widest opacity-80">System Status</p>
+                           <Icons.Zap size={18} className="opacity-50 group-hover:opacity-100 transition-opacity" />
+                        </div>
+                        <p className="text-3xl font-black tracking-tighter">{isScanning ? 'SYNCING' : 'SECURE'}</p>
+                        <p className="text-[10px] font-bold mt-1 opacity-70">Audit Engine is {isScanning ? 'Processing Updates' : 'Monitoring Real-time'}</p>
+                        <div className="absolute -right-6 -bottom-6 w-24 h-24 bg-white/10 rounded-full blur-2xl group-hover:scale-125 transition-transform" />
                      </div>
-                     <div className="bg-slate-900 p-4 rounded-2xl border-b-2 border-black shadow-md flex flex-col justify-center min-w-[180px]">
-                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Window Selector</p>
-                        <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="bg-white/5 border-none text-white text-[9px] font-black uppercase outline-none rounded-lg p-1.5 w-full" />
+
+                     <div className="bg-white dark:bg-slate-900 p-5 rounded-[2rem] border border-slate-200 dark:border-slate-800 shadow-xl flex flex-col justify-center min-w-[200px] sm:col-span-2 lg:col-span-1 group">
+                        <div className="flex items-center justify-between mb-3">
+                           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Time Window</p>
+                           <Icons.Calendar size={16} className="text-slate-400 group-hover:text-indigo-500 transition-colors" />
+                        </div>
+                        <input 
+                           type="date" 
+                           value={selectedDate} 
+                           onChange={e => setSelectedDate(e.target.value)} 
+                           className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-black uppercase outline-none rounded-xl p-2.5 w-full focus:ring-2 focus:ring-indigo-500/20 transition-all" 
+                        />
                      </div>
                   </div>
 
-                  <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-lg">
+                  <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-[2rem] overflow-hidden shadow-2xl">
+                     <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                        <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">Join Audit Stream</h3>
+                        <div className="flex items-center gap-2">
+                           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                           <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">Live Flow</span>
+                        </div>
+                     </div>
                      <div className="overflow-y-auto max-h-[50vh] custom-scrollbar">
                        <table className="w-full text-left">
-                          <thead className="sticky top-0 bg-slate-50 dark:bg-slate-950 backdrop-blur-md z-10">
+                          <thead className="sticky top-0 bg-slate-50/95 dark:bg-slate-950/95 backdrop-blur-xl z-20 border-b border-slate-100 dark:border-slate-800">
                             <tr>
-                              <th className="px-2 py-1.5 text-[8px] font-black text-slate-400 uppercase tracking-widest text-center">SL</th>
-                              <th className="px-2 py-1.5 text-[8px] font-black text-slate-400 uppercase tracking-widest">Identity</th>
-                              <th className="px-2 py-1.5 text-[8px] font-black text-slate-400 uppercase tracking-widest">Target</th>
-                              <th className="px-2 py-1.5 text-[8px] font-black text-slate-400 uppercase tracking-widest">Time</th>
-                              <th className="px-2 py-1.5 text-[8px] font-black text-slate-400 uppercase tracking-widest text-right">Action</th>
+                              <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Idx</th>
+                              <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">User Identity</th>
+                              <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Target Hub</th>
+                              <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Timestamp</th>
+                              <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Protection</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                            {filteredJoins.map((e, idx) => (
-                              <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
-                                <td className="px-2 py-1.5 text-[9px] font-mono text-slate-500 text-center">{idx + 1}</td>
-                                <td className="px-2 py-1.5">
-                                   <div className={`inline-flex items-center px-1.5 py-0.5 rounded-full border ${ROW_COLORS[idx % ROW_COLORS.length]} font-black text-[8px] uppercase`}>
-                                     {e.userName.substring(0, 8)}
+                            {filteredJoins.length > 0 ? filteredJoins.map((e, idx) => (
+                              <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors group">
+                                <td className="px-4 py-3 text-[10px] font-mono font-bold text-slate-400">{idx + 1}</td>
+                                <td className="px-4 py-3">
+                                   <div className="flex items-center gap-2.5">
+                                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-black uppercase shadow-sm ${ROW_COLORS[idx % ROW_COLORS.length]} border border-white/20`}>
+                                         {e.userName.charAt(0)}
+                                      </div>
+                                      <div className="min-w-0">
+                                         <p className="text-[11px] font-black text-slate-900 dark:text-white truncate max-w-[120px]">{e.userName}</p>
+                                         <p className="text-[9px] font-mono text-slate-400 tracking-tighter">ID: {e.userId}</p>
+                                      </div>
                                    </div>
                                 </td>
-                                <td className="px-2 py-1.5 text-[9px] font-bold text-slate-500 truncate max-w-[80px]">{e.chatTitle.substring(0, 12)}</td>
-                                <td className="px-2 py-1.5 text-[9px] font-mono text-slate-400">{formatTime12h(e.timestamp).replace(' ', '')}</td>
-                                <td className="px-2 py-1.5 text-right">
-                                  <div className="flex justify-end gap-1">
-                                    <button onClick={() => handleRequestKick(e)} title="Kick Member" className="p-0.5 text-orange-500 hover:bg-orange-500 hover:text-white rounded transition-all">
-                                      <Icons.Trash size={10}/>
+                                <td className="px-4 py-3">
+                                   <div className="flex flex-col">
+                                      <span className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 truncate max-w-[120px]">{e.chatTitle}</span>
+                                      <span className="text-[8px] font-mono text-slate-400 opacity-60">HUB_{e.chatId.toString().slice(-6)}</span>
+                                   </div>
+                                </td>
+                                <td className="px-4 py-3 text-[10px] font-bold text-slate-500 whitespace-nowrap">
+                                   {formatTime12h(e.timestamp)}
+                                </td>
+                                <td className="px-4 py-3 text-right">
+                                  <div className="flex justify-end gap-1.5">
+                                    <button 
+                                      onClick={() => handleRequestKick(e)} 
+                                      title="Kick Member" 
+                                      className="p-2 text-orange-500 hover:bg-orange-500/10 rounded-xl transition-all active:scale-90"
+                                    >
+                                      <Icons.LogOut size={14} strokeWidth={2.5}/>
                                     </button>
-                                    <button onClick={() => handleRequestBan(e)} title="Permanent Ban" className="p-0.5 text-rose-600 hover:bg-rose-600 hover:text-white rounded transition-all">
-                                      <Icons.Ban size={10}/>
+                                    <button 
+                                      onClick={() => handleRequestBan(e)} 
+                                      title="Permanent Ban" 
+                                      className="p-2 text-rose-600 hover:bg-rose-600/10 rounded-xl transition-all active:scale-90"
+                                    >
+                                      <Icons.Ban size={14} strokeWidth={2.5}/>
                                     </button>
                                   </div>
                                 </td>
                               </tr>
-                            ))}
+                            )) : (
+                              <tr>
+                                <td colSpan={5} className="py-20 text-center">
+                                  <div className="flex flex-col items-center gap-2 opacity-30">
+                                    <Icons.Activity size={40} />
+                                    <p className="text-xs font-black uppercase tracking-widest">No audit data for this date</p>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
                           </tbody>
                        </table>
                      </div>
                   </div>
                 </>
               ) : (
-                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2.5rem] overflow-hidden shadow-xl border-b-8 border-slate-200 dark:border-slate-800">
-                    <div className="p-4 border-b border-slate-100 dark:divide-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
-                      <h2 className="text-lg font-black uppercase tracking-tight">Block List</h2>
-                      <p className="text-[10px] font-bold text-slate-500 mt-0.5 uppercase tracking-widest">Managing permanently banned members</p>
+                <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-[2.5rem] overflow-hidden shadow-2xl">
+                    <div className="p-6 border-b border-slate-100 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-900/30 flex items-center justify-between">
+                      <div>
+                        <h2 className="text-lg font-black uppercase tracking-tight text-slate-900 dark:text-white">Shield Protection</h2>
+                        <p className="text-[10px] font-bold text-slate-500 mt-0.5 uppercase tracking-widest">Blacklisted Entity Management</p>
+                      </div>
+                      <div className="w-12 h-12 rounded-2xl bg-rose-500/10 text-rose-500 flex items-center justify-center shadow-inner">
+                         <Icons.Shield size={24} strokeWidth={2.5} />
+                      </div>
                     </div>
                     
-                    <div className="p-0 overflow-x-auto max-h-[60vh]">
+                    <div className="p-0 overflow-x-auto max-h-[60vh] custom-scrollbar">
                       {bannedUsers.length === 0 ? (
-                        <div className="p-12 text-center">
-                          <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-3xl flex items-center justify-center mx-auto mb-4">
-                             <Icons.CheckCircle className="text-slate-400" size={32} />
+                        <div className="p-20 text-center">
+                          <div className="w-20 h-20 bg-emerald-500/5 dark:bg-emerald-500/10 rounded-[2rem] flex items-center justify-center mx-auto mb-5 shadow-inner animate-pulse-slow">
+                             <Icons.CheckCircle className="text-emerald-500" size={36} strokeWidth={2} />
                           </div>
-                          <h3 className="font-black text-slate-900 dark:text-white uppercase tracking-tight">No Banned Users</h3>
-                          <p className="text-xs font-bold text-slate-500 mt-1 uppercase tracking-widest">Everything is clean!</p>
+                          <h3 className="font-black text-slate-900 dark:text-white uppercase tracking-tight text-sm">Vault is Empty</h3>
+                          <p className="text-[10px] font-bold text-slate-500 mt-1.5 uppercase tracking-widest">No active bans found in database</p>
                         </div>
                       ) : (
                         <table className="w-full text-left">
-                          <thead className="sticky top-0 bg-slate-50 dark:bg-slate-950 backdrop-blur-md z-10">
+                          <thead className="sticky top-0 bg-slate-50/95 dark:bg-slate-950/95 backdrop-blur-xl z-20 border-b border-slate-100 dark:border-slate-800">
                             <tr>
-                              <th className="px-2 py-1.5 text-[8px] font-black text-slate-400 uppercase tracking-widest">User ID</th>
-                              <th className="px-2 py-1.5 text-[8px] font-black text-slate-400 uppercase tracking-widest">Name</th>
-                              <th className="px-2 py-1.5 text-[8px] font-black text-slate-400 uppercase tracking-widest">Chat</th>
-                              <th className="px-2 py-1.5 text-[8px] font-black text-slate-400 uppercase tracking-widest">Banned At</th>
-                              <th className="px-2 py-1.5 text-[8px] font-black text-slate-400 uppercase tracking-widest text-right">Delete</th>
+                              <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Target ID</th>
+                              <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Subject Name</th>
+                              <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Origin Hub</th>
+                              <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Incident Date</th>
+                              <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Relief</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                             {bannedUsers.map((user, idx) => (
-                              <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
-                                <td className="px-2 py-1.5">
-                                  <span className="text-[8px] font-mono font-black text-slate-400 bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded">{user.userId}</span>
+                              <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors group">
+                                <td className="px-4 py-3">
+                                  <span className="text-[9px] font-mono font-black text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-lg border border-slate-200/50 dark:border-slate-700/50">{user.userId}</span>
                                 </td>
-                                <td className="px-2 py-1.5">
-                                  <div className="text-[9px] font-black text-slate-900 dark:text-white truncate max-w-[70px]">{user.userName}</div>
+                                <td className="px-4 py-3">
+                                  <div className="text-[11px] font-black text-slate-900 dark:text-white">{user.userName}</div>
                                 </td>
-                                <td className="px-2 py-1.5">
-                                  <div className="text-[9px] font-bold text-blue-600 dark:text-blue-400 truncate max-w-[80px]">{user.chatTitle}</div>
-                                  <div className="text-[8px] font-mono text-slate-400 tracking-tighter opacity-70">{user.chatId}</div>
+                                <td className="px-4 py-3">
+                                  <div className="text-[10px] font-bold text-blue-600 dark:text-blue-400">{user.chatTitle}</div>
+                                  <div className="text-[8px] font-mono text-slate-400 opacity-60 tracking-tighter">ID: {user.chatId}</div>
                                 </td>
-                                <td className="px-2 py-1.5 text-[8px] font-bold text-slate-500 whitespace-nowrap">
-                                  {new Date(user.timestamp).toLocaleString('en-CA', { dateStyle: 'short', timeStyle: 'short' }).replace(',', '')}
+                                <td className="px-4 py-3 text-[10px] font-bold text-slate-500">
+                                  {new Date(user.timestamp).toLocaleString('en-CA', { dateStyle: 'medium', timeStyle: 'short' })}
                                 </td>
-                                <td className="px-2 py-1.5 text-right">
+                                <td className="px-4 py-3 text-right">
                                   <button 
                                     onClick={() => handleUnban(user)}
-                                    className="p-1.5 bg-rose-500 hover:bg-rose-600 text-white rounded-lg text-[8px] font-black uppercase tracking-tight shadow shadow-rose-500/30 active:scale-95 transition-all inline-flex items-center gap-1"
-                                    title="Unban User"
+                                    className="px-4 py-1.5 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-lg shadow-rose-500/20 active:scale-95 transition-all inline-flex items-center gap-1.5"
                                   >
-                                    <Icons.X size={10} strokeWidth={3} />
-                                    <span className="hidden sm:inline">Unban</span>
+                                    <Icons.RefreshCw size={12} strokeWidth={3} />
+                                    <span>Pardon</span>
                                   </button>
                                 </td>
                               </tr>
@@ -3592,6 +3483,268 @@ const App: React.FC = () => {
 
       {selectedGroup && (
         <InviteModal group={selectedGroup} onClose={handleCloseGroupModal} botToken={token} onInteraction={() => handleGroupInteraction(selectedGroup.id)} />
+      )}
+
+      {/* Root-Level Full Screen Create Folder Page */}
+      {isCreateFolderModalOpen && (
+        <div 
+          className="fixed inset-0 z-[999] bg-slate-50 dark:bg-slate-950 flex flex-col h-[100dvh] w-screen overflow-hidden animate-in fade-in duration-150"
+        >
+          {/* Top Navigation Header */}
+          <header className="px-4 py-2.5 sm:px-6 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800/80 flex items-center justify-between shrink-0 shadow-sm z-50">
+            <div className="flex items-center gap-2.5">
+              <button
+                type="button"
+                onClick={handleCloseCreateFolderModal}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs transition-all active:scale-95 shadow-sm"
+                title="Back to Folders"
+              >
+                <Icons.ArrowLeft size={14} />
+                <span>Back</span>
+              </button>
+
+              <div className="h-4 w-px bg-slate-200 dark:bg-slate-800" />
+
+              <div className="flex items-center gap-2">
+                <div className={`w-7 h-7 rounded-lg bg-gradient-to-br ${newFolderColor} flex items-center justify-center text-white shadow-sm text-sm flex-shrink-0`}>
+                  {newFolderIcon}
+                </div>
+                <h2 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white leading-tight">Create Batch Folder</h2>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!newFolderName.trim()) {
+                    showNotification('Please enter folder name', 'alert');
+                    return;
+                  }
+                  const cleanName = newFolderName.trim().replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '').trim();
+                  const newFolder: BatchFolder = {
+                    id: 'folder-' + Date.now(),
+                    name: `${cleanName || 'My Folder'} ${newFolderIcon}`,
+                    color: newFolderColor,
+                    batchIds: [],
+                    createdAt: Date.now()
+                  };
+                  setFolders(prev => [newFolder, ...prev]);
+                  setNewFolderName('');
+                  handleCloseCreateFolderModal();
+                  showNotification(`Folder created with icon ${newFolderIcon}`, 'success');
+                }}
+                className="px-3.5 py-1.5 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-sm active:scale-95 flex items-center gap-1"
+              >
+                <span>+ Create</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleCloseCreateFolderModal}
+                className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                title="Close"
+              >
+                <Icons.X size={15} />
+              </button>
+            </div>
+          </header>
+
+          {/* Main Single-Page Simple Content Body */}
+          <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-3 sm:py-4 flex flex-col justify-start">
+            <div className="max-w-md mx-auto w-full space-y-3 pb-6">
+              
+              {/* 1. Sleek Live Preview Bar */}
+              <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 flex items-center gap-3 shadow-sm">
+                <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${newFolderColor} flex items-center justify-center text-white text-base shadow-sm flex-shrink-0 transition-all`}>
+                  {newFolderIcon}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Preview</p>
+                  <h3 className="font-black text-xs text-slate-900 dark:text-white truncate">
+                    {newFolderName.trim() ? `${newFolderName.trim()} ${newFolderIcon}` : `My Batch Folder ${newFolderIcon}`}
+                  </h3>
+                </div>
+                <span className="px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-500 text-[10px] font-bold">
+                  Ready
+                </span>
+              </div>
+
+              {/* 2. Folder Name Input Field */}
+              <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl p-3 shadow-sm space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                    Folder Name *
+                  </label>
+                  <span className="text-[10px] font-medium text-slate-400">{newFolderName.length}/40</span>
+                </div>
+
+                <div className="relative">
+                  <input
+                    type="text"
+                    maxLength={40}
+                    placeholder="e.g. UPSC Batches, VIP Students..."
+                    value={newFolderName}
+                    onChange={e => setNewFolderName(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && newFolderName.trim()) {
+                        const cleanName = newFolderName.trim().replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '').trim();
+                        const newFolder: BatchFolder = {
+                          id: 'folder-' + Date.now(),
+                          name: `${cleanName || 'My Folder'} ${newFolderIcon}`,
+                          color: newFolderColor,
+                          batchIds: [],
+                          createdAt: Date.now()
+                        };
+                        setFolders(prev => [newFolder, ...prev]);
+                        setNewFolderName('');
+                        handleCloseCreateFolderModal();
+                        showNotification(`Folder created with icon ${newFolderIcon}`, 'success');
+                      }
+                    }}
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 px-3 py-2 rounded-xl text-xs font-bold text-slate-900 dark:text-white outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 transition-all placeholder:text-slate-400 pr-8"
+                    autoFocus
+                  />
+                  {newFolderName && (
+                    <button
+                      type="button"
+                      onClick={() => setNewFolderName('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-500 hover:text-slate-900 dark:hover:text-white flex items-center justify-center text-[10px] font-bold"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+
+                {/* Quick Presets (Small Chips) */}
+                <div className="flex flex-wrap gap-1.5 pt-0.5">
+                  {[
+                    { name: 'UPSC Aspirants', icon: '📚', color: 'from-amber-500 to-orange-600' },
+                    { name: 'VIP Paid Hub', icon: '💎', color: 'from-purple-600 to-pink-600' },
+                    { name: 'Daily Alerts', icon: '⚡', color: 'from-indigo-600 to-blue-600' },
+                    { name: 'Tech Batches', icon: '🚀', color: 'from-cyan-600 to-blue-600' },
+                    { name: 'Test Series', icon: '🎯', color: 'from-emerald-600 to-teal-600' }
+                  ].map(idea => (
+                    <button
+                      key={idea.name}
+                      type="button"
+                      onClick={() => {
+                        setNewFolderName(idea.name);
+                        setNewFolderIcon(idea.icon);
+                        setNewFolderColor(idea.color);
+                      }}
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-amber-500/10 hover:text-amber-500 text-slate-600 dark:text-slate-300 text-[10px] font-bold border border-slate-200/50 dark:border-slate-700/50 transition-all active:scale-95"
+                    >
+                      <span>{idea.icon}</span>
+                      <span>{idea.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 3. Choose Icon (Small Compact Grid) */}
+              <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl p-3 shadow-sm space-y-2">
+                <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 block">
+                  Select Icon
+                </label>
+                <div className="grid grid-cols-8 gap-1.5">
+                  {['📂', '📁', '💎', '📚', '⚡', '🚀', '🎯', '💼', '🔥', '🏆', '⭐', '🏷️', '🎓', '🔒', '📊', '🌟'].map(emoji => (
+                    <button
+                      key={emoji}
+                      type="button"
+                      onClick={() => setNewFolderIcon(emoji)}
+                      className={`h-8 rounded-lg flex items-center justify-center text-sm transition-all active:scale-90 ${
+                        newFolderIcon === emoji
+                          ? 'bg-amber-500/20 border border-amber-500 shadow-sm scale-105'
+                          : 'bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800'
+                      }`}
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 4. Color Gradient Swatches (Compact) */}
+              <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl p-3 shadow-sm space-y-2">
+                <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 block">
+                  Color Accent
+                </label>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {[
+                    { label: 'Indigo Blue', value: 'from-indigo-600 to-blue-600' },
+                    { label: 'Emerald Teal', value: 'from-emerald-600 to-teal-600' },
+                    { label: 'Purple Pink', value: 'from-purple-600 to-pink-600' },
+                    { label: 'Amber Orange', value: 'from-amber-500 to-orange-600' },
+                    { label: 'Rose Flame', value: 'from-rose-600 to-red-600' },
+                    { label: 'Cyan Sky', value: 'from-cyan-600 to-blue-600' }
+                  ].map(themeOpt => (
+                    <button
+                      key={themeOpt.value}
+                      type="button"
+                      onClick={() => setNewFolderColor(themeOpt.value)}
+                      className={`p-2 rounded-lg border flex items-center gap-2 transition-all ${
+                        newFolderColor === themeOpt.value 
+                          ? 'border-amber-500 bg-amber-500/10 shadow-sm' 
+                          : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 hover:bg-slate-100 dark:hover:bg-slate-800/80'
+                      }`}
+                    >
+                      <div className={`w-3.5 h-3.5 rounded-full bg-gradient-to-r ${themeOpt.value} flex-shrink-0 shadow-sm`} />
+                      <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300 truncate">{themeOpt.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          {/* Compact Bottom Action Dock */}
+          <footer className="px-4 py-4 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200/80 dark:border-slate-800 shrink-0 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-[0_-4px_12px_rgba(0,0,0,0.05)] relative z-50">
+            <div className="max-w-md mx-auto w-full flex flex-row items-center justify-between gap-4">
+              <button
+                type="button"
+                onClick={handleCloseCreateFolderModal}
+                className="px-6 py-2.5 rounded-xl text-xs font-bold text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all active:scale-95 border border-transparent hover:border-slate-200 dark:hover:border-slate-700"
+              >
+                Cancel
+              </button>
+              
+              <button
+                type="button"
+                onClick={() => {
+                  if (!newFolderName.trim()) {
+                    showNotification('Please enter folder name', 'alert');
+                    return;
+                  }
+                  const cleanName = newFolderName.trim().replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '').trim();
+                  const newFolder: BatchFolder = {
+                    id: 'folder-' + Date.now(),
+                    name: `${cleanName || 'My Folder'} ${newFolderIcon}`,
+                    color: newFolderColor,
+                    batchIds: [],
+                    createdAt: Date.now()
+                  };
+                  setFolders(prev => [newFolder, ...prev]);
+
+                  // Sync to MongoDB
+                  fetch('/api/folders', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(newFolder)
+                  }).catch(e => console.error("Failed to sync new folder to DB:", e));
+
+                  setNewFolderName('');
+                  handleCloseCreateFolderModal();
+                  showNotification(`Folder created with icon ${newFolderIcon}`, 'success');
+                }}
+                className="px-6 py-2.5 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:to-orange-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-amber-500/25 active:scale-95 flex items-center gap-2"
+              >
+                <Icons.Plus size={14} strokeWidth={3} />
+                <span>Create Folder</span>
+              </button>
+            </div>
+          </footer>
+        </div>
       )}
 
       {confirmationModalConfig.isOpen && (

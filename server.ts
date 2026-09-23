@@ -68,6 +68,14 @@ const adminSchema = new mongoose.Schema({
   createdAt: { type: Number, default: Date.now }
 }, { timestamps: true });
 
+const folderSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true },
+  name: { type: String, required: true },
+  color: { type: String, required: true },
+  batchIds: [{ type: String }],
+  createdAt: { type: Number, default: Date.now }
+}, { timestamps: true });
+
 // Define Models
 const JoinEvent = mongoose.models.JoinEvent || mongoose.model("JoinEvent", joinEventSchema);
 const PendingJoinRequest = mongoose.models.PendingJoinRequest || mongoose.model("PendingJoinRequest", pendingJoinRequestSchema);
@@ -75,6 +83,7 @@ const Group = mongoose.models.Group || mongoose.model("Group", groupSchema);
 const Broadcast = mongoose.models.Broadcast || mongoose.model("Broadcast", broadcastSchema);
 const InviteLink = mongoose.models.InviteLink || mongoose.model("InviteLink", inviteLinkSchema);
 const Admin = mongoose.models.Admin || mongoose.model("Admin", adminSchema);
+const Folder = mongoose.models.Folder || mongoose.model("Folder", folderSchema);
 
 // Global Error Handlers to prevent server crashes
 process.on('unhandledRejection', (reason, promise) => {
@@ -870,6 +879,46 @@ async function startServer() {
     } catch (error: any) {
       console.error("Failed to delete admin:", error);
       res.status(500).json({ error: "Failed to delete admin", details: error.message });
+    }
+  });
+
+  // Folder Management Endpoints
+  app.get("/api/folders", async (req, res) => {
+    try {
+      const folders = await (Folder as any).find().sort({ createdAt: -1 });
+      res.json(folders);
+    } catch (error) {
+      console.error("Failed to fetch folders:", error);
+      res.status(500).json({ error: "Failed to fetch folders" });
+    }
+  });
+
+  app.post("/api/folders", async (req, res) => {
+    try {
+      const folderData = req.body;
+      if (!folderData.id) {
+        return res.status(400).json({ error: "Folder ID is required" });
+      }
+      const updated = await (Folder as any).findOneAndUpdate(
+        { id: folderData.id },
+        folderData,
+        { upsert: true, new: true }
+      );
+      res.json({ success: true, folder: updated });
+    } catch (error: any) {
+      console.error("Failed to save folder:", error);
+      res.status(500).json({ error: "Failed to save folder", details: error.message });
+    }
+  });
+
+  app.delete("/api/folders/:id", async (req, res) => {
+    try {
+      const id = req.params.id;
+      await (Folder as any).deleteOne({ id });
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Failed to delete folder:", error);
+      res.status(500).json({ error: "Failed to delete folder", details: error.message });
     }
   });
 
