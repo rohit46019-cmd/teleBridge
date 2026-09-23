@@ -2648,127 +2648,141 @@ const App: React.FC = () => {
           )}
 
           {activeTab === 'analysis' && (
-            <div className={`space-y-6 ${animationClass}`}>
-              <div className="flex bg-slate-100/80 dark:bg-slate-800/80 p-1.5 rounded-[2rem] border border-slate-200/80 dark:border-slate-700/80 shadow-inner mb-8">
+            <div className={`space-y-4 ${animationClass}`}>
+              {/* Compact Sub-tab Switcher */}
+              <div className="flex bg-slate-100/90 dark:bg-slate-800/90 p-1 rounded-xl border border-slate-200/80 dark:border-slate-700/80 shadow-inner max-w-sm mb-3">
                 <button 
                   onClick={() => setAuditSubTab('audit')}
-                  className={`flex-1 flex items-center justify-center gap-2.5 py-3 rounded-[1.5rem] text-[10px] font-black uppercase tracking-widest transition-all ${auditSubTab === 'audit' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-xl scale-[1.02] border border-indigo-500/10' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${auditSubTab === 'audit' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm border border-indigo-500/10' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
                 >
-                  <Icons.Activity size={15} strokeWidth={2.5} /> Live Audit
+                  <Icons.Activity size={13} strokeWidth={2.5} /> Live Audit
                 </button>
                 <button 
                   onClick={() => setAuditSubTab('blocked')}
-                  className={`flex-1 flex items-center justify-center gap-2.5 py-3 rounded-[1.5rem] text-[10px] font-black uppercase tracking-widest transition-all ${auditSubTab === 'blocked' ? 'bg-white dark:bg-slate-700 text-rose-600 dark:text-rose-400 shadow-xl scale-[1.02] border border-rose-500/10' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${auditSubTab === 'blocked' ? 'bg-white dark:bg-slate-700 text-rose-600 dark:text-rose-400 shadow-sm border border-rose-500/10' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
                 >
-                  <Icons.Shield size={15} strokeWidth={2.5} /> Block List
+                  <Icons.Shield size={13} strokeWidth={2.5} /> Block List ({bannedUsers.length})
                 </button>
               </div>
 
               {auditSubTab === 'audit' ? (
                 <>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                     <div className="bg-gradient-to-br from-indigo-600 to-indigo-700 p-5 rounded-[2rem] shadow-lg shadow-indigo-500/20 text-white relative overflow-hidden active:scale-95 transition-all group">
-                        <div className="flex items-center justify-between mb-2">
-                           <p className="text-[10px] font-black uppercase tracking-widest opacity-80">Total Joins</p>
-                           <Icons.Activity size={18} className="opacity-50 group-hover:opacity-100 transition-opacity" />
+                  {/* Compact Stats Row */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                     <div className="bg-gradient-to-br from-indigo-600 to-indigo-700 p-3.5 rounded-2xl shadow-md shadow-indigo-500/15 text-white relative overflow-hidden transition-all group">
+                        <div className="flex items-center justify-between mb-1">
+                           <p className="text-[9px] font-black uppercase tracking-widest opacity-80">Total Joins</p>
+                           <Icons.Activity size={14} className="opacity-60" />
                         </div>
-                        <p className="text-3xl font-black tracking-tighter">{filteredJoins.length}</p>
-                        <p className="text-[10px] font-bold mt-1 opacity-70">Captured for {selectedDate}</p>
-                        <div className="absolute -right-6 -bottom-6 w-24 h-24 bg-white/10 rounded-full blur-2xl group-hover:scale-125 transition-transform" />
+                        <div className="flex items-baseline gap-2">
+                           <p className="text-2xl font-black tracking-tight">{filteredJoins.length}</p>
+                           <span className="text-[9px] font-semibold opacity-75">captured</span>
+                        </div>
+                        <p className="text-[8px] font-medium opacity-65 mt-0.5 truncate">{selectedDate}</p>
+                        <div className="absolute -right-4 -bottom-4 w-16 h-16 bg-white/10 rounded-full blur-xl pointer-events-none" />
                      </div>
 
-                     <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 p-5 rounded-[2rem] shadow-lg shadow-emerald-500/20 text-white relative overflow-hidden active:scale-95 transition-all group">
-                        <div className="flex items-center justify-between mb-2">
-                           <p className="text-[10px] font-black uppercase tracking-widest opacity-80">System Status</p>
-                           <Icons.Zap size={18} className="opacity-50 group-hover:opacity-100 transition-opacity" />
+                     <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 p-3.5 rounded-2xl shadow-md shadow-emerald-500/15 text-white relative overflow-hidden transition-all group">
+                        <div className="flex items-center justify-between mb-1">
+                           <p className="text-[9px] font-black uppercase tracking-widest opacity-80">Engine Status</p>
+                           <Icons.Zap size={14} className="opacity-60" />
                         </div>
-                        <p className="text-3xl font-black tracking-tighter">{isScanning ? 'SYNCING' : 'SECURE'}</p>
-                        <p className="text-[10px] font-bold mt-1 opacity-70">Audit Engine is {isScanning ? 'Processing Updates' : 'Monitoring Real-time'}</p>
-                        <div className="absolute -right-6 -bottom-6 w-24 h-24 bg-white/10 rounded-full blur-2xl group-hover:scale-125 transition-transform" />
+                        <div className="flex items-baseline gap-2">
+                           <p className="text-2xl font-black tracking-tight">{isScanning ? 'SYNCING' : 'SECURE'}</p>
+                           <span className="inline-block w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                        </div>
+                        <p className="text-[8px] font-medium opacity-65 mt-0.5 truncate">{isScanning ? 'Processing Updates' : 'Monitoring Real-time'}</p>
+                        <div className="absolute -right-4 -bottom-4 w-16 h-16 bg-white/10 rounded-full blur-xl pointer-events-none" />
                      </div>
 
-                     <div className="bg-white dark:bg-slate-900 p-5 rounded-[2rem] border border-slate-200 dark:border-slate-800 shadow-xl flex flex-col justify-center min-w-[200px] sm:col-span-2 lg:col-span-1 group">
-                        <div className="flex items-center justify-between mb-3">
-                           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Time Window</p>
-                           <Icons.Calendar size={16} className="text-slate-400 group-hover:text-indigo-500 transition-colors" />
+                     <div className="bg-white dark:bg-slate-900 p-3.5 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-md flex flex-col justify-between">
+                        <div className="flex items-center justify-between mb-1.5">
+                           <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Filter By Date</p>
+                           <Icons.Calendar size={13} className="text-slate-400" />
                         </div>
                         <input 
                            type="date" 
                            value={selectedDate} 
                            onChange={e => setSelectedDate(e.target.value)} 
-                           className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-black uppercase outline-none rounded-xl p-2.5 w-full focus:ring-2 focus:ring-indigo-500/20 transition-all" 
+                           className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-bold outline-none rounded-lg py-1.5 px-2.5 w-full focus:ring-2 focus:ring-indigo-500/20 transition-all cursor-pointer" 
                         />
                      </div>
                   </div>
 
-                  <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-[2rem] overflow-hidden shadow-2xl">
-                     <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                        <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">Join Audit Stream</h3>
+                  {/* Sleek Stream Table */}
+                  <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl overflow-hidden shadow-lg">
+                     <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-950/40">
                         <div className="flex items-center gap-2">
-                           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                           <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">Live Flow</span>
+                           <h3 className="text-[11px] font-black uppercase tracking-wider text-slate-700 dark:text-slate-300">Join Audit Stream</h3>
+                           <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
+                             {filteredJoins.length} events
+                           </span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                           <span className="text-[9px] font-bold text-emerald-500 uppercase tracking-wider">Live Flow</span>
                         </div>
                      </div>
-                     <div className="overflow-y-auto max-h-[50vh] custom-scrollbar">
+                     <div className="overflow-y-auto max-h-[380px] custom-scrollbar">
                        <table className="w-full text-left">
                           <thead className="sticky top-0 bg-slate-50/95 dark:bg-slate-950/95 backdrop-blur-xl z-20 border-b border-slate-100 dark:border-slate-800">
                             <tr>
-                              <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Idx</th>
-                              <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">User Identity</th>
-                              <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Target Hub</th>
-                              <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Timestamp</th>
-                              <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Protection</th>
+                              <th className="px-3 py-2 text-[8px] font-black text-slate-400 uppercase tracking-widest w-10">#</th>
+                              <th className="px-3 py-2 text-[8px] font-black text-slate-400 uppercase tracking-widest">User Identity</th>
+                              <th className="px-3 py-2 text-[8px] font-black text-slate-400 uppercase tracking-widest">Target Hub</th>
+                              <th className="px-3 py-2 text-[8px] font-black text-slate-400 uppercase tracking-widest">Timestamp</th>
+                              <th className="px-3 py-2 text-[8px] font-black text-slate-400 uppercase tracking-widest text-right">Actions</th>
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                          <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
                             {filteredJoins.length > 0 ? filteredJoins.map((e, idx) => (
-                              <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors group">
-                                <td className="px-4 py-3 text-[10px] font-mono font-bold text-slate-400">{idx + 1}</td>
-                                <td className="px-4 py-3">
-                                   <div className="flex items-center gap-2.5">
-                                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-black uppercase shadow-sm ${ROW_COLORS[idx % ROW_COLORS.length]} border border-white/20`}>
+                              <tr key={idx} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors group">
+                                <td className="px-3 py-1.5 text-[9px] font-mono font-bold text-slate-400">{idx + 1}</td>
+                                <td className="px-3 py-1.5">
+                                   <div className="flex items-center gap-2">
+                                      <div className={`w-6 h-6 rounded-md flex items-center justify-center text-[9px] font-black uppercase shadow-xs ${ROW_COLORS[idx % ROW_COLORS.length]} border border-white/20 flex-shrink-0`}>
                                          {e.userName.charAt(0)}
                                       </div>
                                       <div className="min-w-0">
-                                         <p className="text-[11px] font-black text-slate-900 dark:text-white truncate max-w-[120px]">{e.userName}</p>
-                                         <p className="text-[9px] font-mono text-slate-400 tracking-tighter">ID: {e.userId}</p>
+                                         <p className="text-[10px] font-bold text-slate-900 dark:text-white truncate max-w-[140px] leading-tight">{e.userName}</p>
+                                         <p className="text-[8px] font-mono text-slate-400 tracking-tighter">ID: {e.userId}</p>
                                       </div>
                                    </div>
                                 </td>
-                                <td className="px-4 py-3">
+                                <td className="px-3 py-1.5">
                                    <div className="flex flex-col">
-                                      <span className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 truncate max-w-[120px]">{e.chatTitle}</span>
-                                      <span className="text-[8px] font-mono text-slate-400 opacity-60">HUB_{e.chatId.toString().slice(-6)}</span>
+                                      <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 truncate max-w-[140px] leading-tight">{e.chatTitle}</span>
+                                      <span className="text-[7px] font-mono text-slate-400 opacity-60">HUB_{e.chatId.toString().slice(-6)}</span>
                                    </div>
                                 </td>
-                                <td className="px-4 py-3 text-[10px] font-bold text-slate-500 whitespace-nowrap">
+                                <td className="px-3 py-1.5 text-[9px] font-medium text-slate-500 whitespace-nowrap">
                                    {formatTime12h(e.timestamp)}
                                 </td>
-                                <td className="px-4 py-3 text-right">
-                                  <div className="flex justify-end gap-1.5">
+                                <td className="px-3 py-1.5 text-right">
+                                  <div className="flex justify-end gap-1">
                                     <button 
                                       onClick={() => handleRequestKick(e)} 
                                       title="Kick Member" 
-                                      className="p-2 text-orange-500 hover:bg-orange-500/10 rounded-xl transition-all active:scale-90"
+                                      className="p-1 text-orange-500 hover:bg-orange-500/10 rounded-lg transition-all active:scale-90"
                                     >
-                                      <Icons.LogOut size={14} strokeWidth={2.5}/>
+                                      <Icons.LogOut size={13} strokeWidth={2.2}/>
                                     </button>
                                     <button 
                                       onClick={() => handleRequestBan(e)} 
                                       title="Permanent Ban" 
-                                      className="p-2 text-rose-600 hover:bg-rose-600/10 rounded-xl transition-all active:scale-90"
+                                      className="p-1 text-rose-600 hover:bg-rose-600/10 rounded-lg transition-all active:scale-90"
                                     >
-                                      <Icons.Ban size={14} strokeWidth={2.5}/>
+                                      <Icons.Ban size={13} strokeWidth={2.2}/>
                                     </button>
                                   </div>
                                 </td>
                               </tr>
                             )) : (
                               <tr>
-                                <td colSpan={5} className="py-20 text-center">
-                                  <div className="flex flex-col items-center gap-2 opacity-30">
-                                    <Icons.Activity size={40} />
-                                    <p className="text-xs font-black uppercase tracking-widest">No audit data for this date</p>
+                                <td colSpan={5} className="py-10 text-center">
+                                  <div className="flex flex-col items-center gap-1.5 opacity-40">
+                                    <Icons.Activity size={24} />
+                                    <p className="text-[10px] font-bold uppercase tracking-wider">No audit data for this date</p>
                                   </div>
                                 </td>
                               </tr>
@@ -2779,59 +2793,59 @@ const App: React.FC = () => {
                   </div>
                 </>
               ) : (
-                <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-[2.5rem] overflow-hidden shadow-2xl">
-                    <div className="p-6 border-b border-slate-100 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-900/30 flex items-center justify-between">
+                <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl overflow-hidden shadow-lg">
+                    <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-950/40 flex items-center justify-between">
                       <div>
-                        <h2 className="text-lg font-black uppercase tracking-tight text-slate-900 dark:text-white">Shield Protection</h2>
-                        <p className="text-[10px] font-bold text-slate-500 mt-0.5 uppercase tracking-widest">Blacklisted Entity Management</p>
+                        <h2 className="text-xs font-black uppercase tracking-tight text-slate-900 dark:text-white">Shield Protection</h2>
+                        <p className="text-[9px] font-medium text-slate-500 uppercase tracking-wider">Blacklisted Entity Management</p>
                       </div>
-                      <div className="w-12 h-12 rounded-2xl bg-rose-500/10 text-rose-500 flex items-center justify-center shadow-inner">
-                         <Icons.Shield size={24} strokeWidth={2.5} />
+                      <div className="w-8 h-8 rounded-xl bg-rose-500/10 text-rose-500 flex items-center justify-center shadow-xs">
+                         <Icons.Shield size={16} strokeWidth={2.5} />
                       </div>
                     </div>
                     
-                    <div className="p-0 overflow-x-auto max-h-[60vh] custom-scrollbar">
+                    <div className="p-0 overflow-x-auto max-h-[380px] custom-scrollbar">
                       {bannedUsers.length === 0 ? (
-                        <div className="p-20 text-center">
-                          <div className="w-20 h-20 bg-emerald-500/5 dark:bg-emerald-500/10 rounded-[2rem] flex items-center justify-center mx-auto mb-5 shadow-inner animate-pulse-slow">
-                             <Icons.CheckCircle className="text-emerald-500" size={36} strokeWidth={2} />
+                        <div className="py-10 text-center">
+                          <div className="w-12 h-12 bg-emerald-500/10 rounded-2xl flex items-center justify-center mx-auto mb-2 shadow-inner">
+                             <Icons.CheckCircle className="text-emerald-500" size={22} strokeWidth={2} />
                           </div>
-                          <h3 className="font-black text-slate-900 dark:text-white uppercase tracking-tight text-sm">Vault is Empty</h3>
-                          <p className="text-[10px] font-bold text-slate-500 mt-1.5 uppercase tracking-widest">No active bans found in database</p>
+                          <h3 className="font-bold text-slate-900 dark:text-white uppercase tracking-tight text-xs">Vault is Empty</h3>
+                          <p className="text-[9px] font-medium text-slate-400 mt-0.5 uppercase tracking-wider">No active bans in database</p>
                         </div>
                       ) : (
                         <table className="w-full text-left">
                           <thead className="sticky top-0 bg-slate-50/95 dark:bg-slate-950/95 backdrop-blur-xl z-20 border-b border-slate-100 dark:border-slate-800">
                             <tr>
-                              <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Target ID</th>
-                              <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Subject Name</th>
-                              <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Origin Hub</th>
-                              <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Incident Date</th>
-                              <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Relief</th>
+                              <th className="px-3 py-2 text-[8px] font-black text-slate-400 uppercase tracking-widest">Target ID</th>
+                              <th className="px-3 py-2 text-[8px] font-black text-slate-400 uppercase tracking-widest">Subject Name</th>
+                              <th className="px-3 py-2 text-[8px] font-black text-slate-400 uppercase tracking-widest">Origin Hub</th>
+                              <th className="px-3 py-2 text-[8px] font-black text-slate-400 uppercase tracking-widest">Incident Date</th>
+                              <th className="px-3 py-2 text-[8px] font-black text-slate-400 uppercase tracking-widest text-right">Relief</th>
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                          <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
                             {bannedUsers.map((user, idx) => (
-                              <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors group">
-                                <td className="px-4 py-3">
-                                  <span className="text-[9px] font-mono font-black text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-lg border border-slate-200/50 dark:border-slate-700/50">{user.userId}</span>
+                              <tr key={idx} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors group">
+                                <td className="px-3 py-2">
+                                  <span className="text-[8px] font-mono font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200/50 dark:border-slate-700/50">{user.userId}</span>
                                 </td>
-                                <td className="px-4 py-3">
-                                  <div className="text-[11px] font-black text-slate-900 dark:text-white">{user.userName}</div>
+                                <td className="px-3 py-2">
+                                  <div className="text-[10px] font-bold text-slate-900 dark:text-white truncate max-w-[140px]">{user.userName}</div>
                                 </td>
-                                <td className="px-4 py-3">
-                                  <div className="text-[10px] font-bold text-blue-600 dark:text-blue-400">{user.chatTitle}</div>
-                                  <div className="text-[8px] font-mono text-slate-400 opacity-60 tracking-tighter">ID: {user.chatId}</div>
+                                <td className="px-3 py-2">
+                                  <div className="text-[10px] font-bold text-blue-600 dark:text-blue-400 truncate max-w-[140px]">{user.chatTitle}</div>
+                                  <div className="text-[7px] font-mono text-slate-400 opacity-60 tracking-tighter">ID: {user.chatId}</div>
                                 </td>
-                                <td className="px-4 py-3 text-[10px] font-bold text-slate-500">
-                                  {new Date(user.timestamp).toLocaleString('en-CA', { dateStyle: 'medium', timeStyle: 'short' })}
+                                <td className="px-3 py-2 text-[9px] font-medium text-slate-500 whitespace-nowrap">
+                                  {new Date(user.timestamp).toLocaleString('en-CA', { dateStyle: 'short', timeStyle: 'short' })}
                                 </td>
-                                <td className="px-4 py-3 text-right">
+                                <td className="px-3 py-2 text-right">
                                   <button 
                                     onClick={() => handleUnban(user)}
-                                    className="px-4 py-1.5 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-lg shadow-rose-500/20 active:scale-95 transition-all inline-flex items-center gap-1.5"
+                                    className="px-2.5 py-1 bg-rose-500 hover:bg-rose-600 text-white rounded-lg text-[8px] font-black uppercase tracking-wider shadow-sm active:scale-95 transition-all inline-flex items-center gap-1"
                                   >
-                                    <Icons.RefreshCw size={12} strokeWidth={3} />
+                                    <Icons.RefreshCw size={10} strokeWidth={2.5} />
                                     <span>Pardon</span>
                                   </button>
                                 </td>
