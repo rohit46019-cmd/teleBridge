@@ -2002,11 +2002,19 @@ const App: React.FC = () => {
       />
 
       <main className="flex-1 transition-all duration-300 md:ml-64 px-4 md:px-6 lg:px-8 pb-28 w-full max-w-[1400px] mx-auto">
-        <header className="sticky top-0 z-40 bg-white/80 dark:bg-slate-950/85 backdrop-blur-2xl -mx-4 px-4 md:-mx-6 md:px-6 lg:-mx-8 lg:px-8 py-3 mb-5 border-b border-slate-200/80 dark:border-slate-800/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.1)] transition-all rounded-b-[2rem] md:rounded-b-[3rem]">
+        <header className={`sticky top-0 z-40 backdrop-blur-2xl -mx-4 px-4 md:-mx-6 md:px-6 lg:-mx-8 lg:px-8 py-3 mb-5 transition-all rounded-b-[2rem] md:rounded-b-[2.5rem] ${
+          colorTheme === 'quantum'
+            ? 'bg-gradient-to-r from-slate-950 via-emerald-950/90 to-slate-950 border-b border-emerald-500/35 shadow-[0_10px_30px_rgba(16,185,129,0.22)]'
+            : colorTheme === 'violet'
+            ? 'bg-gradient-to-r from-slate-950 via-purple-950/90 to-slate-950 border-b border-purple-500/35 shadow-[0_10px_30px_rgba(168,85,247,0.22)]'
+            : colorTheme === 'executive'
+            ? 'bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 border-b border-slate-600/50 shadow-[0_10px_30px_rgba(0,0,0,0.3)]'
+            : 'bg-gradient-to-r from-slate-950 via-indigo-950 to-purple-950 border-b border-indigo-500/35 shadow-[0_10px_30px_rgba(99,102,241,0.25)]'
+        }`}>
           <div className="flex items-center justify-between gap-3">
             {/* Left: Tab Title & Icon with Status Glow */}
             <div className="flex items-center gap-3 min-w-0">
-              <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 via-purple-600 to-pink-500 p-0.5 shadow-md shadow-indigo-500/20 flex-shrink-0 flex items-center justify-center text-white text-lg font-black">
+              <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500 p-0.5 shadow-md shadow-indigo-500/30 flex-shrink-0 flex items-center justify-center text-white text-lg font-black ring-2 ring-white/10">
                 {activeTab === 'dashboard' && '⚡'}
                 {activeTab === 'groups' && '👥'}
                 {activeTab === 'folders' && '📂'}
@@ -2015,15 +2023,15 @@ const App: React.FC = () => {
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <h1 key={activeTab} className="text-base md:text-xl font-black tracking-tight text-slate-900 dark:text-white capitalize truncate animate-in fade-in">
+                  <h1 key={activeTab} className="text-base md:text-xl font-black tracking-tight text-white capitalize truncate animate-in fade-in drop-shadow-sm">
                     {activeTab === 'dashboard' ? 'Home' : activeTab === 'groups' ? 'Batches & Hubs' : activeTab === 'folders' ? 'Batch Folders' : activeTab === 'analysis' ? 'Audit & Security' : 'Bot Settings'}
                   </h1>
-                  <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-[9px] font-black uppercase tracking-wider">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 text-[9px] font-black uppercase tracking-wider shadow-xs">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
                     Live
                   </span>
                 </div>
-                <p className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 truncate">
+                <p className="text-[10px] font-semibold text-slate-300/85 truncate">
                   {activeTab === 'dashboard' && 'Real-time hub metrics & join monitors'}
                   {activeTab === 'groups' && `${groups.length} Telegram groups connected`}
                   {activeTab === 'folders' && `${folders.length} organized batch folders`}
@@ -2036,7 +2044,7 @@ const App: React.FC = () => {
             {/* Right: Controls & Actions */}
             <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
               {/* Font Size Quick Selector */}
-              <div className="hidden lg:flex items-center gap-0.5 p-1 bg-slate-100/90 dark:bg-slate-900/90 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl shadow-inner">
+              <div className="hidden lg:flex items-center gap-0.5 p-1 bg-slate-900/80 border border-slate-700/80 rounded-2xl shadow-inner backdrop-blur-md">
                 {[
                   { id: 'xs', label: 'Micro', short: 'XS' },
                   { id: 'small', label: 'Small', short: 'S' },
@@ -2049,7 +2057,7 @@ const App: React.FC = () => {
                     className={`px-2.5 py-1 rounded-xl text-[10px] font-black tracking-tight transition-all ${
                       fontSize === f.id
                         ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-sm scale-105'
-                        : 'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                        : 'text-slate-400 hover:text-white'
                     }`}
                   >
                     <span>{f.short}</span>
@@ -2058,7 +2066,7 @@ const App: React.FC = () => {
               </div>
 
               {/* Quick Theme Presets (Desktop) */}
-              <div className="hidden xl:flex items-center gap-0.5 p-1 bg-slate-100/90 dark:bg-slate-900/90 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl shadow-inner">
+              <div className="hidden xl:flex items-center gap-0.5 p-1 bg-slate-900/80 border border-slate-700/80 rounded-2xl shadow-inner backdrop-blur-md">
                 {(['midnight', 'quantum', 'violet', 'executive'] as ThemePreset[]).map((preset) => {
                   const presetLabels: Record<ThemePreset, { name: string; color: string }> = {
                     midnight: { name: 'Cyber', color: 'bg-indigo-500' },
@@ -2076,8 +2084,8 @@ const App: React.FC = () => {
                       }}
                       className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[9px] font-black uppercase transition-all ${
                         colorTheme === preset
-                          ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm border border-slate-200/80 dark:border-slate-700/80 scale-105'
-                          : 'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                          ? 'bg-white/20 text-white shadow-xs border border-white/30 scale-105'
+                          : 'text-slate-400 hover:text-white'
                       }`}
                     >
                       <span className={`w-1.5 h-1.5 rounded-full ${presetLabels[preset].color}`} />
@@ -2090,17 +2098,17 @@ const App: React.FC = () => {
               {/* Theme mode toggle */}
               <button 
                 onClick={toggleTheme} 
-                className="w-9 h-9 rounded-2xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-center text-slate-600 dark:text-amber-400 hover:scale-105 active:scale-95 transition-all"
+                className="w-9 h-9 rounded-2xl bg-slate-900/80 border border-slate-700/80 shadow-sm flex items-center justify-center text-amber-400 hover:bg-slate-800 hover:scale-105 active:scale-95 transition-all"
                 title="Toggle Dark / Light Mode"
               >
-                {theme === 'dark' ? <Icons.Sun size={16} /> : <Icons.Moon size={16} className="text-indigo-600" />}
+                {theme === 'dark' ? <Icons.Sun size={16} /> : <Icons.Moon size={16} className="text-indigo-400" />}
               </button>
 
               {/* Sync Hubs Button */}
               <button 
                 onClick={() => syncAllGroupsMemberCount(token)} 
                 disabled={isScanning} 
-                className="h-9 px-3 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-500 hover:to-pink-500 text-white rounded-2xl shadow-md shadow-indigo-500/20 active:scale-95 transition-all flex items-center gap-2 font-bold text-xs"
+                className="h-9 px-3 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 hover:from-indigo-400 hover:to-pink-400 text-white rounded-2xl shadow-md shadow-indigo-500/25 active:scale-95 transition-all flex items-center gap-2 font-bold text-xs"
                 title="Refresh Telegram Hubs Data"
               >
                 <Icons.Refresh size={14} className={isScanning ? 'animate-spin' : ''} />
