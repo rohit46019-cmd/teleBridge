@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { TelegramGroup } from '../types.ts';
 import { Icons } from '../constants.tsx';
@@ -117,48 +116,50 @@ const GroupCard: React.FC<GroupCardProps> = ({ group, onClick, onTogglePin, inde
   return (
     <div 
       onClick={() => onClick(group)}
-      className={`group relative rounded-[1.25rem] p-2.5 flex items-center justify-between transition-all duration-500 cursor-pointer 
-        ${theme.bgLight} ${theme.bgDark} border ${theme.borderLight} ${theme.borderDark}
-        hover:-translate-y-0.5 hover:shadow-[0_12px_24px_-10px_rgba(0,0,0,0.12)] 
+      className={`group relative rounded-[1.25rem] p-3 flex items-center justify-between transition-all duration-500 cursor-pointer 
+        ${group.pinned 
+          ? 'bg-gradient-to-r from-amber-50/95 via-amber-100/50 to-yellow-50/80 dark:from-amber-950/50 dark:via-slate-900 dark:to-amber-950/30 border-2 border-amber-400 dark:border-amber-500 shadow-[0_12px_35px_rgba(245,158,11,0.3)] ring-2 ring-amber-400/40' 
+          : `${theme.bgLight} ${theme.bgDark} border ${theme.borderLight} ${theme.borderDark}`}
+        hover:-translate-y-0.5 hover:shadow-[0_16px_32px_-8px_rgba(0,0,0,0.15)] 
         hover:border-b-[5px] active:translate-y-[1px] active:border-b-[3px]
         overflow-hidden w-full
       `}
       style={{
-        backgroundImage: theme.pattern,
+        backgroundImage: group.pinned ? 'radial-gradient(circle at 2px 2px, rgba(245,158,11,0.15) 1.5px, transparent 0)' : theme.pattern,
         backgroundSize: '15px 15px',
-        boxShadow: `0 2px 4px -1px rgba(0,0,0,0.01), 0 1px 2px -1px rgba(0,0,0,0.01), hover: 0 16px 32px -8px ${theme.glow}`
       }}
     >
       {/* Dynamic Glow Refraction */}
-      <div className="absolute inset-0 bg-gradient-to-tr from-white/10 via-transparent to-white/5 opacity-40 group-hover:opacity-75 transition-opacity duration-500 pointer-events-none" />
+      <div className="absolute inset-0 bg-gradient-to-tr from-white/15 via-transparent to-white/5 opacity-50 group-hover:opacity-80 transition-opacity duration-500 pointer-events-none" />
       
-      {/* Left Vertical Brand Highlight Pill */}
-      <div className={`absolute left-0 top-2 bottom-2 w-1 rounded-r-full ${theme.accent} shadow-[1px_0_6px_${theme.glow}]`} />
+      {/* Left Vertical Brand Highlight Pill (Gold if pinned) */}
+      <div className={`absolute left-0 top-2 bottom-2 w-1.5 rounded-r-full ${group.pinned ? 'bg-gradient-to-b from-amber-400 to-yellow-600 shadow-[0_0_12px_rgba(245,158,11,0.8)]' : `${theme.accent} shadow-[1px_0_6px_${theme.glow}]`}`} />
 
       {/* Pin/Tag Actions Container */}
-      <div className="absolute top-2.5 left-3 flex items-center gap-1 z-20">
+      <div className="absolute top-2.5 left-3.5 flex items-center gap-1.5 z-20">
         <button 
           onClick={(e) => onTogglePin(e, group.id)} 
-          className={`p-0.5 rounded-lg transition-all shadow-[0_1px_4px_rgba(0,0,0,0.08)] border backdrop-blur-md hover:scale-105 active:scale-95
+          title={group.pinned ? "Pinned to VIP Priority Top (Click to Unpin)" : "Pin to VIP Top"}
+          className={`p-1.5 rounded-xl transition-all shadow-md border backdrop-blur-md hover:scale-110 active:scale-95 flex items-center justify-center
             ${group.pinned 
-              ? 'bg-amber-400 text-white border-amber-300 scale-105 rotate-6' 
-              : 'bg-white/90 dark:bg-slate-800/90 border-slate-200/50 dark:border-slate-700/50 text-slate-400 hover:text-amber-500'}`}
+              ? 'bg-gradient-to-r from-amber-500 to-yellow-500 text-white border-amber-300 shadow-amber-500/50 scale-110 rotate-6 ring-2 ring-amber-300/60 animate-pulse' 
+              : 'bg-white/90 dark:bg-slate-800/90 border-slate-200/50 dark:border-slate-700/50 text-slate-400 hover:text-amber-500 hover:border-amber-400'}`}
         >
-          <span className="text-[8px] leading-none">{group.pinned ? '📌' : '📍'}</span>
+          <span className="text-[10px] leading-none">{group.pinned ? '📌' : '📍'}</span>
         </button>
 
         {index !== undefined && (
-          <span className="px-1.5 py-0.5 rounded-md font-mono font-black text-[8px] leading-none tracking-tight text-white bg-slate-900/90 dark:bg-slate-800/90 border border-white/5 shadow-sm whitespace-nowrap">
+          <span className="px-1.5 py-0.5 rounded-md font-mono font-black text-[9px] leading-none tracking-tight text-white bg-slate-900/90 dark:bg-slate-800/90 border border-white/10 shadow-sm whitespace-nowrap">
             #{String(index + 1).padStart(2, '0')}
           </span>
         )}
       </div>
 
-      <div className="flex items-center gap-3 relative z-10 flex-1 min-w-0 ml-7">
+      <div className="flex items-center gap-3 relative z-10 flex-1 min-w-0 ml-10">
         <div className="relative">
           {/* Radial Pulse Effect behind Image */}
-          <div className={`absolute -inset-0.5 blur-md opacity-30 group-hover:opacity-60 transition-opacity duration-500 rounded-lg ${theme.accent}`} />
-          <div className="w-10 h-10 rounded-lg overflow-hidden bg-slate-200 dark:bg-slate-800 flex-shrink-0 group-hover:scale-105 transition-transform duration-500 border border-white/40 shadow-md relative z-10">
+          <div className={`absolute -inset-0.5 blur-md opacity-40 group-hover:opacity-70 transition-opacity duration-500 rounded-lg ${group.pinned ? 'bg-amber-500' : theme.accent}`} />
+          <div className="w-10 h-10 rounded-xl overflow-hidden bg-slate-200 dark:bg-slate-800 flex-shrink-0 group-hover:scale-105 transition-transform duration-500 border border-white/60 dark:border-slate-700 shadow-md relative z-10">
             <img 
               src={group.image.replace('/200', '/100')} 
               alt={group.name} 
@@ -172,11 +173,18 @@ const GroupCard: React.FC<GroupCardProps> = ({ group, onClick, onTogglePin, inde
           </div>
         </div>
         <div className="flex-1 min-w-0">
-          <h3 className="text-xs md:text-sm font-extrabold text-slate-800 dark:text-slate-100 truncate leading-tight mb-0.5 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">
-            {group.name}
-          </h3>
+          <div className="flex items-center gap-1.5 mb-0.5">
+            <h3 className="text-xs md:text-sm font-extrabold text-slate-900 dark:text-slate-100 truncate leading-tight group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">
+              {group.name}
+            </h3>
+            {group.pinned && (
+              <span className="px-1.5 py-0.5 rounded-md text-[7px] font-black uppercase tracking-widest bg-gradient-to-r from-amber-500 to-yellow-500 text-white shadow-sm shadow-amber-500/30 flex items-center gap-0.5 shrink-0">
+                ⭐ VIP PINNED
+              </span>
+            )}
+          </div>
           <div className="flex items-center gap-1.5 flex-wrap">
-            <div className={`px-1.5 py-0.5 rounded-md text-[8px] font-black text-white uppercase tracking-wider shadow-sm ${theme.accent} shadow-[0_1px_4px_${theme.glow}]`}>
+            <div className={`px-1.5 py-0.5 rounded-md text-[8px] font-black text-white uppercase tracking-wider shadow-sm ${group.pinned ? 'bg-amber-600 shadow-amber-500/40' : `${theme.accent} shadow-[0_1px_4px_${theme.glow}]`}`}>
               {group.memberCount} MEMBERS
             </div>
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_6px_rgba(16,185,129,0.8)]" />
@@ -189,10 +197,10 @@ const GroupCard: React.FC<GroupCardProps> = ({ group, onClick, onTogglePin, inde
         </div>
       </div>
 
-      <div className="flex items-center gap-2 relative z-10 ml-1.5">
+      <div className="flex items-center gap-2 relative z-10 ml-2">
         <button 
           onClick={copyId} 
-          className="hidden md:flex items-center gap-1 px-2 py-1 bg-white/60 dark:bg-slate-800/50 hover:bg-white dark:hover:bg-slate-700 rounded-lg transition-all border border-slate-200/50 dark:border-slate-700/50 group/copy shadow-sm active:scale-95"
+          className="hidden md:flex items-center gap-1 px-2.5 py-1 bg-white/70 dark:bg-slate-800/60 hover:bg-white dark:hover:bg-slate-700 rounded-lg transition-all border border-slate-200/60 dark:border-slate-700/60 group/copy shadow-sm active:scale-95"
         >
           <span className="text-[8px] font-mono font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest truncate max-w-[80px]">
             {copied ? 'COPIED!' : `ID: ${group.id}`}
@@ -200,7 +208,7 @@ const GroupCard: React.FC<GroupCardProps> = ({ group, onClick, onTogglePin, inde
           <Icons.Copy size={9} className={copied ? 'text-emerald-500 scale-110' : 'text-slate-400 group-hover/copy:text-blue-500 transition-all'} />
         </button>
         
-        <div className={`w-8 h-8 text-white rounded-lg flex items-center justify-center group-hover:scale-105 group-hover:rotate-3 transition-all shadow-[0_2px_6px_rgba(0,0,0,0.1)] active:scale-90 ${theme.accent} border-2 border-white/20`}>
+        <div className={`w-8 h-8 text-white rounded-xl flex items-center justify-center group-hover:scale-105 group-hover:rotate-3 transition-all shadow-md active:scale-90 ${group.pinned ? 'bg-gradient-to-br from-amber-500 to-yellow-600 shadow-amber-500/30' : theme.accent} border-2 border-white/20`}>
           <Icons.Link size={13} strokeWidth={3} />
         </div>
       </div>
