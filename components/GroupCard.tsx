@@ -104,8 +104,8 @@ const GroupCard: React.FC<GroupCardProps> = ({ group, onClick, onTogglePin, inde
 
   // For past added groups that might not have createdAt, fallback to lastInteraction if available.
   const timeCreated = group.createdAt || group.lastInteraction || 0;
-  // 74 hours in milliseconds
-  const isNew = timeCreated > 0 && (Date.now() - timeCreated < 74 * 60 * 60 * 1000);
+  // 4 days in milliseconds
+  const isNew = timeCreated > 0 && (Date.now() - timeCreated < 4 * 24 * 60 * 60 * 1000);
 
   const copyId = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -182,7 +182,7 @@ const GroupCard: React.FC<GroupCardProps> = ({ group, onClick, onTogglePin, inde
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_6px_rgba(16,185,129,0.8)]" />
             {isNew && (
               <span className="px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-widest bg-gradient-to-r from-rose-500 to-pink-600 text-white animate-bounce shadow-md shadow-rose-500/50 border border-white/40">
-                ⭐ NEW
+                🆕 NEW
               </span>
             )}
           </div>

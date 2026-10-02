@@ -248,6 +248,45 @@ const App: React.FC = () => {
     }
   });
 
+  const [deletedGroups, setDeletedGroups] = useState<any[]>(() => {
+    const saved = localStorage.getItem('tg_deleted_groups_bin');
+    try {
+      const parsed = saved ? JSON.parse(saved) : [];
+      const now = Date.now();
+      const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+      const valid = parsed.filter((g: any) => {
+        const deletedTime = g.deletedAt || now;
+        return (now - deletedTime) < thirtyDaysMs;
+      });
+      return Array.isArray(valid) ? valid : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    const now = Date.now();
+    const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+    const filtered = deletedGroups.filter(g => (now - (g.deletedAt || now)) < thirtyDaysMs);
+    localStorage.setItem('tg_deleted_groups_bin', JSON.stringify(filtered));
+    const deletedIds = filtered.map(g => String(g.id));
+    localStorage.setItem('tg_deleted_groups', JSON.stringify(deletedIds));
+  }, [deletedGroups]);
+
+  const moveToDeletedBin = (group: TelegramGroup, reason: string) => {
+    setGroups(prev => prev.filter(g => g.id !== group.id));
+    setDeletedGroups(prev => {
+      if (prev.some(d => d.id === group.id)) return prev;
+      return [...prev, { ...group, deletedAt: Date.now(), errorReason: reason }];
+    });
+    fetch('/api/groups/remove', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: group.id })
+    }).catch(e => console.error("Failed to remove unacceptable group from DB:", e));
+    showNotification(`Moved unacceptable group "${group.name}" to Deleted Bin (${reason})`, 'alert');
+  };
+
   const [folders, setFolders] = useState<BatchFolder[]>(() => {
     try {
       const saved = localStorage.getItem('telebridge_batch_folders');
@@ -291,11 +330,17 @@ const App: React.FC = () => {
   const [groups, setGroups] = useState<TelegramGroup[]>(() => {
     const saved = localStorage.getItem('tg_groups');
     try {
-      const parsed = saved ? JSON.parse(saved) : [];
+      const parsed = saved ? JSON.parse(saved) : DEFAULT_GROUPS;
       const deletedIds = JSON.parse(localStorage.getItem('tg_deleted_groups') || '[]');
-      return Array.isArray(parsed) ? parsed.filter((g: any) => g && g.id && !deletedIds.includes(String(g.id))) : [];
+      const filtered = Array.isArray(parsed) && parsed.length > 0 
+        ? parsed.filter((g: any) => g && g.id && !deletedIds.includes(String(g.id))) 
+        : DEFAULT_GROUPS;
+      return filtered.map((g: any) => ({
+        ...g,
+        createdAt: g.createdAt || Date.now()
+      }));
     } catch (e) {
-      return [];
+      return DEFAULT_GROUPS.map(g => ({ ...g, createdAt: Date.now() }));
     }
   });
   const [joinEvents, setJoinEvents] = useState<JoinEvent[]>(() => {
@@ -702,7 +747,10 @@ const App: React.FC = () => {
           
           // Filter out deleted groups from server data
           const activeServerGroups = Array.isArray(serverGroups) 
-            ? serverGroups.filter(sg => sg && sg.id && !deletedIds.includes(String(sg.id)))
+            ? serverGroups.filter(sg => sg && sg.id && !deletedIds.includes(String(sg.id))).map(sg => ({
+                ...sg,
+                createdAt: sg.createdAt || Date.now()
+              }))
             : [];
           
           const merged = [...activeServerGroups];
@@ -713,13 +761,13 @@ const App: React.FC = () => {
             const serverG = merged.find(sg => sg.id === localG.id);
             if (!serverG) {
               // Local only group (maybe created offline), keep it
-              merged.push(localG);
+              merged.push({ ...localG, createdAt: localG.createdAt || Date.now() });
             } else {
               // Compare timestamps if available
               if ((localG.lastInteraction || 0) > (serverG.lastInteraction || 0)) {
                 // Local is newer, keep local version for now
                 const idx = merged.findIndex(sg => sg.id === localG.id);
-                merged[idx] = localG;
+                merged[idx] = { ...localG, createdAt: localG.createdAt || serverG.createdAt || Date.now() };
               }
             }
           });
@@ -1184,8 +1232,13 @@ const App: React.FC = () => {
           } else {
             updatedGroups.push(g);
           }
-        } catch (e) {
-          updatedGroups.push(g);
+        } catch (e: any) {
+          const errMsg = e.message || String(e);
+          if (errMsg.includes('Bad Request') || errMsg.includes('chat not found') || errMsg.includes('kicked') || errMsg.includes('Forbidden') || errMsg.includes('not a member')) {
+            moveToDeletedBin(g, errMsg);
+          } else {
+            updatedGroups.push(g);
+          }
         }
       }));
 
@@ -1268,6 +1321,17 @@ const App: React.FC = () => {
         successCount++;
       } catch (err: any) { 
         console.warn(`Failed to inject group ${rawId}:`, err);
+        const reason = err.message || 'Bad Request / Unaccessible';
+        const dummyGroup: TelegramGroup = {
+          id: rawId.startsWith('-100') ? rawId : `-100${rawId.replace(/^-/, '')}`,
+          name: `Unacceptable Hub (${rawId})`,
+          memberCount: 0,
+          description: reason,
+          category: 'Telegram',
+          image: `https://picsum.photos/seed/${rawId}/200`,
+          createdAt: Date.now()
+        };
+        moveToDeletedBin(dummyGroup, reason);
         failCount++;
       }
     }
@@ -2731,7 +2795,7 @@ const App: React.FC = () => {
                            <span className="text-[9px] font-bold text-emerald-500 uppercase tracking-wider">Live Flow</span>
                         </div>
                      </div>
-                     <div className="overflow-y-auto max-h-[380px] custom-scrollbar">
+                     <div className="overflow-y-auto max-h-[200px] custom-scrollbar">
                        <table className="w-full text-left">
                           <thead className="sticky top-0 bg-slate-50/95 dark:bg-slate-950/95 backdrop-blur-xl z-20 border-b border-slate-100 dark:border-slate-800">
                             <tr>
