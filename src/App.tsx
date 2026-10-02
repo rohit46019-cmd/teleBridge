@@ -190,7 +190,7 @@ const App: React.FC = () => {
   const [filterOption, setFilterOption] = useState<'mostMembers' | 'leastMembers' | 'frequent' | 'recent' | 'newAdded' | 'activeToday'>('recent');
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }));
-  const [auditSubTab, setAuditSubTab] = useState<'audit' | 'blocked'>('audit');
+  const [auditSubTab, setAuditSubTab] = useState<'audit' | 'blocked' | 'deleted'>('audit');
   const [updates, setUpdates] = useState<any[]>([]);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const saved = localStorage.getItem('theme');
@@ -2722,7 +2722,7 @@ const App: React.FC = () => {
           {activeTab === 'analysis' && (
             <div className={`space-y-4 ${animationClass}`}>
               {/* Compact Sub-tab Switcher */}
-              <div className="flex bg-slate-100/90 dark:bg-slate-800/90 p-1 rounded-xl border border-slate-200/80 dark:border-slate-700/80 shadow-inner max-w-sm mb-3">
+              <div className="flex bg-slate-100/90 dark:bg-slate-800/90 p-1 rounded-xl border border-slate-200/80 dark:border-slate-700/80 shadow-inner max-w-lg mb-3">
                 <button 
                   onClick={() => setAuditSubTab('audit')}
                   className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${auditSubTab === 'audit' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm border border-indigo-500/10' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
@@ -2734,6 +2734,12 @@ const App: React.FC = () => {
                   className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${auditSubTab === 'blocked' ? 'bg-white dark:bg-slate-700 text-rose-600 dark:text-rose-400 shadow-sm border border-rose-500/10' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
                 >
                   <Icons.Shield size={13} strokeWidth={2.5} /> Block List ({bannedUsers.length})
+                </button>
+                <button 
+                  onClick={() => setAuditSubTab('deleted')}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${auditSubTab === 'deleted' ? 'bg-white dark:bg-slate-700 text-amber-600 dark:text-amber-400 shadow-sm border border-amber-500/10' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                >
+                  <span>🗑️</span> Deleted Bin ({deletedGroups.length})
                 </button>
               </div>
 
@@ -2864,7 +2870,7 @@ const App: React.FC = () => {
                      </div>
                   </div>
                 </>
-              ) : (
+              ) : auditSubTab === 'blocked' ? (
                 <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl overflow-hidden shadow-lg">
                     <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-950/40 flex items-center justify-between">
                       <div>
@@ -2925,6 +2931,78 @@ const App: React.FC = () => {
                             ))}
                           </tbody>
                         </table>
+                      )}
+                    </div>
+                </div>
+              ) : (
+                <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl overflow-hidden shadow-lg">
+                    <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-950/40 flex items-center justify-between">
+                      <div>
+                        <h2 className="text-xs font-black uppercase tracking-tight text-slate-900 dark:text-white">Deleted & Unacceptable Bin</h2>
+                        <p className="text-[9px] font-medium text-slate-500 uppercase tracking-wider">Auto-deletion countdown in 30 days</p>
+                      </div>
+                      <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center shadow-xs">
+                         <span>🗑️</span>
+                      </div>
+                    </div>
+                    
+                    <div className="p-4 overflow-x-auto max-h-[380px] custom-scrollbar space-y-3">
+                      {deletedGroups.length === 0 ? (
+                        <div className="py-10 text-center">
+                          <div className="w-12 h-12 bg-emerald-500/10 rounded-2xl flex items-center justify-center mx-auto mb-2 shadow-inner">
+                             <Icons.CheckCircle className="text-emerald-500" size={22} strokeWidth={2} />
+                          </div>
+                          <h3 className="font-bold text-slate-900 dark:text-white uppercase tracking-tight text-xs">Bin is Empty</h3>
+                          <p className="text-[9px] font-medium text-slate-400 mt-0.5 uppercase tracking-wider">No unacceptable or bad request groups</p>
+                        </div>
+                      ) : (
+                        deletedGroups.map((dg, idx) => {
+                          const daysLeft = Math.max(1, 30 - Math.floor((Date.now() - (dg.deletedAt || Date.now())) / (24 * 60 * 60 * 1000)));
+                          return (
+                            <div key={idx} className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 rounded-xl p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                              <div className="flex items-center gap-3 truncate">
+                                <img src={dg.image} alt="" className="w-9 h-9 rounded-lg object-cover flex-shrink-0" />
+                                <div className="truncate">
+                                  <h4 className="text-xs font-bold text-slate-900 dark:text-white truncate">{dg.name}</h4>
+                                  <p className="text-[10px] text-rose-500 font-semibold truncate">Removal Reason: {dg.errorReason || 'Bad request / Unaccessible'}</p>
+                                  <p className="text-[8px] font-mono text-slate-400">ID: {dg.id} • ⏳ Countdown: <span className="text-amber-500 font-bold">{daysLeft} days remaining</span> until DB purge</p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                                <button 
+                                  onClick={() => {
+                                    setDeletedGroups(prev => prev.filter(d => d.id !== dg.id));
+                                    setGroups(prev => [...prev, { ...dg, createdAt: Date.now() }]);
+                                    fetch('/api/groups', {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify(dg)
+                                    }).catch(e => console.error("Failed to restore group:", e));
+                                    showNotification(`Restored "${dg.name}" successfully!`, 'success');
+                                  }}
+                                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[9px] font-black uppercase tracking-wider shadow-sm active:scale-95 transition-all"
+                                >
+                                  Restore
+                                </button>
+                                <button 
+                                  onClick={() => {
+                                    handleOpenConfirmModal({
+                                      title: 'Delete Permanently',
+                                      message: `Permanently delete "${dg.name}" from database immediately?`,
+                                      onConfirm: () => {
+                                        setDeletedGroups(prev => prev.filter(d => d.id !== dg.id));
+                                        showNotification('Group permanently deleted', 'info');
+                                      }
+                                    });
+                                  }}
+                                  className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[9px] font-black uppercase tracking-wider shadow-sm active:scale-95 transition-all"
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })
                       )}
                     </div>
                 </div>
