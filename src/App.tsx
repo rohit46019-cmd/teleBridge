@@ -236,9 +236,9 @@ const App: React.FC = () => {
   const [autoApproveJoinRequest, setAutoApproveJoinRequest] = useState(() => {
     return localStorage.getItem('tg_auto_approve') === 'true';
   });
-  const [hideRevenue, setHideRevenue] = useState(() => {
-    return localStorage.getItem('hideRevenue') === 'true';
-  });
+  const [welcomeMessage, setWelcomeMessage] = useState(() => localStorage.getItem('tg_welcome_message') || 'Welcome to the group!');
+  const [isWelcomeEnabled, setIsWelcomeEnabled] = useState(() => localStorage.getItem('tg_welcome_enabled') === 'true');
+
   const [bannedUsers, setBannedUsers] = useState<BannedUser[]>(() => {
     const saved = localStorage.getItem('tg_banned_users');
     try {
@@ -406,13 +406,9 @@ const App: React.FC = () => {
   const [isGroupListCollapsed, setIsGroupListCollapsed] = useState(true);
   const [selectedGroupToDelete, setSelectedGroupToDelete] = useState('');
   const [settingsSubTab, setSettingsSubTab] = useState<'charts' | 'config' | 'admins'>('charts');
-  const [revenueOption, setRevenueOption] = useState<number | { month: number, year: number }>(14);
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [joinRate, setJoinRate] = useState(() => {
-    return Number(localStorage.getItem('tg_join_rate')) || 87;
-  });
   const [linkToRevoke, setLinkToRevoke] = useState('');
 
   const CustomTooltip = ({ active, payload, label }: any) => {
@@ -530,58 +526,7 @@ const App: React.FC = () => {
     };
   }, [joinEvents]);
 
-  const revenueAnalysis = useMemo(() => {
-    if (!joinEvents.length) return { data: [], highest: null, lowest: null };
 
-    let startDate: Date | null = null;
-    let endDate: Date | null = null;
-
-    if (analyticsRange === 'CUSTOM' && analysisStartDate && analysisEndDate) {
-      startDate = new Date(analysisStartDate);
-      startDate.setHours(0, 0, 0, 0);
-      endDate = new Date(analysisEndDate);
-      endDate.setHours(23, 59, 59, 999);
-    } else {
-      const now = new Date();
-      startDate = new Date();
-      endDate = new Date();
-      
-      if (typeof revenueOption === 'number') {
-        startDate.setDate(now.getDate() - revenueOption + 1);
-        startDate.setHours(0, 0, 0, 0);
-        endDate.setHours(23, 59, 59, 999);
-      } else {
-        startDate = new Date(revenueOption.year, revenueOption.month, 1);
-        endDate = new Date(revenueOption.year, revenueOption.month + 1, 0, 23, 59, 59, 999);
-      }
-    }
-
-    const dataMap: Record<string, number> = {};
-    joinEvents.forEach(event => {
-      const d = new Date(event.timestamp);
-      if (d >= startDate! && d <= endDate!) {
-        const dateStr = d.toLocaleDateString('en-CA');
-        dataMap[dateStr] = (dataMap[dateStr] || 0) + 1;
-      }
-    });
-
-    const data = Object.entries(dataMap)
-      .map(([date, count]) => ({
-        date,
-        revenue: count * joinRate
-      }))
-      .sort((a, b) => a.date.localeCompare(b.date));
-
-    let highest = data[0] || null;
-    let lowest = data[0] || null;
-
-    data.forEach(item => {
-      if (highest === null || item.revenue > highest.revenue) highest = item;
-      if (lowest === null || item.revenue < lowest.revenue) lowest = item;
-    });
-
-    return { data, highest, lowest };
-  }, [joinEvents, joinRate, revenueOption, analyticsRange, analysisStartDate, analysisEndDate]);
 
   useEffect(() => {
     lastUpdateIdRef.current = lastUpdateId;
@@ -602,13 +547,19 @@ const App: React.FC = () => {
     localStorage.setItem('activeTab', activeTab);
   }, [activeTab]);
 
-  useEffect(() => {
-    localStorage.setItem('hideRevenue', hideRevenue.toString());
-  }, [hideRevenue]);
+
 
   useEffect(() => {
     localStorage.setItem('tg_auto_clean', autoCleanServiceMessages.toString());
   }, [autoCleanServiceMessages]);
+
+  useEffect(() => {
+    localStorage.setItem('tg_welcome_message', welcomeMessage);
+  }, [welcomeMessage]);
+
+  useEffect(() => {
+    localStorage.setItem('tg_welcome_enabled', isWelcomeEnabled.toString());
+  }, [isWelcomeEnabled]);
 
   useEffect(() => {
     localStorage.setItem('tg_auto_welcome', autoWelcome.toString());
@@ -658,9 +609,7 @@ const App: React.FC = () => {
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
-  useEffect(() => {
-    localStorage.setItem('tg_join_rate', joinRate.toString());
-  }, [joinRate]);
+
 
   const handleShareApp = () => {
     const url = window.location.href;
@@ -2244,33 +2193,6 @@ const App: React.FC = () => {
                     </div>
                  </motion.div>
 
-                 <motion.div 
-                    whileHover={{ scale: 1.04, translateY: -6, rotateX: 2, rotateY: -1, boxShadow: '0 30px 60px -10px rgba(245,175,25,0.45)' }}
-                    whileTap={{ scale: 0.96, translateY: 2 }}
-                    className="bg-gradient-to-br from-[#f12711] to-[#f5af19] p-5 rounded-[2rem] border-b-[6px] border-[#8b1408] shadow-[0_15px_35px_rgba(245,175,25,0.3),inset_0_2px_4px_rgba(255,255,255,0.35)] transition-all relative overflow-hidden"
-                  >
-                    <BubbleBackground />
-                    <div className="flex justify-between items-start mb-4 relative z-10">
-                      <div className="w-10 h-10 bg-gradient-to-br from-white/35 to-white/5 border border-white/30 rounded-xl flex items-center justify-center shadow-[inset_0_1px_3px_rgba(255,255,255,0.4),0_4px_10px_rgba(0,0,0,0.15)] backdrop-blur-md">
-                        <Icons.TrendingUp size={20} className="text-white" strokeWidth={3} />
-                      </div>
-                      <button 
-                        onClick={() => setHideRevenue(!hideRevenue)}
-                        className="p-2 hover:bg-white/10 rounded-full transition-colors"
-                        title={hideRevenue ? "Show Revenue" : "Hide Revenue"}
-                      >
-                        {hideRevenue ? <Icons.EyeOff size={16} className="text-white/70" /> : <Icons.Eye size={16} className="text-white/70" />}
-                      </button>
-                    </div>
-                    <p className="text-[10px] font-black text-orange-100 uppercase tracking-widest mb-1 relative z-10">Today's Revenue</p>
-                    {hideRevenue ? (
-                      <p className="text-3xl font-black text-white relative z-10 text-shadow-sm blur-md select-none">₹8,888,888</p>
-                    ) : (
-                      <p className="text-3xl font-black text-white relative z-10 text-shadow-sm">₹{(joinsTodayCount * joinRate).toLocaleString()}</p>
-                    )}
-                    <p className="text-[8px] font-bold text-orange-100/60 uppercase mt-1 relative z-10">Rate: ₹{joinRate}/join</p>
-                 </motion.div>
-
                  <motion.button 
                     whileHover={{ scale: 1.04, translateY: -6, rotateX: 2, rotateY: 2, boxShadow: '0 30px 60px -10px rgba(99,102,241,0.4)' }}
                     whileTap={{ scale: 0.96, translateY: 2 }}
@@ -2483,6 +2405,10 @@ const App: React.FC = () => {
                                     title: 'Delete Folder',
                                     message: `Are you sure you want to delete folder "${folder.name}"?`,
                                     onConfirm: () => {
+                                      if (folder.id === 'f-1' || folder.id === 'f-2') {
+                                        showNotification("Cannot delete default folders", "alert");
+                                        return;
+                                      }
                                       setFolders(prev => prev.filter(f => f.id !== folder.id));
                                       fetch(`/api/folders/${folder.id}`, { method: 'DELETE' })
                                         .catch(e => console.error("Failed to delete folder from DB:", e));
@@ -2571,6 +2497,10 @@ const App: React.FC = () => {
                                 title: 'Delete Folder',
                                 message: `Are you sure you want to delete folder "${currentFolder.name}"?`,
                                 onConfirm: () => {
+                                  if (currentFolder.id === 'f-1' || currentFolder.id === 'f-2') {
+                                    showNotification("Cannot delete default folders", "alert");
+                                    return;
+                                  }
                                   setFolders(prev => prev.filter(f => f.id !== currentFolder.id));
                                   fetch(`/api/folders/${currentFolder.id}`, { method: 'DELETE' })
                                     .catch(e => console.error("Failed to delete folder from DB:", e));
@@ -3165,68 +3095,7 @@ const App: React.FC = () => {
                   </div>
 
                   <div className="grid grid-cols-1 gap-6">
-                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2.5rem] p-6 shadow-xl">
-                      <div className="flex items-center justify-between mb-4">
-                        <div>
-                          <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">Revenue Analysis</h3>
-                          <p className="text-[10px] font-bold text-slate-500 uppercase mt-0.5">
-                            {analyticsRange === 'CUSTOM' ? 'Custom Period' : (
-                              typeof revenueOption === 'number' 
-                                ? `Last ${revenueOption} Days` 
-                                : `${new Date(0, revenueOption.month).toLocaleString('default', { month: 'short' })} ${revenueOption.year}`
-                            )}
-                          </p>
-                        </div>
-                        {analyticsRange !== 'CUSTOM' && (
-                          <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl items-center gap-1">
-                            {[7, 14, 30, 90].map(days => (
-                              <button
-                                key={days}
-                                onClick={() => setRevenueOption(days)}
-                                className={`px-2.5 py-1 text-[8px] font-black uppercase rounded-lg transition-all ${revenueOption === days ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
-                              >
-                                {days}D
-                              </button>
-                            ))}
-                            <button
-                              onClick={() => setIsPickerOpen(!isPickerOpen)}
-                              className={`px-2.5 py-1 text-[8px] font-black uppercase rounded-lg transition-all ${isPickerOpen ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
-                            >
-                              Picker
-                            </button>
-                          </div>
-                        )}
-                        {isPickerOpen && (
-                          <div className="absolute right-6 mt-2 p-3 bg-white dark:bg-slate-900 shadow-xl border border-slate-200 dark:border-slate-800 rounded-xl z-20 flex gap-2">
-                             <select value={selectedMonth} onChange={e => setSelectedMonth(Number(e.target.value))} className="text-xs bg-transparent">
-                               {[...Array(12).keys()].map(m => <option key={m} value={m}>{new Date(0, m).toLocaleString('default', { month: 'short' })}</option>)}
-                             </select>
-                             <select value={selectedYear} onChange={e => setSelectedYear(Number(e.target.value))} className="text-xs bg-transparent">
-                               {[2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
-                             </select>
-                             <button onClick={() => { setRevenueOption({ month: selectedMonth, year: selectedYear }); setIsPickerOpen(false); }} className="text-[8px] bg-indigo-600 text-white px-2 rounded">Set</button>
-                          </div>
-                        )}
-                      </div>
-                      <div className="mt-4">
-                        <p className="text-3xl font-black text-slate-900 dark:text-white">
-                          ₹{revenueAnalysis.data.reduce((sum, item) => sum + item.revenue, 0).toLocaleString()}
-                        </p>
-                      </div>
-                    </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-5 rounded-[2rem] text-white shadow-lg">
-                        <p className="text-[8px] font-black uppercase tracking-[0.2em] opacity-70 mb-1">Highest Income</p>
-                        <p className="text-xs font-black truncate">{revenueAnalysis.highest ? new Date(revenueAnalysis.highest.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : 'N/A'}</p>
-                        <p className="text-lg font-black mt-1">₹{revenueAnalysis.highest?.revenue.toLocaleString() || 0}</p>
-                      </div>
-                      <div className="bg-white dark:bg-slate-800 p-5 rounded-[2rem] border border-slate-200 dark:border-slate-700 shadow-lg">
-                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">Lowest Income</p>
-                        <p className="text-xs font-black text-slate-900 dark:text-white truncate">{revenueAnalysis.lowest ? new Date(revenueAnalysis.lowest.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : 'N/A'}</p>
-                        <p className="text-lg font-black text-slate-900 dark:text-white mt-1">₹{revenueAnalysis.lowest?.revenue.toLocaleString() || 0}</p>
-                      </div>
-                    </div>
                   </div>
                 </>
               )}
@@ -3258,6 +3127,27 @@ const App: React.FC = () => {
                       >
                         <Icons.UserPlus size={14} /> Open Admin Manager
                       </button>
+                    </div>
+
+                    {/* New Welcome Message Configuration */}
+                    <div className="p-6 bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-200 dark:border-slate-800 shadow-sm mb-6">
+                      <div className="flex items-center justify-between mb-4">
+                        <h4 className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider">Automated Welcome Message</h4>
+                        <button 
+                          onClick={() => setIsWelcomeEnabled(!isWelcomeEnabled)}
+                          className={`px-3 py-1 text-[9px] font-black rounded-lg ${isWelcomeEnabled ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-600'}`}
+                        >
+                          {isWelcomeEnabled ? 'ENABLED' : 'DISABLED'}
+                        </button>
+                      </div>
+                      <textarea
+                        value={welcomeMessage}
+                        onChange={e => setWelcomeMessage(e.target.value)}
+                        disabled={!isWelcomeEnabled}
+                        className="w-full h-24 p-3 bg-slate-50 dark:bg-slate-800 rounded-xl text-xs text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                        placeholder="Enter the welcome message..."
+                      />
+                      <p className="text-[8px] font-bold text-slate-400 mt-2">Use {"{{name}}"} to insert the user's name.</p>
                     </div>
 
                     <div className="mb-6 p-4 bg-white dark:bg-black/20 rounded-2xl border border-slate-200 dark:border-white/5 space-y-4">
@@ -3433,20 +3323,11 @@ const App: React.FC = () => {
                       )}
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3 mb-4">
-                      <div className="relative">
-                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">₹</span>
-                        <input 
-                          type="number" 
-                          value={joinRate} 
-                          onChange={e => setJoinRate(Number(e.target.value))} 
-                          className="w-full bg-white dark:bg-black/30 border border-slate-200 dark:border-white/10 pl-8 pr-6 py-4 rounded-2xl text-slate-900 dark:text-white font-mono text-xs outline-none focus:ring-4 focus:ring-indigo-500/20 transition-all" 
-                          placeholder="Join Rate"
-                        />
-                        <span className="absolute -top-2 left-4 bg-white dark:bg-slate-900 px-2 text-[8px] font-black text-slate-400 uppercase tracking-widest">Revenue Rate</span>
-                      </div>
+
+                    <div className="mb-4">
                       <input type="password" value={token} onChange={e => setToken(e.target.value)} disabled={isLocked} className="w-full bg-white dark:bg-black/30 border border-slate-200 dark:border-white/10 px-6 py-4 rounded-2xl text-slate-900 dark:text-white font-mono text-xs outline-none focus:ring-4 focus:ring-indigo-500/20 transition-all" placeholder="Bot Token" />
                     </div>
+
                     <div className="flex gap-2 mb-6">
                       <button onClick={() => handleVerify(token)} className="flex-1 py-4 bg-indigo-600 text-white font-black uppercase text-xs rounded-2xl shadow-xl hover:bg-indigo-500 active:scale-95 transition-all">Sync Connection</button>
                       <button onClick={() => setIsLocked(!isLocked)} className="px-6 py-4 bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-2xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all">{isLocked ? 'Unlock' : 'Lock'}</button>
