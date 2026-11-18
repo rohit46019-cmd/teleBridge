@@ -1,17 +1,26 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <defs>
-    <linearGradient id="bg-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#2563eb" />
-      <stop offset="50%" stop-color="#7c3aed" />
-      <stop offset="100%" stop-color="#db2777" />
+    <linearGradient id="app-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3b82f6" />
+      <stop offset="50%" stop-color="#6366f1" />
+      <stop offset="100%" stop-color="#a855f7" />
     </linearGradient>
-    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
-      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#000000" flood-opacity="0.3"/>
+    <linearGradient id="accent-grad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#06b6d4" />
+      <stop offset="100%" stop-color="#10b981" />
+    </linearGradient>
+    <filter id="app-shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="16" stdDeviation="20" flood-color="#3b82f6" flood-opacity="0.45"/>
     </filter>
   </defs>
-  <rect width="512" height="512" rx="128" fill="url(#bg-gradient)" />
-  <g filter="url(#shadow)">
-    <path d="M120 240 L240 290 L400 140 L270 320 L270 420 L320 340 Z" fill="#ffffff" />
-    <circle cx="380" cy="140" r="16" fill="#ffffff" />
+  <rect width="512" height="512" rx="128" fill="url(#app-grad)" />
+  <g filter="url(#app-shadow)">
+    <!-- Central Bridge Node -->
+    <path d="M128 256 C128 180, 180 128, 256 128 C332 128, 384 180, 384 256 C384 332, 332 384, 256 384 C180 384, 128 332, 128 256 Z" fill="none" stroke="#ffffff" stroke-width="28" stroke-dasharray="16 12" stroke-linecap="round"/>
+    <circle cx="256" cy="256" r="64" fill="url(#accent-grad)" stroke="#ffffff" stroke-width="12"/>
+    <circle cx="256" cy="140" r="20" fill="#ffffff" />
+    <circle cx="372" cy="256" r="20" fill="#ffffff" />
+    <circle cx="256" cy="372" r="20" fill="#ffffff" />
+    <circle cx="140" cy="256" r="20" fill="#ffffff" />
   </g>
 </svg>

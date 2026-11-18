@@ -5,26 +5,14 @@
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#0f172a",
-  "theme_color": "#2563eb",
+  "background_color": "#020617",
+  "theme_color": "#4f46e5",
   "icons": [
     {
-      "src": "https://picsum.photos/seed/telebridge/192/192",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "https://picsum.photos/seed/telebridge/512/512",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "https://picsum.photos/seed/telebridge-mask/512/512",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "maskable"
+      "src": "/logo.jpg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
     }
   ],
   "requestFramePermissions": [],

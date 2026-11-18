@@ -43,8 +43,8 @@ const Sidebar: React.FC<SidebarProps> = ({
         {/* Brand Header */}
         <div className="p-6 pb-2 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 via-purple-600 to-pink-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-500/25 animate-pulse-slow">
-              <Icons.Zap className="text-white" size={20} strokeWidth={2.5} />
+            <div className="w-10 h-10 rounded-2xl overflow-hidden shadow-lg shadow-indigo-500/25 ring-2 ring-white/10 bg-slate-800">
+              <img src="/logo.jpg" alt="TeleBridge Logo" className="w-full h-full object-cover" />
             </div>
             <div>
               <span className="font-display font-black text-xl tracking-tight bg-gradient-to-r from-slate-900 via-indigo-900 to-purple-950 dark:from-white dark:via-indigo-200 dark:to-purple-200 bg-clip-text text-transparent">
@@ -119,19 +119,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           </div>
         </div>
 
-        {/* Status indicator */}
-        <div className="p-4 pt-0">
-          <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-              </div>
-              <p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">Hub Gateway Sync</p>
-            </div>
-            <span className="text-[9px] font-mono font-black text-emerald-500">ONLINE</span>
-          </div>
-        </div>
+        {/* Status indicator removed per request */}
       </aside>
 
       {/* Mobile Nav - Creative Floating Dock Design */}

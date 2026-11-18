@@ -18,7 +18,7 @@ export default defineConfig(({ mode }) => {
         VitePWA({
           registerType: 'autoUpdate',
           injectRegister: 'auto',
-          includeAssets: ['logo.svg'],
+          includeAssets: ['logo.jpg'],
           manifest: {
             name: 'TeleBridge Pro Admin',
             short_name: 'TeleBridge',
@@ -33,27 +33,27 @@ export default defineConfig(({ mode }) => {
             id: '/',
             icons: [
               {
-                src: 'logo.svg',
+                src: 'logo.jpg',
                 sizes: '192x192',
-                type: 'image/svg+xml',
+                type: 'image/jpeg',
                 purpose: 'any'
               },
               {
-                src: 'logo.svg',
+                src: 'logo.jpg',
                 sizes: '512x512',
-                type: 'image/svg+xml',
+                type: 'image/jpeg',
                 purpose: 'any'
               },
               {
-                src: 'logo.svg',
+                src: 'logo.jpg',
                 sizes: '192x192',
-                type: 'image/svg+xml',
+                type: 'image/jpeg',
                 purpose: 'maskable'
               },
               {
-                src: 'logo.svg',
+                src: 'logo.jpg',
                 sizes: '512x512',
-                type: 'image/svg+xml',
+                type: 'image/jpeg',
                 purpose: 'maskable'
               }
             ]

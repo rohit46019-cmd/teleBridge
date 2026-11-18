@@ -132,6 +132,11 @@ const GroupCard: React.FC<GroupCardProps> = ({ group, onClick, onTogglePin, inde
       {/* Dynamic Glow Refraction */}
       <div className="absolute inset-0 bg-gradient-to-tr from-white/15 via-transparent to-white/5 opacity-50 group-hover:opacity-80 transition-opacity duration-500 pointer-events-none" />
       
+      {/* Background Icon Watermark */}
+      <div className="absolute right-[-20px] bottom-[-20px] opacity-[0.03] dark:opacity-[0.05] pointer-events-none select-none group-hover:scale-110 group-hover:-rotate-12 transition-transform duration-1000">
+        <Icons.Zap size={140} strokeWidth={1} />
+      </div>
+
       {/* Left Vertical Brand Highlight Pill (Gold if pinned) */}
       <div className={`absolute left-0 top-2 bottom-2 w-1.5 rounded-r-full ${group.pinned ? 'bg-gradient-to-b from-amber-400 to-yellow-600 shadow-[0_0_12px_rgba(245,158,11,0.8)]' : `${theme.accent} shadow-[1px_0_6px_${theme.glow}]`}`} />
 

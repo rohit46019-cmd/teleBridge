@@ -1,978 +1,640 @@
 import express from "express";
+import type { Request, Response, NextFunction } from "express";
 import mongoose from "mongoose";
 import cors from "cors";
 import path from "path";
+import fs from "fs";
 
-const MONGODB_URI = (process.env.MONGODB_URI || "mongodb+srv://rohit46019_db_user:m5j51NXjSGxEzSrs@cluster0.b3gft5l.mongodb.net/telebridge_pro?appName=Cluster0").replace(/^['"]|['"]$/g, '');
+const PORT = Number(process.env.PORT) || 3000;
+const RAW_MONGODB_URI =
+  process.env.MONGODB_URI ||
+  "mongodb+srv://rohit46019_db_user:m5j51NXjSGxEzSrs@cluster0.b3gft5l.mongodb.net/telebridge_pro?appName=Cluster0";
+const MONGODB_URI = RAW_MONGODB_URI.replace(/^['"]|['"]$/g, "");
 
 // Define Schemas
-const joinEventSchema = new mongoose.Schema({
-  userId: Number,
-  userName: String,
-  chatId: Number,
-  chatTitle: String,
-  timestamp: Number
-}, { timestamps: true });
-
-const pendingJoinRequestSchema = new mongoose.Schema({
-  userId: Number,
-  chatId: Number,
-  userName: String,
-  timestamp: Number
-}, { timestamps: true });
-
-const groupSchema = new mongoose.Schema({
-  id: { type: String, unique: true },
-  name: String,
-  memberCount: Number,
-  description: String,
-  category: String,
-  image: String,
-  lastInteraction: Number,
-  interactionCount: { type: Number, default: 0 },
-  pinned: { type: Boolean, default: false }
-}, { timestamps: true });
-
-const broadcastSchema = new mongoose.Schema({
-  message: String,
-  timestamp: Number,
-  sentTo: [{
-    chatId: String,
-    messageId: Number
-  }]
-}, { timestamps: true });
-
-const inviteLinkSchema = new mongoose.Schema({
-  groupId: String,
-  link: String,
-  createdAt: { type: Number, default: Date.now }
-}, { timestamps: true });
-
-const adminSchema = new mongoose.Schema({
-  userId: { type: Number, required: true, unique: true },
-  username: { type: String, default: '' },
-  name: { type: String, default: '' },
-  customTitle: { type: String, default: 'Admin' },
-  isMasterAdmin: { type: Boolean, default: true },
-  groups: [{ type: String }],
-  permissions: {
-    canDeleteMessages: { type: Boolean, default: true },
-    canRestrictMembers: { type: Boolean, default: true },
-    canInviteUsers: { type: Boolean, default: true },
-    canPinMessages: { type: Boolean, default: true },
-    canChangeInfo: { type: Boolean, default: false },
-    canManageVideoChats: { type: Boolean, default: true },
-    canManageTopics: { type: Boolean, default: true },
-    canPromoteMembers: { type: Boolean, default: false }
+const joinEventSchema = new mongoose.Schema(
+  {
+    userId: Number,
+    userName: String,
+    chatId: Number,
+    chatTitle: String,
+    timestamp: Number,
   },
-  createdAt: { type: Number, default: Date.now }
-}, { timestamps: true });
+  { timestamps: true }
+);
 
-const folderSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true },
-  name: { type: String, required: true },
-  color: { type: String, required: true },
-  batchIds: [{ type: String }],
-  createdAt: { type: Number, default: Date.now }
-}, { timestamps: true });
+const groupSchema = new mongoose.Schema(
+  {
+    id: { type: String, unique: true },
+    name: String,
+    memberCount: { type: Number, default: 0 },
+    description: String,
+    category: String,
+    image: String,
+    lastInteraction: Number,
+    interactionCount: { type: Number, default: 0 },
+    pinned: { type: Boolean, default: false },
+    createdAt: { type: Number, default: () => Date.now() },
+  },
+  { timestamps: true }
+);
+
+const folderSchema = new mongoose.Schema(
+  {
+    id: { type: String, unique: true },
+    name: String,
+    color: String,
+    batchIds: [{ type: String }],
+    createdAt: { type: Number, default: () => Date.now() },
+  },
+  { timestamps: true }
+);
+
+const broadcastSchema = new mongoose.Schema(
+  {
+    message: String,
+    timestamp: Number,
+    sentTo: [
+      {
+        chatId: String,
+        messageId: Number,
+      },
+    ],
+  },
+  { timestamps: true }
+);
+
+const inviteLinkSchema = new mongoose.Schema(
+  {
+    groupId: String,
+    link: String,
+    createdAt: { type: Number, default: () => Date.now() },
+  },
+  { timestamps: true }
+);
+
+const adminSchema = new mongoose.Schema(
+  {
+    userId: { type: Number, required: true, unique: true },
+    username: { type: String, default: "" },
+    name: { type: String, default: "" },
+    customTitle: { type: String, default: "Admin" },
+    isMasterAdmin: { type: Boolean, default: true },
+    groups: [{ type: String }],
+    permissions: {
+      canDeleteMessages: { type: Boolean, default: true },
+      canRestrictMembers: { type: Boolean, default: true },
+      canInviteUsers: { type: Boolean, default: true },
+      canPinMessages: { type: Boolean, default: true },
+      canChangeInfo: { type: Boolean, default: false },
+      canManageVideoChats: { type: Boolean, default: true },
+      canManageTopics: { type: Boolean, default: true },
+      canPromoteMembers: { type: Boolean, default: false },
+    },
+    createdAt: { type: Number, default: () => Date.now() },
+  },
+  { timestamps: true }
+);
+
+const pendingJoinSchema = new mongoose.Schema(
+  {
+    userId: Number,
+    chatId: Number,
+    userName: String,
+    timestamp: Number,
+  },
+  { timestamps: true }
+);
 
 // Define Models
-const JoinEvent = mongoose.models.JoinEvent || mongoose.model("JoinEvent", joinEventSchema);
-const PendingJoinRequest = mongoose.models.PendingJoinRequest || mongoose.model("PendingJoinRequest", pendingJoinRequestSchema);
-const Group = mongoose.models.Group || mongoose.model("Group", groupSchema);
-const Broadcast = mongoose.models.Broadcast || mongoose.model("Broadcast", broadcastSchema);
-const InviteLink = mongoose.models.InviteLink || mongoose.model("InviteLink", inviteLinkSchema);
-const Admin = mongoose.models.Admin || mongoose.model("Admin", adminSchema);
-const Folder = mongoose.models.Folder || mongoose.model("Folder", folderSchema);
+function getModel(name: string, schema: mongoose.Schema): any {
+  return mongoose.models[name] || mongoose.model(name, schema);
+}
 
-// Global Error Handlers to prevent server crashes
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+const JoinEvent = getModel("JoinEvent", joinEventSchema);
+const Group = getModel("Group", groupSchema);
+const Folder = getModel("Folder", folderSchema);
+const Broadcast = getModel("Broadcast", broadcastSchema);
+const InviteLink = getModel("InviteLink", inviteLinkSchema);
+const Admin = getModel("Admin", adminSchema);
+const PendingJoin = getModel("PendingJoin", pendingJoinSchema);
+
+let connectPromise: Promise<typeof mongoose> | null = null;
+
+async function connectDB(): Promise<typeof mongoose> {
+  if (mongoose.connection.readyState === 1) {
+    return mongoose;
+  }
+  if (connectPromise) {
+    return connectPromise;
+  }
+
+  connectPromise = mongoose
+    .connect(MONGODB_URI, {
+      serverSelectionTimeoutMS: 10000,
+      connectTimeoutMS: 15000,
+      socketTimeoutMS: 45000,
+      dbName: "telebridge_pro",
+    })
+    .then((conn) => {
+      console.log("Connected to MongoDB successfully");
+      connectPromise = null;
+      return conn;
+    })
+    .catch((err: any) => {
+      connectPromise = null;
+      console.error("MongoDB connection error:", err?.message || err);
+      throw err;
+    });
+
+  return connectPromise;
+}
+
+const app = express();
+app.use(cors());
+app.use(express.json({ limit: "10mb" }));
+
+// Fast health check (never blocked by DB so Cloud Run startup/liveness probes pass immediately)
+app.get("/api/health", (_req: Request, res: Response) => {
+  res.status(200).json({
+    status: "ok",
+    uptime: process.uptime(),
+    dbStatus: mongoose.connection.readyState === 1 ? "connected" : "connecting",
+    timestamp: new Date().toISOString(),
+  });
 });
 
-process.on('uncaughtException', (err) => {
-  console.error('Uncaught Exception thrown:', err);
+app.get("/api/diagnostics", (_req: Request, res: Response) => {
+  res.status(200).json({
+    status: "ok",
+    uptime: process.uptime(),
+    nodeVersion: process.version,
+    port: PORT,
+    dbReadyState: mongoose.connection.readyState,
+    dbStatus: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
+    timestamp: new Date().toISOString(),
+  });
 });
 
-async function seedData() {
-  const defaultGroups: any[] = [
-    { "id": "-1003698762401", "name": "GK & GS Brahmastra 4.0 Batch", "memberCount": 5, "description": "Synced Hub", "category": "Telegram", "image": "https://picsum.photos/seed/-1003698762401/200", "lastInteraction": 1774102797184, "interactionCount": 0, "pinned": false },
-    { "id": "-1003040206839", "name": "ɢᴀɢᴀɴ ᴘʀᴀᴛᴀᴘ", "memberCount": 19, "description": "Synced Hub", "category": "Telegram", "image": "https://picsum.photos/seed/-1003040206839/200", "lastInteraction": 1774101136444, "interactionCount": 0, "pinned": false },
-    { "id": "-1003339244700", "name": "🎯 Abhinay sir Math", "memberCount": 9, "description": "Synced Hub", "category": "Telegram", "image": "https://picsum.photos/seed/-1003339244700/200", "lastInteraction": 1774015354790, "interactionCount": 0, "pinned": false },
-    { "id": "-1003036147121", "name": "Aman Sir ENG ( Rec)", "memberCount": 21, "description": "Synced Hub", "category": "Telegram", "image": "https://picsum.photos/seed/-1003036147121/200", "lastInteraction": 1773675480941, "interactionCount": 0, "pinned": false },
-    { "id": "-1003865582010", "name": "Intense Maths Revision (IMR)", "memberCount": 4, "description": "Synced Hub", "category": "Telegram", "image": "https://picsum.photos/seed/-1003865582010/200", "lastInteraction": 1773906201286, "interactionCount": 0, "pinned": false },
-    { "id": "-1003114073401", "name": "Himanshi mam CDP", "memberCount": 6, "description": "Synced Hub", "category": "Telegram", "image": "https://picsum.photos/seed/-1003114073401/200", "lastInteraction": 1774148078755, "interactionCount": 0, "pinned": false },
-    { "id": "-1003612284793", "name": "PARMAR UP GK", "memberCount": 23, "description": "Synced Hub", "category": "Telegram", "image": "https://picsum.photos/seed/-1003612284793/200", "lastInteraction": 1774068601367, "interactionCount": 0, "pinned": false },
-    { "id": "-1003676915691", "name": "Amarnath sir Hindi", "memberCount": 6, "description": "Synced Hub", "category": "Telegram", "image": "https://picsum.photos/seed/-1003676915691/200", "lastInteraction": 1770980589344, "interactionCount": 0, "pinned": false },
-    { "id": "-1003225282870", "name": "Selection Way", "memberCount": 31, "description": "Synced Hub", "category": "Telegram", "image": "https://picsum.photos/seed/-1003225282870/200", "lastInteraction": 1773385627192, "interactionCount": 0, "pinned": false },
-    { "id": "-1003153087650", "name": "Parmar SSC 4.0 🔴Live", "memberCount": 481, "description": "Synced Hub", "category": "Telegram", "image": "https://picsum.photos/seed/-1003153087650/200", "lastInteraction": 1775504736123, "interactionCount": 6, "pinned": false },
-    { "id": "-1003736636212", "name": "Ultra Calculation", "memberCount": 5, "description": "Auto Synced Hub", "category": "Telegram", "image": "https://picsum.photos/seed/-1003736636212/200", "lastInteraction": 1773920218031, "interactionCount": 0, "pinned": false },
-    { "id": "-1003732445402", "name": "RANI MAM 7.0", "memberCount": 79, "description": "Synced Group", "category": "Telegram", "image": "https://picsum.photos/seed/-1003732445402/100", "lastInteraction": 1774100397699, "interactionCount": 0, "pinned": false },
-    { "id": "-1003360985096", "name": "Hindi Foundation Batch 2025 by khan sir", "memberCount": 6, "description": "Synced Group", "category": "Telegram", "image": "https://picsum.photos/seed/-1003360985096/100", "lastInteraction": 1770980272065, "interactionCount": 0, "pinned": false },
-    { "id": "-1003067240220", "name": "𝗔𝗗𝗜𝗧𝗬𝗔 𝗦𝗜𝗥 3.0", "memberCount": 35, "description": "Synced Group", "category": "Telegram", "image": "https://picsum.photos/seed/-1003067240220/100", "lastInteraction": 1773975394503, "interactionCount": 0, "pinned": false },
-    { "id": "-1003037426232", "name": "𝐕𝐈𝐊𝐑𝐀𝐌𝐉𝐄𝐄𝐓 𝐑𝐄𝐀𝐒𝐎𝐍𝐈𝐍𝐆 𝟑.𝟎", "memberCount": 8, "description": "Synced Group", "category": "Telegram", "image": "https://picsum.photos/seed/-1003037426232/100", "lastInteraction": 1771649376701, "interactionCount": 0, "pinned": false },
-    { "id": "-1003767448478", "name": "E1 Coching", "memberCount": 5, "description": "Synced Group", "category": "Telegram", "image": "https://picsum.photos/seed/-1003767448478/100", "lastInteraction": 1770961968213, "interactionCount": 0, "pinned": false },
-    { "id": "-1003636154961", "name": "Parmar 2.0 ENG", "memberCount": 9, "description": "Synced Group", "category": "Telegram", "image": "https://picsum.photos/seed/-1003636154961/200", "lastInteraction": 1773971217355, "interactionCount": 0, "pinned": false },
-    { "id": "-1003565371067", "name": "RWA sanjeev sir Eng Live", "memberCount": 4, "description": "Synced Group", "category": "Telegram", "image": "https://picsum.photos/seed/-1003565371067/100", "lastInteraction": 1769822904677, "interactionCount": 0, "pinned": false },
-    { "id": "-1003856954597", "name": "Nimisha mam", "memberCount": 41, "description": "Auto Discovered Hub", "category": "Telegram", "image": "https://picsum.photos/seed/-1003856954597/100", "lastInteraction": 1775500553389, "interactionCount": 0, "pinned": false },
-    { "id": "-1002793359066", "name": "Piyush Sir Reasoning", "memberCount": 74, "description": "Synced Group", "category": "Telegram", "image": "https://picsum.photos/seed/-1002793359066/100", "lastInteraction": 1774110379993, "interactionCount": 0, "pinned": false },
-    { "id": "-1003577096046", "name": "Math by Bhutesh sir", "memberCount": 11, "description": "Synced Group", "category": "Telegram", "image": "https://picsum.photos/seed/-1003577096046/100", "lastInteraction": 1774104429374, "interactionCount": 0, "pinned": false },
-    { "id": "-1003012561565", "name": "Parmar 3.0", "memberCount": 29, "description": "Synced Group", "category": "Telegram", "image": "https://picsum.photos/seed/-1003012561565/100", "lastInteraction": 1774146437398, "interactionCount": 0, "pinned": false },
-    { "id": "-1003419167658", "name": "🛑𝚁𝙰𝙽𝙸 𝙼𝙰𝙼 𝟼.𝟶", "memberCount": 23, "description": "Synced Group", "category": "Telegram", "image": "https://picsum.photos/seed/-1003419167658/200", "lastInteraction": 1772894197557, "interactionCount": 0, "pinned": false },
-    { "id": "-1002661265147", "name": "Batch 1", "memberCount": 46, "description": "Auto Discovered Hub", "category": "Telegram", "image": "https://picsum.photos/seed/-1002661265147/100", "lastInteraction": 1775504589652, "interactionCount": 0, "pinned": false },
-    { "id": "-1002986001803", "name": "rakesh yadav", "memberCount": 107, "description": "Synced Group", "category": "Telegram", "image": "https://picsum.photos/seed/-1002986001803/200", "lastInteraction": 1773996390291, "interactionCount": 0, "pinned": false },
-    { "id": "-1003790122016", "name": "Science magnet", "memberCount": 93, "description": "Auto Discovered Hub", "category": "Telegram", "image": "https://picsum.photos/seed/-1003790122016/200", "lastInteraction": 1775500715439, "interactionCount": 0, "pinned": false },
-    { "id": "-1003615370383", "name": "MATH MANIA", "memberCount": 9, "description": "Auto Discovered Hub", "category": "Telegram", "image": "https://picsum.photos/seed/-1003615370383/200", "lastInteraction": 1775502355637, "interactionCount": 0, "pinned": false },
-    { "id": "-1003839638841", "name": "Bhutesh sir math parmar ssc", "memberCount": 4, "description": "Auto Discovered Hub", "category": "Telegram", "image": "https://picsum.photos/seed/-1003839638841/200", "lastInteraction": 1775504050623, "interactionCount": 7, "pinned": false }
-  ];
-
+// Ensure DB connection for data API routes
+const requireDB = async (_req: Request, res: Response, next: NextFunction) => {
   try {
-    const groupCount = await Group.countDocuments();
-    if (groupCount > 0) {
-      console.log("Database already has data, skipping seed.");
+    await connectDB();
+    next();
+  } catch (err: any) {
+    const message = err?.message || "Unknown database error";
+    const isIpError =
+      message.includes("IP not whitelisted") ||
+      message.includes("is not allowed to access from this IP") ||
+      message.includes("Could not connect to any servers");
+    res.status(503).json({
+      error: "Database Connection Failed",
+      details: message,
+      diagnosis: isIpError ? "IP_RESTRICTION" : "UNKNOWN_ERROR",
+    });
+  }
+};
+
+// Groups Routes
+app.get("/api/groups", requireDB, async (_req: Request, res: Response) => {
+  try {
+    const groups = await Group.find().sort({ lastInteraction: -1 }).lean();
+    res.json(groups);
+  } catch (error: any) {
+    res.status(500).json({ error: "Failed to fetch groups", details: error?.message });
+  }
+});
+
+app.post("/api/groups", requireDB, async (req: Request, res: Response) => {
+  try {
+    const group = req.body;
+    if (!group || !group.id) {
+      res.status(400).json({ error: "Missing group ID" });
+      return;
+    }
+    await Group.findOneAndUpdate({ id: String(group.id) }, group, { upsert: true });
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: "Failed to save group", details: error?.message });
+  }
+});
+
+app.post("/api/groups/remove", requireDB, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.body || {};
+    if (!id) {
+      res.status(400).json({ error: "Missing group ID" });
+      return;
+    }
+    const result = await Group.deleteOne({
+      $or: [{ id: String(id) }, { id: Number(id) }],
+    });
+    res.json({ success: true, deletedCount: result.deletedCount });
+  } catch (error: any) {
+    res.status(500).json({ error: "Failed to delete group", details: error?.message });
+  }
+});
+
+app.delete("/api/groups/:id", requireDB, async (req: Request, res: Response) => {
+  try {
+    const groupId = req.params.id || (req.query.id as string);
+    if (!groupId) {
+      res.status(400).json({ error: "Missing group ID" });
+      return;
+    }
+    const result = await Group.deleteOne({
+      $or: [{ id: String(groupId) }, { id: Number(groupId) }],
+    });
+    res.json({ success: true, deletedCount: result.deletedCount });
+  } catch (error: any) {
+    res.status(500).json({ error: "Failed to delete group", details: error?.message });
+  }
+});
+
+app.put("/api/groups/bulk-update", requireDB, async (req: Request, res: Response) => {
+  try {
+    const updates = Array.isArray(req.body) ? req.body : [];
+    for (const g of updates) {
+      if (g && g.id) {
+        await Group.findOneAndUpdate({ id: String(g.id) }, g, { upsert: true });
+      }
+    }
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: "Failed to update groups", details: error?.message });
+  }
+});
+
+const handleGroupInteraction = async (req: Request, res: Response) => {
+  try {
+    await Group.findOneAndUpdate(
+      { id: String(req.params.id) },
+      {
+        $set: { lastInteraction: Date.now() },
+        $inc: { interactionCount: 1 },
+      },
+      { upsert: true }
+    );
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: "Failed to update interaction", details: error?.message });
+  }
+};
+
+app.put("/api/groups/:id/interaction", requireDB, handleGroupInteraction);
+app.post("/api/groups/:id/interaction", requireDB, handleGroupInteraction);
+
+// Events Routes
+app.get("/api/events", requireDB, async (req: Request, res: Response) => {
+  try {
+    const limit = Math.min(Number(req.query.limit) || 1000, 5000);
+    const events = await JoinEvent.find().sort({ timestamp: -1 }).limit(limit).lean();
+    res.json(events);
+  } catch (error: any) {
+    res.status(500).json({ error: "Failed to fetch events", details: error?.message });
+  }
+});
+
+app.post("/api/events", requireDB, async (req: Request, res: Response) => {
+  try {
+    const events = Array.isArray(req.body) ? req.body : [];
+    for (const ev of events) {
+      if (ev && ev.userId !== undefined && ev.timestamp !== undefined) {
+        await JoinEvent.findOneAndUpdate(
+          { userId: ev.userId, timestamp: ev.timestamp },
+          ev,
+          { upsert: true }
+        );
+      }
+    }
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: "Failed to save events", details: error?.message });
+  }
+});
+
+app.delete("/api/events/:userId/:timestamp", requireDB, async (req: Request, res: Response) => {
+  try {
+    await JoinEvent.deleteOne({
+      userId: Number(req.params.userId),
+      timestamp: Number(req.params.timestamp),
+    });
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: "Failed to delete event", details: error?.message });
+  }
+});
+
+// Folders Routes
+app.get("/api/folders", requireDB, async (_req: Request, res: Response) => {
+  try {
+    const folders = await Folder.find().sort({ createdAt: -1 }).lean();
+    res.json(folders);
+  } catch (error: any) {
+    res.status(500).json({ error: "Failed to fetch folders", details: error?.message });
+  }
+});
+
+app.post("/api/folders", requireDB, async (req: Request, res: Response) => {
+  try {
+    const folder = req.body;
+    if (!folder || !folder.id) {
+      res.status(400).json({ error: "Missing folder ID" });
+      return;
+    }
+    await Folder.findOneAndUpdate({ id: String(folder.id) }, folder, { upsert: true });
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: "Failed to save folder", details: error?.message });
+  }
+});
+
+app.delete("/api/folders/:id", requireDB, async (req: Request, res: Response) => {
+  try {
+    await Folder.deleteOne({ id: String(req.params.id) });
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: "Failed to delete folder", details: error?.message });
+  }
+});
+
+// Invite Links Routes
+app.get("/api/groups/:id/links", requireDB, async (req: Request, res: Response) => {
+  try {
+    const links = await InviteLink.find({ groupId: String(req.params.id) })
+      .sort({ createdAt: -1 })
+      .limit(10)
+      .lean();
+    res.json(links);
+  } catch (error: any) {
+    res.status(500).json({ error: "Failed to fetch links", details: error?.message });
+  }
+});
+
+app.post("/api/groups/:id/links", requireDB, async (req: Request, res: Response) => {
+  try {
+    const { link } = req.body || {};
+    if (!link) {
+      res.status(400).json({ error: "Link is required" });
+      return;
+    }
+    const newLink = await InviteLink.create({
+      groupId: String(req.params.id),
+      link,
+      createdAt: Date.now(),
+    });
+    res.json({ success: true, id: newLink._id });
+  } catch (error: any) {
+    res.status(500).json({ error: "Failed to save link", details: error?.message });
+  }
+});
+
+app.delete("/api/groups/:id/links", requireDB, async (req: Request, res: Response) => {
+  try {
+    const { link } = req.body || {};
+    await InviteLink.deleteOne({ groupId: String(req.params.id), link });
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: "Failed to delete link", details: error?.message });
+  }
+});
+
+app.post("/api/revoke-link", requireDB, async (req: Request, res: Response) => {
+  try {
+    const { link, token } = req.body || {};
+    if (!link || !token) {
+      res.status(400).json({ error: "Link and token required" });
+      return;
+    }
+    const inviteLinkDoc = await InviteLink.findOne({ link });
+    if (!inviteLinkDoc) {
+      res.status(404).json({ error: "Link not found in database" });
       return;
     }
 
-    console.log("Database empty, seeding default groups...");
-    await Group.insertMany(defaultGroups);
-    console.log("Default groups seeded successfully");
-  } catch (error) {
-    console.error("Seeding error:", error);
-  }
-}
+    const chatId = inviteLinkDoc.groupId;
+    const response = await fetch(
+      `https://api.telegram.org/bot${token}/revokeChatInviteLink`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: chatId, invite_link: link }),
+      }
+    );
+    const data: any = await response.json();
+    if (!data.ok) {
+      throw new Error(data.description || "Failed to revoke link on Telegram");
+    }
 
-// Connection state management for serverless (Vercel)
-let isConnecting = false;
-
-async function connectDB() {
-  if (mongoose.connection.readyState === 1) {
-    return mongoose.connection;
-  }
-
-  if (isConnecting) {
-    // Wait for the active connection attempt to finish
-    return new Promise((resolve, reject) => {
-      const check = setInterval(() => {
-        if (mongoose.connection.readyState === 1) {
-          clearInterval(check);
-          resolve(mongoose.connection);
-        }
-      }, 500);
-      setTimeout(() => {
-        clearInterval(check);
-        reject(new Error("Database connection timeout"));
-      }, 15000);
-    });
-  }
-
-  isConnecting = true;
-  try {
-    console.log("Connecting to MongoDB Atlas...");
-    const conn = await mongoose.connect(MONGODB_URI, {
-      serverSelectionTimeoutMS: 15000,
-      connectTimeoutMS: 20000,
-      socketTimeoutMS: 45000,
-      dbName: 'telebridge_pro'
-    });
-    console.log("Successfully connected to MongoDB");
-    
-    // Seed data in background
-    seedData().catch(err => console.error("Background seeding failed:", err));
-    
-    return conn;
+    await InviteLink.deleteOne({ link });
+    res.json({ success: true });
   } catch (error: any) {
-    console.error("MongoDB direct connection error:", error.message);
-    throw error;
-  } finally {
-    isConnecting = false;
+    res.status(500).json({ error: "Failed to revoke link: " + (error?.message || error) });
   }
-}
+});
 
-async function startServer() {
-  const app = express();
-  const PORT = 3000;
+// Broadcast Routes
+app.get("/api/broadcast", requireDB, async (_req: Request, res: Response) => {
+  try {
+    const broadcasts = await Broadcast.find().sort({ timestamp: -1 }).lean();
+    res.json(broadcasts);
+  } catch (error: any) {
+    res.status(500).json({ error: "Failed to fetch broadcasts", details: error?.message });
+  }
+});
 
-  app.use(cors());
-  app.use(express.json());
-
-  // DB connection middleware with better diagnostic info
-  app.use(async (req, res, next) => {
-    // Skip DB for static files and simple health check if we want
-    if (req.path.startsWith('/assets') || req.path === '/favicon.ico') return next();
-
-    try {
-      await connectDB();
-      next();
-    } catch (err: any) {
-      console.error("Vercel DB Connection Failure:", err.message);
-      
-      const isIpError = err.message.includes("IP not whitelisted") || 
-                        err.message.includes("is not allowed to access from this IP") ||
-                        err.message.includes("Could not connect to any servers");
-
-      res.status(503).json({ 
-        error: "Database Connection Failed", 
-        message: "Unable to connect to MongoDB from Vercel.",
-        details: err.message,
-        diagnosis: isIpError ? "IP_RESTRICTION" : "UNKNOWN_FETCH_ERROR",
-        advice: isIpError ? 
-          "IMPORTANT: You must allow '0.0.0.0/0' (Allow access from anywhere) in your MongoDB Atlas Network Access settings for Vercel to connect." : 
-          "Check your MONGODB_URI in Vercel environment variables."
-      });
+app.post("/api/broadcast", requireDB, async (req: Request, res: Response) => {
+  try {
+    const { token, message } = req.body || {};
+    if (!token || !message) {
+      res.status(400).json({ error: "Token and message required" });
+      return;
     }
-  });
 
-  // API Routes
-  const webhookLogs: any[] = [];
+    const groups = await Group.find().lean();
+    const timestamp = Date.now();
+    if (!groups.length) {
+      res.json({ success: true, sentCount: 0, totalCount: 0 });
+      return;
+    }
 
-  app.get("/api/health", (req, res) => {
-    res.json({ 
-      status: "ok", 
-      uptime: process.uptime(),
-      dbStatus: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
-      timestamp: new Date().toISOString() 
-    });
-  });
+    const broadcastRecord = await Broadcast.create({ message, timestamp, sentTo: [] });
 
-  app.get("/api/diagnostics", (req, res) => {
-    res.json(webhookLogs);
-  });
-
-  app.post("/api/webhook/:token", async (req, res) => {
-    try {
-      const token = req.params.token;
-      const autoWelcome = req.query.welcome === 'true';
-      const autoClean = req.query.clean === 'true';
-      const autoApprove = req.query.approve === 'true';
-      const u = req.body;
-
-      // Keep recent 50
-      webhookLogs.unshift({ time: new Date().toISOString(), payload: u });
-      if (webhookLogs.length > 50) webhookLogs.pop();
-
-      res.json({ ok: true }); // Immediately Ack to telegram
-
-      (async () => {
+    const results = await Promise.all(
+      groups.map(async (group: any) => {
         try {
-          const rawJoinsToAdd: any[] = [];
-          const memberChanges: Record<string, number> = {};
-          let shouldSyncGroup: any = null;
-
-          // 0. Process `chat_join_request`
-          if (u.chat_join_request && u.chat_join_request.chat) {
-            const jr = u.chat_join_request;
-            if (autoApprove) {
-              fetch(`https://api.telegram.org/bot${token}/approveChatJoinRequest?chat_id=${jr.chat.id}&user_id=${jr.from.id}`)
-                .catch(e => console.error("Failed to approve join request:", e));
-            } else {
-              // Store pending request
-              await (PendingJoinRequest as any).create({
-                userId: jr.from.id,
-                chatId: jr.chat.id,
-                userName: jr.from.first_name,
-                timestamp: Date.now()
-              });
+          const response = await fetch(
+            `https://api.telegram.org/bot${token}/sendMessage`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ chat_id: group.id, text: message }),
+              signal: AbortSignal.timeout(8000),
             }
-            rawJoinsToAdd.push({
-              userId: jr.from.id,
-              userName: jr.from.first_name + (jr.from.last_name ? ` ${jr.from.last_name}` : ''),
-              chatId: jr.chat.id,
-              chatTitle: jr.chat.title,
-              timestamp: jr.date ? jr.date * 1000 : Date.now(),
-              is_bot: jr.from.is_bot
-            });
-            shouldSyncGroup = jr.chat;
-          }
-
-          // Handle my_chat_member (Bot's own status changed - added/removed from group)
-          if (u.my_chat_member && u.my_chat_member.chat) {
-            const myMu = u.my_chat_member;
-            const newStatus = myMu.new_chat_member?.status;
-            if (['member', 'administrator', 'creator', 'restricted'].includes(newStatus)) {
-              shouldSyncGroup = myMu.chat;
-            } else if (['left', 'kicked'].includes(newStatus)) {
-              console.log(`[Webhook] Bot removed from group ${myMu.chat.id}, deleting from DB`);
-              await (Group as any).deleteOne({ id: myMu.chat.id.toString() });
-            }
-          }
-
-          // 1. Process `chat_member` (Admin-only update, works for hidden members)
-          if (u.chat_member && u.chat_member.chat) {
-            const mu = u.chat_member;
-            const chatIdStr = mu.chat.id.toString();
-            const oldStatus = mu.old_chat_member?.status;
-            const newStatus = mu.new_chat_member?.status;
-
-            const isMemberNow = ['member', 'administrator', 'creator', 'restricted'].includes(newStatus);
-            const wasMemberBefore = ['member', 'administrator', 'creator', 'restricted'].includes(oldStatus);
-
-            if (isMemberNow && !wasMemberBefore) {
-              rawJoinsToAdd.push({
-                userId: mu.new_chat_member.user.id,
-                userName: mu.new_chat_member.user.first_name + (mu.new_chat_member.user.last_name ? ` ${mu.new_chat_member.user.last_name}` : ''),
-                chatId: mu.chat.id,
-                chatTitle: mu.chat.title,
-                timestamp: mu.date ? mu.date * 1000 : Date.now(),
-                is_bot: mu.new_chat_member.user.is_bot
-              });
-              shouldSyncGroup = mu.chat;
-            } else if (!isMemberNow && wasMemberBefore) {
-              memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) - 1;
-              shouldSyncGroup = mu.chat;
-            }
-          }
-
-          // 2. Process `message` / `channel_post` (Works for visible members, handles deletions)
-          const msg = u.message || u.channel_post;
-          if (msg && msg.chat) {
-            const chatId = msg.chat.id;
-            const chatTitle = msg.chat.title;
-            const chatIdStr = chatId.toString();
-            shouldSyncGroup = msg.chat;
-
-            if (msg.new_chat_members) {
-              msg.new_chat_members.forEach((newUser: any) => {
-                rawJoinsToAdd.push({
-                  userId: newUser.id,
-                  userName: newUser.first_name + (newUser.last_name ? ` ${newUser.last_name}` : ''),
-                  chatId: chatId,
-                  chatTitle: chatTitle,
-                  timestamp: msg.date ? msg.date * 1000 : Date.now(),
-                  is_bot: newUser.is_bot
-                });
-              });
-            }
-
-            if (msg.left_chat_member) {
-              memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) - 1;
-            }
-
-            // Auto-clean service messages (Join/Leave)
-            const isJoinLeave = msg.new_chat_members || msg.left_chat_member || msg.new_chat_participant || msg.left_chat_participant;
-            if (autoClean && msg.message_id && isJoinLeave) {
-              // Add a tiny delay to ensure message is registered
-              setTimeout(() => {
-                fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${chatId}&message_id=${msg.message_id}`)
-                  .then(r => r.json())
-                  .then(d => {
-                    if (!d.ok) console.warn("Failed to delete service message:", d.description);
-                  })
-                  .catch(() => {});
-              }, 1000); // 1 second delay
-            }
-
-            if (msg.text && msg.text.startsWith('/approveall')) {
-              const senderId = msg.from?.id;
-              let isAuthorized = false;
-
-              if (senderId) {
-                // Check if target user id is authorized unconditionally as admin
-                const isMasterHardcoded = senderId.toString() === '6581298945';
-                const dbAdmin = await (Admin as any).findOne({ userId: senderId });
-                if (isMasterHardcoded || dbAdmin) {
-                  isAuthorized = true;
-                } else {
-                  // Check if the user is an administrator or creator in that chat
-                  try {
-                    const memberRes = await fetch(`https://api.telegram.org/bot${token}/getChatMember?chat_id=${chatId}&user_id=${senderId}`);
-                    const memberData: any = await memberRes.json();
-                    if (memberData.ok && ['administrator', 'creator'].includes(memberData.result?.status)) {
-                      isAuthorized = true;
-                    }
-                  } catch (e) {
-                    console.error("Error checking chat member status:", e);
-                  }
-                }
-              }
-
-              if (!isAuthorized) {
-                console.log(`[Webhook] Unauthorized command attempt /approveall from user: ${senderId}`);
-                fetch(`https://api.telegram.org/bot${token}/sendMessage?chat_id=${chatId}&text=❌ Error: You are not authorized to use this command. Only authorized administrators can execute /approveall.`)
-                  .catch(e => console.error("Error sending unauthorized response:", e));
-              } else {
-                console.log(`[Webhook] Approving all pending join requests for chat: ${chatId}`);
-                const pendingRequests = await (PendingJoinRequest as any).find({ chatId: chatId });
-                console.log(`[Webhook] Found ${pendingRequests.length} pending requests.`);
-                let successCount = 0;
-                for (const pr of pendingRequests) {
-                  console.log(`[Webhook] Approving request for user: ${pr.userId}`);
-                  try {
-                    const approveRes = await fetch(`https://api.telegram.org/bot${token}/approveChatJoinRequest?chat_id=${pr.chatId}&user_id=${pr.userId}`);
-                    const approveData: any = await approveRes.json();
-                    if (approveData.ok) {
-                      successCount++;
-                    } else {
-                      console.error(`Failed to approve user ${pr.userId}: ${approveData.description}`);
-                    }
-                  } catch (e) {
-                    console.error("Error approving join request with Telegram API:", e);
-                  }
-                }
-                await (PendingJoinRequest as any).deleteMany({ chatId: chatId });
-                console.log(`[Webhook] Cleared pending requests for chat: ${chatId}`);
-                fetch(`https://api.telegram.org/bot${token}/sendMessage?chat_id=${chatId}&text=✅ Approved ${successCount} pending join requests.`)
-                  .catch(e => console.error("Error sending response message:", e));
-              }
-            }
-
-            if (msg.new_chat_title) {
-              await (Group as any).findOneAndUpdate({ id: chatIdStr }, { name: msg.new_chat_title }, { upsert: false });
-            }
-          }
-          
-          if (shouldSyncGroup && (['group', 'supergroup', 'channel'].includes(shouldSyncGroup.type))) {
-             const chatIdStr = shouldSyncGroup.id.toString();
-             const groupExists = await (Group as any).findOne({ id: chatIdStr });
-             if (!groupExists) {
-               let memberCount = 0;
-               try {
-                 const countRes = await fetch(`https://api.telegram.org/bot${token}/getChatMemberCount?chat_id=${chatIdStr}`);
-                 const countData: any = await countRes.json();
-                 if (countData.ok) memberCount = countData.result;
-               } catch (e) {
-                 console.error("Error fetching member count for new group:", e);
-               }
-
-               await (Group as any).create({
-                 id: chatIdStr,
-                 name: shouldSyncGroup.title || 'Unknown',
-                 memberCount: memberCount,
-                 description: shouldSyncGroup.description || 'Auto Discovered Hub',
-                 category: 'Telegram',
-                 image: `https://picsum.photos/seed/${chatIdStr}/200`,
-                 lastInteraction: Date.now(),
-                 interactionCount: 1,
-                 createdAt: Date.now()
-               });
-             } else {
-               await (Group as any).findOneAndUpdate({ id: chatIdStr }, { 
-                 $set: { lastInteraction: Date.now() }, 
-                 $inc: { interactionCount: 1 }
-               });
-             }
-          }
-
-          // 3. Deduplicate joins mathematically!
-          for (const ev of rawJoinsToAdd) {
-             const cutoffLower = ev.timestamp - 120000; // Deduplicate within 2 mins
-             const cutoffUpper = ev.timestamp + 120000;
-             const existing = await (JoinEvent as any).findOne({
-               userId: ev.userId,
-               chatId: ev.chatId,
-               timestamp: { $gt: cutoffLower, $lt: cutoffUpper }
-             });
-
-             if (!existing) {
-               // Only proceed if we haven't tracked this exact join in the last 60s
-               await (JoinEvent as any).create({
-                 userId: ev.userId,
-                 userName: ev.userName,
-                 chatId: ev.chatId,
-                 chatTitle: ev.chatTitle,
-                 timestamp: ev.timestamp
-               });
-
-               const chatIdStr = ev.chatId.toString();
-               memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) + 1;
-
-               if (autoWelcome && !ev.is_bot) {
-                 setTimeout(() => {
-                   const escapedName = (ev.userName || 'Awesome Member').toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-                   const text = `🎉 <b>Welcome to the Hub!</b> 🎉\n\nHey <a href="tg://user?id=${ev.userId}"><b>${escapedName}</b></a>, we're thrilled to have you here! ✨\n\n<i>Enjoy your stay, and keep it friendly!</i> 🚀`;
-                   fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-                     method: 'POST',
-                     headers: { 'Content-Type': 'application/json' },
-                     body: JSON.stringify({ chat_id: ev.chatId, text, parse_mode: 'HTML' })
-                   })
-                   .then((res: any) => res.json())
-                   .then((data: any) => {
-                     if (data.ok) {
-                       setTimeout(() => {
-                         fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${ev.chatId}&message_id=${data.result.message_id}`).catch(() => {});
-                        }, 59000); // 59 SECONDS
-                     }
-                   }).catch(() => {});
-                 }, 5000); // 5 SECONDS
-               }
-             }
-          }
-
-          for (const [chatIdStr, diff] of Object.entries(memberChanges)) {
-             if (diff !== 0) {
-               await (Group as any).findOneAndUpdate({ id: chatIdStr }, { $inc: { memberCount: diff } });
-             }
-          }
-        } catch (e) {
-          console.error("Error processing webhook update:", e);
-        }
-      })();
-    } catch (err) {
-      console.error("Webhook route error:", err);
-      // Ensure we don't bleed errors and timeout to TG
-      res.status(500).json({ error: "Webhook failure" });
-    }
-  });
-
-  app.get("/api/groups", async (req, res) => {
-    try {
-      console.log("Fetching groups from DB...");
-      const groups = await Group.find().sort({ lastInteraction: -1 });
-      console.log(`Successfully fetched ${groups.length} groups from DB`);
-      res.json(groups);
-    } catch (error) {
-      console.error("Failed to fetch groups:", error);
-      res.status(500).json({ error: "Failed to fetch groups" });
-    }
-  });
-
-  app.get("/api/events", async (req, res) => {
-    try {
-      const events = await JoinEvent.find().sort({ timestamp: -1 }).limit(1000);
-      res.json(events);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch events" });
-    }
-  });
-
-  app.post("/api/groups", async (req, res) => {
-    try {
-      const group = req.body;
-      await (Group as any).findOneAndUpdate({ id: group.id }, group, { upsert: true });
-      res.json({ success: true });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to save group" });
-    }
-  });
-
-  app.post("/api/groups/remove", async (req, res) => {
-    try {
-      const { id } = req.body;
-      console.log(`[API POST Remove] Removing group with ID: ${id}`);
-      if (!id) {
-        return res.status(400).json({ error: "Missing group ID" });
-      }
-      const result = await (Group as any).deleteOne({
-        $or: [
-          { id: String(id) },
-          { id: Number(id) }
-        ]
-      });
-      console.log(`[API POST Remove] Delete result:`, result);
-      res.json({ success: true, deletedCount: result.deletedCount });
-    } catch (error: any) {
-      console.error(`[API POST Remove] Error deleting group:`, error);
-      res.status(500).json({ error: "Failed to delete group", details: error.message });
-    }
-  });
-
-  app.delete("/api/groups/:id", async (req, res) => {
-    try {
-      const groupId = req.params.id || req.query.id;
-      console.log(`[API] Deleting group with ID: ${groupId}`);
-      if (!groupId) {
-        return res.status(400).json({ error: "Missing group ID" });
-      }
-      const result = await (Group as any).deleteOne({
-        $or: [
-          { id: String(groupId) },
-          { id: Number(groupId) }
-        ]
-      });
-      console.log(`[API] Delete result:`, result);
-      res.json({ success: true, deletedCount: result.deletedCount });
-    } catch (error: any) {
-      console.error(`[API] Error deleting group:`, error);
-      res.status(500).json({ error: "Failed to delete group", details: error.message });
-    }
-  });
-
-  app.put("/api/groups/bulk-update", async (req, res) => {
-    try {
-      const updates = req.body;
-      console.log(`[BulkUpdate] Received ${updates.length} group updates`);
-      for (const g of updates) {
-        console.log(`[BulkUpdate] Updating group ${g.id}, pinned: ${g.pinned}`);
-        await (Group as any).findOneAndUpdate({ id: g.id }, g, { upsert: true });
-      }
-      res.json({ success: true });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to update groups" });
-    }
-  });
-
-  app.put("/api/groups/:id/interaction", async (req, res) => {
-    try {
-      await (Group as any).findOneAndUpdate({ id: req.params.id }, { 
-        lastInteraction: Date.now(),
-        $inc: { interactionCount: 1 }
-      });
-      res.json({ success: true });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to update interaction" });
-    }
-  });
-
-  app.post("/api/events", async (req, res) => {
-    try {
-      const events = req.body;
-      for (const ev of events) {
-        await (JoinEvent as any).findOneAndUpdate({ userId: ev.userId, timestamp: ev.timestamp }, ev, { upsert: true });
-      }
-      res.json({ success: true });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to save events" });
-    }
-  });
-
-  app.delete("/api/events/:userId/:timestamp", async (req, res) => {
-    try {
-      await (JoinEvent as any).deleteOne({ userId: Number(req.params.userId), timestamp: Number(req.params.timestamp) });
-      res.json({ success: true });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to delete event" });
-    }
-  });
-
-  app.post("/api/groups/:id/interaction", async (req, res) => {
-    try {
-      await (Group as any).findOneAndUpdate(
-        { id: req.params.id },
-        { 
-          $set: { lastInteraction: Date.now() },
-          $inc: { interactionCount: 1 }
-        },
-        { upsert: true }
-      );
-      res.json({ success: true });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to update interaction" });
-    }
-  });
-
-  app.get("/api/groups/:id/links", async (req, res) => {
-    try {
-      const groupId = req.params.id;
-      console.log(`[GET] Fetching links for group: ${groupId}`);
-      const links = await (InviteLink as any).find({ groupId }).sort({ createdAt: -1 }).limit(10);
-      console.log(`[GET] Found ${links.length} links for group ${groupId}`);
-      res.json(links);
-    } catch (error) {
-      console.error("[GET] Failed to fetch links:", error);
-      res.status(500).json({ error: "Failed to fetch links" });
-    }
-  });
-
-  app.post("/api/groups/:id/links", async (req, res) => {
-    try {
-      const groupId = req.params.id;
-      const { link } = req.body;
-      console.log(`[POST] Saving new link for group ${groupId}: ${link}`);
-      
-      if (!link) {
-        return res.status(400).json({ error: "Link is required" });
-      }
-
-      const newLink = await (InviteLink as any).create({ 
-        groupId, 
-        link, 
-        createdAt: Date.now() 
-      });
-      
-      console.log(`[POST] Successfully saved link: ${newLink._id}`);
-      res.json({ success: true, id: newLink._id });
-    } catch (error) {
-      console.error("[POST] Failed to save link:", error);
-      res.status(500).json({ error: "Failed to save link" });
-    }
-  });
-
-  app.delete("/api/groups/:id/links", async (req, res) => {
-    try {
-      const { link } = req.body;
-      await (InviteLink as any).deleteOne({ groupId: req.params.id, link });
-      res.json({ success: true });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to delete link" });
-    }
-  });
-
-  app.post("/api/revoke-link", async (req, res) => {
-    console.log("==> REVOKE LINK CALLED");
-    try {
-      const { link, token } = req.body;
-      console.log(`[POST] Revoking link: ${link}, token present: ${!!token}`);
-      
-      if (!InviteLink) {
-        console.error("InviteLink model is missing");
-        return res.status(500).json({ error: "InviteLink model is missing" });
-      }
-      
-      const inviteLinkDoc = await (InviteLink as any).findOne({ link });
-      
-      if (!inviteLinkDoc) {
-        return res.status(404).json({ error: "Link not found in database" });
-      }
-      
-      const chatId = inviteLinkDoc.groupId;
-      
-      // Call Telegram API
-      try {
-        const response = await fetch(`https://api.telegram.org/bot${token}/revokeChatInviteLink?chat_id=${chatId}&invite_link=${link}`);
-        const data = await response.json();
-        
-        if (!data.ok) {
-          throw new Error(data.description || "Failed to revoke link on Telegram");
-        }
-      } catch (tgError: any) {
-        console.error("[POST] Telegram API error:", tgError);
-        return res.status(500).json({ error: "Failed to revoke link on Telegram: " + tgError.message, stage: 'tg_api' });
-      }
-      
-      await (InviteLink as any).deleteOne({ link });
-      
-      res.json({ success: true });
-    } catch (error) {
-      console.error("[POST] Failed to revoke link:", error);
-      res.status(500).json({ error: "Failed to revoke link: " + (error as any).message, stage: 'internal' });
-    }
-  });
-
-  app.post("/api/broadcast", async (req, res) => {
-    try {
-      const { token, message } = req.body;
-      const groups = await Group.find();
-      const timestamp = Date.now();
-
-      if (!groups.length) {
-        return res.json({ success: true, sentCount: 0, totalCount: 0 });
-      }
-
-      console.log(`[Broadcast] Starting broadcast to ${groups.length} groups`);
-
-      // 1. Initial save so we don't lose the record if it timeouts
-      const broadcastRecord = await (Broadcast as any).create({ 
-        message, 
-        timestamp, 
-        sentTo: [] 
-      });
-
-      // 2. Parallel sending with a timeout safety
-      // Telegram allows 30 msg/sec. For Vercel, we need to be fast.
-      const sendPromises = groups.map(async (group) => {
-        try {
-          const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage?chat_id=${group.id}&text=${encodeURIComponent(message)}`, {
-            signal: AbortSignal.timeout(8000) // 8 second timeout per request
-          });
-          const data = await response.json();
+          );
+          const data: any = await response.json();
           if (data.ok) {
             return { chatId: group.id, messageId: data.result.message_id, success: true };
           }
-        } catch (err) {
-          console.error(`[Broadcast] Error sending to ${group.id}:`, err);
+        } catch {
+          // ignore individual failure
         }
         return { chatId: group.id, success: false };
-      });
+      })
+    );
 
-      const results = await Promise.all(sendPromises);
-      const sentTo = results.filter((r: any) => r.success).map((r: any) => ({ chatId: r.chatId, messageId: r.messageId }));
-      
-      // 3. Update the record with final results
-      await (Broadcast as any).findByIdAndUpdate(broadcastRecord._id, { sentTo });
-      
-      console.log(`[Broadcast] Completed. Sent to ${sentTo.length}/${groups.length} groups`);
-      
-      res.json({ 
-        success: true, 
-        sentCount: sentTo.length, 
-        totalCount: groups.length 
-      });
-    } catch (error: any) {
-      console.error("[Broadcast] Global error:", error);
-      res.status(500).json({ error: "Failed to broadcast message", details: error.message });
+    const sentTo = results
+      .filter((r) => r.success)
+      .map((r) => ({ chatId: r.chatId, messageId: r.messageId }));
+
+    await Broadcast.findByIdAndUpdate(broadcastRecord._id, { sentTo });
+
+    res.json({
+      success: true,
+      sentCount: sentTo.length,
+      totalCount: groups.length,
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: "Failed to broadcast message", details: error?.message });
+  }
+});
+
+app.delete("/api/broadcast/:id", requireDB, async (req: Request, res: Response) => {
+  try {
+    const token = (req.query.token as string) || (req.headers["x-bot-token"] as string);
+    if (!token) {
+      res.status(400).json({ error: "Bot token is required for deletion" });
+      return;
     }
-  });
 
-  app.get("/api/broadcast", async (req, res) => {
-    try {
-      const broadcasts = await (Broadcast as any).find().sort({ timestamp: -1 });
-      res.json(broadcasts);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch broadcasts" });
+    const broadcast = await Broadcast.findById(req.params.id);
+    if (!broadcast) {
+      res.status(404).json({ error: "Broadcast not found" });
+      return;
     }
-  });
 
-  app.delete("/api/broadcast/:id", async (req, res) => {
-    try {
-      const token = req.query.token || req.headers['x-bot-token'];
-      if (!token) {
-        return res.status(400).json({ error: "Bot token is required for deletion" });
-      }
+    await Broadcast.findByIdAndDelete(req.params.id);
 
-      const broadcast = await (Broadcast as any).findById(req.params.id);
-      if (!broadcast) {
-        return res.status(404).json({ error: "Broadcast not found" });
-      }
+    await Promise.allSettled(
+      (broadcast.sentTo || []).map(async (item: any) => {
+        if (!item.chatId || !item.messageId) return;
+        try {
+          await fetch(
+            `https://api.telegram.org/bot${token}/deleteMessage?chat_id=${item.chatId}&message_id=${item.messageId}`,
+            { signal: AbortSignal.timeout(5000) }
+          );
+        } catch {
+          // ignore individual cleanup failure
+        }
+      })
+    );
 
-      // Delete from DB immediately to free up the request
-      await (Broadcast as any).findByIdAndDelete(req.params.id);
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: "Failed to delete broadcast", details: error?.message });
+  }
+});
 
-      // Perform Telegram deletions in background to avoid Vercel/Cloud Run timeouts
-      if (broadcast.sentTo && broadcast.sentTo.length > 0) {
-        (async () => {
-          console.log(`[DeleteBroadcast] Starting background deletion of ${broadcast.sentTo.length} messages`);
-          // Use Promise.all with chunks or just map if the number is reasonable
-          // For now, map is fine as we don't await it here.
-          await Promise.allSettled(broadcast.sentTo.map(async (item: any) => {
-            if (!item.chatId || !item.messageId) return;
-            try {
-              await fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${item.chatId}&message_id=${item.messageId}`, {
-                signal: AbortSignal.timeout(5000)
-              });
-            } catch (err) {
-              // Ignore individual deletion errors
-            }
-          }));
-          console.log(`[DeleteBroadcast] Background deletion completed for ${req.params.id}`);
-        })().catch(err => console.error("Background deletion failed", err));
-      }
+// Admin Management Routes
+app.get("/api/admins", requireDB, async (_req: Request, res: Response) => {
+  try {
+    const admins = await Admin.find().sort({ createdAt: -1 }).lean();
+    res.json(admins);
+  } catch (error: any) {
+    res.status(500).json({ error: "Failed to fetch admins", details: error?.message });
+  }
+});
 
-      res.json({ success: true, message: "Broadcast deletion started in background" });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to delete broadcast" });
+app.post("/api/admins", requireDB, async (req: Request, res: Response) => {
+  try {
+    const adminData = req.body || {};
+    if (!adminData.userId) {
+      res.status(400).json({ error: "userId is required" });
+      return;
     }
-  });
+    const updated = await Admin.findOneAndUpdate(
+      { userId: Number(adminData.userId) },
+      adminData,
+      { upsert: true, new: true }
+    );
+    res.json({ success: true, admin: updated });
+  } catch (error: any) {
+    res.status(500).json({ error: "Failed to save admin", details: error?.message });
+  }
+});
 
-  // Admin Management Endpoints
-  app.get("/api/admins", async (req, res) => {
-    try {
-      const admins = await (Admin as any).find().sort({ createdAt: -1 });
-      res.json(admins);
-    } catch (error) {
-      console.error("Failed to fetch admins:", error);
-      res.status(500).json({ error: "Failed to fetch admins" });
+app.delete("/api/admins/:userId", requireDB, async (req: Request, res: Response) => {
+  try {
+    await Admin.deleteOne({ userId: Number(req.params.userId) });
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: "Failed to delete admin", details: error?.message });
+  }
+});
+
+app.post("/api/admin/promote", requireDB, async (req: Request, res: Response) => {
+  try {
+    const {
+      token,
+      userId,
+      username,
+      name,
+      customTitle,
+      groupScope,
+      groupIds,
+      permissions,
+      isMasterAdmin,
+    } = req.body || {};
+    if (!token || !userId) {
+      res.status(400).json({ error: "Bot token and userId are required" });
+      return;
     }
-  });
 
-  app.post("/api/admins", async (req, res) => {
-    try {
-      const adminData = req.body;
-      if (!adminData.userId) {
-        return res.status(400).json({ error: "userId is required" });
-      }
-      const updated = await (Admin as any).findOneAndUpdate(
-        { userId: Number(adminData.userId) },
-        adminData,
-        { upsert: true, new: true }
-      );
-      res.json({ success: true, admin: updated });
-    } catch (error: any) {
-      console.error("Failed to save admin:", error);
-      res.status(500).json({ error: "Failed to save admin", details: error.message });
+    const numericUserId = Number(userId);
+    if (Number.isNaN(numericUserId)) {
+      res.status(400).json({ error: "Valid numeric userId is required" });
+      return;
     }
-  });
 
-  app.delete("/api/admins/:userId", async (req, res) => {
-    try {
-      const userId = Number(req.params.userId);
-      await (Admin as any).deleteOne({ userId });
-      res.json({ success: true });
-    } catch (error: any) {
-      console.error("Failed to delete admin:", error);
-      res.status(500).json({ error: "Failed to delete admin", details: error.message });
-    }
-  });
+    const targetGroups =
+      groupScope === "all" || !groupIds || groupIds.length === 0
+        ? await Group.find().lean()
+        : await Group.find({ id: { $in: groupIds } }).lean();
 
-  // Folder Management Endpoints
-  app.get("/api/folders", async (req, res) => {
-    try {
-      const folders = await (Folder as any).find().sort({ createdAt: -1 });
-      res.json(folders);
-    } catch (error) {
-      console.error("Failed to fetch folders:", error);
-      res.status(500).json({ error: "Failed to fetch folders" });
-    }
-  });
-
-  app.post("/api/folders", async (req, res) => {
-    try {
-      const folderData = req.body;
-      if (!folderData.id) {
-        return res.status(400).json({ error: "Folder ID is required" });
-      }
-      const updated = await (Folder as any).findOneAndUpdate(
-        { id: folderData.id },
-        folderData,
-        { upsert: true, new: true }
-      );
-      res.json({ success: true, folder: updated });
-    } catch (error: any) {
-      console.error("Failed to save folder:", error);
-      res.status(500).json({ error: "Failed to save folder", details: error.message });
-    }
-  });
-
-  app.delete("/api/folders/:id", async (req, res) => {
-    try {
-      const id = req.params.id;
-      await (Folder as any).deleteOne({ id });
-      res.json({ success: true });
-    } catch (error: any) {
-      console.error("Failed to delete folder:", error);
-      res.status(500).json({ error: "Failed to delete folder", details: error.message });
-    }
-  });
-
-  app.post("/api/admin/promote", async (req, res) => {
-    try {
-      const { token, userId, username, name, customTitle, groupScope, groupIds, permissions, isMasterAdmin } = req.body;
-      if (!token || !userId) {
-        return res.status(400).json({ error: "Bot token and userId are required" });
-      }
-
-      const numericUserId = Number(userId);
-      if (isNaN(numericUserId)) {
-        return res.status(400).json({ error: "Valid numeric userId is required" });
-      }
-
-      // Determine target groups
-      let targetGroups: any[] = [];
-      if (groupScope === 'all' || !groupIds || groupIds.length === 0) {
-        targetGroups = await Group.find();
-      } else {
-        targetGroups = await Group.find({ id: { $in: groupIds } } as any);
-      }
-
-      console.log(`[Admin Promote] Promoting user ${numericUserId} across ${targetGroups.length} groups`);
-
-      const results = await Promise.all(targetGroups.map(async (grp) => {
+    const results = await Promise.all(
+      targetGroups.map(async (grp: any) => {
         try {
           const params = new URLSearchParams({
             chat_id: grp.id.toString(),
             user_id: numericUserId.toString(),
-            can_manage_chat: 'true',
-            can_delete_messages: permissions?.canDeleteMessages !== false ? 'true' : 'false',
-            can_restrict_members: permissions?.canRestrictMembers !== false ? 'true' : 'false',
-            can_invite_users: permissions?.canInviteUsers !== false ? 'true' : 'false',
-            can_pin_messages: permissions?.canPinMessages !== false ? 'true' : 'false',
-            can_change_info: permissions?.canChangeInfo ? 'true' : 'false',
-            can_manage_video_chats: permissions?.canManageVideoChats !== false ? 'true' : 'false',
-            can_manage_topics: permissions?.canManageTopics !== false ? 'true' : 'false',
-            can_promote_members: permissions?.canPromoteMembers ? 'true' : 'false',
+            can_manage_chat: "true",
+            can_delete_messages: permissions?.canDeleteMessages !== false ? "true" : "false",
+            can_restrict_members: permissions?.canRestrictMembers !== false ? "true" : "false",
+            can_invite_users: permissions?.canInviteUsers !== false ? "true" : "false",
+            can_pin_messages: permissions?.canPinMessages !== false ? "true" : "false",
+            can_change_info: permissions?.canChangeInfo ? "true" : "false",
+            can_manage_video_chats: permissions?.canManageVideoChats !== false ? "true" : "false",
+            can_manage_topics: permissions?.canManageTopics !== false ? "true" : "false",
+            can_promote_members: permissions?.canPromoteMembers ? "true" : "false",
           });
 
-          const resp = await fetch(`https://api.telegram.org/bot${token}/promoteChatMember?${params.toString()}`);
+          const resp = await fetch(
+            `https://api.telegram.org/bot${token}/promoteChatMember?${params.toString()}`
+          );
           const data: any = await resp.json();
 
-          if (data.ok && customTitle && customTitle.trim()) {
+          if (data.ok && customTitle && String(customTitle).trim()) {
             try {
               const titleParams = new URLSearchParams({
                 chat_id: grp.id.toString(),
                 user_id: numericUserId.toString(),
-                custom_title: customTitle.trim().slice(0, 16)
+                custom_title: String(customTitle).trim().slice(0, 16),
               });
-              await fetch(`https://api.telegram.org/bot${token}/setChatAdministratorCustomTitle?${titleParams.toString()}`);
-            } catch (tErr) {
-              console.warn(`Could not set custom title in ${grp.name}:`, tErr);
+              await fetch(
+                `https://api.telegram.org/bot${token}/setChatAdministratorCustomTitle?${titleParams.toString()}`
+              );
+            } catch {
+              // ignore title failure
             }
           }
 
@@ -980,230 +642,491 @@ async function startServer() {
             groupId: grp.id,
             groupName: grp.name,
             success: data.ok,
-            error: data.ok ? null : (data.description || 'Failed to promote')
+            error: data.ok ? null : data.description,
           };
         } catch (e: any) {
           return {
             groupId: grp.id,
             groupName: grp.name,
             success: false,
-            error: e.message || 'Network error'
+            error: e?.message,
           };
         }
-      }));
+      })
+    );
 
-      const promotedCount = results.filter(r => r.success).length;
-      const failedCount = results.filter(r => !r.success).length;
-
-      // Save or update Admin in database
-      const adminRecord = await (Admin as any).findOneAndUpdate(
-        { userId: numericUserId },
-        {
-          userId: numericUserId,
-          username: (username || '').replace(/^@/, ''),
-          name: name || (username ? `@${username.replace(/^@/, '')}` : `User ${numericUserId}`),
-          customTitle: customTitle || 'Admin',
-          isMasterAdmin: isMasterAdmin !== false,
-          groups: groupScope === 'all' ? ['all'] : (groupIds || []),
-          permissions: {
-            canDeleteMessages: permissions?.canDeleteMessages !== false,
-            canRestrictMembers: permissions?.canRestrictMembers !== false,
-            canInviteUsers: permissions?.canInviteUsers !== false,
-            canPinMessages: permissions?.canPinMessages !== false,
-            canChangeInfo: !!permissions?.canChangeInfo,
-            canManageVideoChats: permissions?.canManageVideoChats !== false,
-            canManageTopics: permissions?.canManageTopics !== false,
-            canPromoteMembers: !!permissions?.canPromoteMembers
-          },
-          createdAt: Date.now()
+    const cleanUsername = String(username || "").replace(/^@/, "");
+    const adminRecord = await Admin.findOneAndUpdate(
+      { userId: numericUserId },
+      {
+        userId: numericUserId,
+        username: cleanUsername,
+        name: name || (cleanUsername ? `@${cleanUsername}` : `User ${numericUserId}`),
+        customTitle: customTitle || "Admin",
+        isMasterAdmin: isMasterAdmin !== false,
+        groups: groupScope === "all" ? ["all"] : groupIds || [],
+        permissions: {
+          canDeleteMessages: permissions?.canDeleteMessages !== false,
+          canRestrictMembers: permissions?.canRestrictMembers !== false,
+          canInviteUsers: permissions?.canInviteUsers !== false,
+          canPinMessages: permissions?.canPinMessages !== false,
+          canChangeInfo: !!permissions?.canChangeInfo,
+          canManageVideoChats: permissions?.canManageVideoChats !== false,
+          canManageTopics: permissions?.canManageTopics !== false,
+          canPromoteMembers: !!permissions?.canPromoteMembers,
         },
-        { upsert: true, new: true }
-      );
+        createdAt: Date.now(),
+      },
+      { upsert: true, new: true }
+    );
 
-      res.json({
-        success: true,
-        promotedCount,
-        failedCount,
-        totalGroups: targetGroups.length,
-        admin: adminRecord,
-        results
-      });
-    } catch (error: any) {
-      console.error("[Admin Promote] Global error:", error);
-      res.status(500).json({ error: "Failed to promote admin", details: error.message });
+    res.json({
+      success: true,
+      promotedCount: results.filter((r) => r.success).length,
+      failedCount: results.filter((r) => !r.success).length,
+      totalGroups: targetGroups.length,
+      admin: adminRecord,
+      results,
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: "Failed to promote admin", details: error?.message });
+  }
+});
+
+app.post("/api/admin/demote", requireDB, async (req: Request, res: Response) => {
+  try {
+    const { token, userId, groupScope, groupIds } = req.body || {};
+    if (!token || !userId) {
+      res.status(400).json({ error: "Bot token and userId are required" });
+      return;
     }
-  });
 
-  app.post("/api/admin/demote", async (req, res) => {
-    try {
-      const { token, userId, groupScope, groupIds } = req.body;
-      if (!token || !userId) {
-        return res.status(400).json({ error: "Bot token and userId are required" });
-      }
+    const numericUserId = Number(userId);
+    const targetGroups =
+      groupScope === "all" || !groupIds || groupIds.length === 0
+        ? await Group.find().lean()
+        : await Group.find({ id: { $in: groupIds } }).lean();
 
-      const numericUserId = Number(userId);
-      let targetGroups: any[] = [];
-      if (groupScope === 'all' || !groupIds || groupIds.length === 0) {
-        targetGroups = await Group.find();
-      } else {
-        targetGroups = await Group.find({ id: { $in: groupIds } } as any);
-      }
-
-      const results = await Promise.all(targetGroups.map(async (grp) => {
+    const results = await Promise.all(
+      targetGroups.map(async (grp: any) => {
         try {
           const params = new URLSearchParams({
             chat_id: grp.id.toString(),
             user_id: numericUserId.toString(),
-            can_manage_chat: 'false',
-            can_delete_messages: 'false',
-            can_restrict_members: 'false',
-            can_invite_users: 'false',
-            can_pin_messages: 'false',
-            can_change_info: 'false',
-            can_manage_video_chats: 'false',
-            can_manage_topics: 'false',
-            can_promote_members: 'false',
+            can_manage_chat: "false",
+            can_delete_messages: "false",
+            can_restrict_members: "false",
+            can_invite_users: "false",
+            can_pin_messages: "false",
+            can_change_info: "false",
+            can_manage_video_chats: "false",
+            can_manage_topics: "false",
+            can_promote_members: "false",
           });
-
-          const resp = await fetch(`https://api.telegram.org/bot${token}/promoteChatMember?${params.toString()}`);
+          const resp = await fetch(
+            `https://api.telegram.org/bot${token}/promoteChatMember?${params.toString()}`
+          );
           const data: any = await resp.json();
           return {
             groupId: grp.id,
             groupName: grp.name,
             success: data.ok,
-            error: data.ok ? null : data.description
+            error: data.ok ? null : data.description,
           };
         } catch (e: any) {
           return {
             groupId: grp.id,
             groupName: grp.name,
             success: false,
-            error: e.message
+            error: e?.message,
           };
         }
-      }));
+      })
+    );
 
-      // Delete from DB if demoted
-      await (Admin as any).deleteOne({ userId: numericUserId });
+    await Admin.deleteOne({ userId: numericUserId });
+    res.json({
+      success: true,
+      demotedCount: results.filter((r) => r.success).length,
+      failedCount: results.filter((r) => !r.success).length,
+      results,
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: "Failed to demote admin", details: error?.message });
+  }
+});
 
-      res.json({
-        success: true,
-        demotedCount: results.filter(r => r.success).length,
-        failedCount: results.filter(r => !r.success).length,
-        results
-      });
-    } catch (error: any) {
-      console.error("[Admin Demote] Error:", error);
-      res.status(500).json({ error: "Failed to demote admin", details: error.message });
+app.get("/api/admin/resolve-user", requireDB, async (req: Request, res: Response) => {
+  try {
+    const query = String(req.query.query || "").trim();
+    if (!query) {
+      res.json({ matches: [] });
+      return;
     }
-  });
 
-  app.get("/api/admin/resolve-user", async (req, res) => {
-    try {
-      const query = (req.query.query as string || '').trim();
-      if (!query) {
-        return res.json({ matches: [] });
+    const cleanQuery = query.replace(/^@/, "");
+    const escapedQuery = cleanQuery.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const isNumeric = /^\d+$/.test(cleanQuery);
+
+    const matches: any[] = [];
+    const seenIds = new Set<number>();
+
+    if (isNumeric) {
+      const numId = Number(cleanQuery);
+      seenIds.add(numId);
+      const existingEvent = await JoinEvent.findOne({ userId: numId })
+        .sort({ timestamp: -1 })
+        .lean();
+      const existingAdmin = await Admin.findOne({ userId: numId }).lean();
+      matches.push({
+        userId: numId,
+        userName: existingAdmin?.name || existingEvent?.userName || `User ${numId}`,
+        username: existingAdmin?.username || "",
+        source: existingAdmin ? "admin" : existingEvent ? "join_event" : "direct_id",
+      });
+    }
+
+    const eventMatches = await JoinEvent.find({
+      userName: { $regex: escapedQuery, $options: "i" },
+    })
+      .sort({ timestamp: -1 })
+      .limit(10)
+      .lean();
+
+    for (const em of eventMatches) {
+      if (!seenIds.has(em.userId)) {
+        seenIds.add(em.userId);
+        matches.push({ userId: em.userId, userName: em.userName, source: "join_event" });
       }
+    }
 
-      const cleanQuery = query.replace(/^@/, '');
-      const isNumeric = /^\d+$/.test(cleanQuery);
+    const adminMatches = await Admin.find({
+      $or: [
+        { username: { $regex: escapedQuery, $options: "i" } },
+        { name: { $regex: escapedQuery, $options: "i" } },
+      ],
+    })
+      .limit(5)
+      .lean();
 
-      const matches: any[] = [];
-      const seenIds = new Set<number>();
-
-      if (isNumeric) {
-        const numId = Number(cleanQuery);
-        seenIds.add(numId);
-        const existingEvent = await (JoinEvent as any).findOne({ userId: numId }).sort({ timestamp: -1 });
-        const existingAdmin = await (Admin as any).findOne({ userId: numId });
+    for (const am of adminMatches) {
+      if (!seenIds.has(am.userId)) {
+        seenIds.add(am.userId);
         matches.push({
-          userId: numId,
-          userName: existingAdmin?.name || existingEvent?.userName || `User ${numId}`,
-          username: existingAdmin?.username || '',
-          source: existingAdmin ? 'admin' : (existingEvent ? 'join_event' : 'direct_id')
+          userId: am.userId,
+          userName: am.name,
+          username: am.username,
+          source: "admin",
         });
       }
-
-      // Search in JoinEvents
-      const eventMatches = await (JoinEvent as any).find({
-        userName: { $regex: cleanQuery, $options: 'i' }
-      }).sort({ timestamp: -1 }).limit(10);
-
-      for (const em of eventMatches) {
-        if (!seenIds.has(em.userId)) {
-          seenIds.add(em.userId);
-          matches.push({
-            userId: em.userId,
-            userName: em.userName,
-            source: 'join_event'
-          });
-        }
-      }
-
-      const adminMatches = await (Admin as any).find({
-        $or: [
-          { username: { $regex: cleanQuery, $options: 'i' } },
-          { name: { $regex: cleanQuery, $options: 'i' } }
-        ]
-      }).limit(5);
-
-      for (const am of adminMatches) {
-        if (!seenIds.has(am.userId)) {
-          seenIds.add(am.userId);
-          matches.push({
-            userId: am.userId,
-            userName: am.name,
-            username: am.username,
-            source: 'admin'
-          });
-        }
-      }
-
-      res.json({ matches });
-    } catch (error: any) {
-      console.error("[Resolve User] Error:", error);
-      res.status(500).json({ error: "Failed to resolve user", details: error.message });
     }
+
+    res.json({ matches });
+  } catch (error: any) {
+    res.status(500).json({ error: "Failed to resolve user", details: error?.message });
+  }
+});
+
+// Telegram Webhook Handler
+app.post("/api/webhook/:token", (req: Request, res: Response) => {
+  const token = req.params.token;
+  const autoWelcome = req.query.welcome === "true";
+  const autoClean = req.query.clean === "true";
+  const autoApprove = req.query.approve === "true";
+  const u = req.body || {};
+
+  // ACK immediately to Telegram
+  res.status(200).json({ ok: true });
+
+  void (async () => {
+    try {
+      await connectDB();
+      const rawJoinsToAdd: any[] = [];
+      const memberChanges: Record<string, number> = {};
+      let shouldSyncGroup: any = null;
+
+      // 1. chat_join_request
+      if (u.chat_join_request && u.chat_join_request.chat) {
+        const jr = u.chat_join_request;
+        const chat = jr.chat;
+        const user = jr.from;
+
+        if (autoApprove) {
+          await fetch(
+            `https://api.telegram.org/bot${token}/approveChatJoinRequest?chat_id=${chat.id}&user_id=${user.id}`,
+            { method: "POST" }
+          ).catch(() => {});
+        } else {
+          await PendingJoin.findOneAndUpdate(
+            { userId: user.id, chatId: chat.id },
+            {
+              userId: user.id,
+              chatId: chat.id,
+              userName: user.first_name || "",
+              timestamp: Date.now(),
+            },
+            { upsert: true }
+          );
+        }
+
+        rawJoinsToAdd.push({
+          userId: user.id,
+          userName:
+            (user.first_name || "") + (user.last_name ? ` ${user.last_name}` : ""),
+          chatId: chat.id,
+          chatTitle: chat.title || "",
+          timestamp: jr.date ? jr.date * 1000 : Date.now(),
+          is_bot: user.is_bot || false,
+        });
+        shouldSyncGroup = chat;
+      }
+
+      // 2. my_chat_member
+      if (u.my_chat_member && u.my_chat_member.chat) {
+        const myMu = u.my_chat_member;
+        const chat = myMu.chat;
+        const newStatus = myMu.new_chat_member?.status;
+        if (["member", "administrator", "creator", "restricted"].includes(newStatus)) {
+          shouldSyncGroup = chat;
+        } else if (["left", "kicked"].includes(newStatus)) {
+          await Group.deleteOne({ id: String(chat.id) });
+        }
+      }
+
+      // 3. chat_member
+      if (u.chat_member && u.chat_member.chat) {
+        const mu = u.chat_member;
+        const chat = mu.chat;
+        const chatIdStr = String(chat.id);
+        const oldStatus = mu.old_chat_member?.status;
+        const newStatus = mu.new_chat_member?.status;
+
+        const isMemberNow = ["member", "administrator", "creator", "restricted"].includes(
+          newStatus
+        );
+        const wasMemberBefore = [
+          "member",
+          "administrator",
+          "creator",
+          "restricted",
+        ].includes(oldStatus);
+
+        if (isMemberNow && !wasMemberBefore) {
+          const user = mu.new_chat_member.user;
+          rawJoinsToAdd.push({
+            userId: user.id,
+            userName:
+              (user.first_name || "") + (user.last_name ? ` ${user.last_name}` : ""),
+            chatId: chat.id,
+            chatTitle: chat.title || "",
+            timestamp: mu.date ? mu.date * 1000 : Date.now(),
+            is_bot: user.is_bot || false,
+          });
+          shouldSyncGroup = chat;
+        } else if (!isMemberNow && wasMemberBefore) {
+          memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) - 1;
+          shouldSyncGroup = chat;
+        }
+      }
+
+      // 4. message / channel_post
+      const msg = u.message || u.channel_post;
+      if (msg && msg.chat) {
+        const chat = msg.chat;
+        const chatIdStr = String(chat.id);
+        shouldSyncGroup = chat;
+
+        if (Array.isArray(msg.new_chat_members)) {
+          for (const newUser of msg.new_chat_members) {
+            rawJoinsToAdd.push({
+              userId: newUser.id,
+              userName:
+                (newUser.first_name || "") +
+                (newUser.last_name ? ` ${newUser.last_name}` : ""),
+              chatId: chat.id,
+              chatTitle: chat.title || "",
+              timestamp: msg.date ? msg.date * 1000 : Date.now(),
+              is_bot: newUser.is_bot || false,
+            });
+          }
+        }
+
+        if (msg.left_chat_member) {
+          memberChanges[chatIdStr] = (memberChanges[chatIdStr] || 0) - 1;
+        }
+
+        if (autoClean && (msg.new_chat_members || msg.left_chat_member)) {
+          setTimeout(() => {
+            fetch(
+              `https://api.telegram.org/bot${token}/deleteMessage?chat_id=${chat.id}&message_id=${msg.message_id}`,
+              { method: "POST" }
+            ).catch(() => {});
+          }, 1000);
+        }
+
+        if (msg.new_chat_title) {
+          await Group.findOneAndUpdate(
+            { id: chatIdStr },
+            { name: msg.new_chat_title },
+            { upsert: false }
+          );
+        }
+      }
+
+      // Sync group info
+      if (
+        shouldSyncGroup &&
+        ["group", "supergroup", "channel"].includes(shouldSyncGroup.type)
+      ) {
+        const chatIdStr = String(shouldSyncGroup.id);
+        const groupExists = await Group.findOne({ id: chatIdStr });
+        if (!groupExists) {
+          let memberCount = 0;
+          try {
+            const countRes = await fetch(
+              `https://api.telegram.org/bot${token}/getChatMemberCount?chat_id=${chatIdStr}`
+            );
+            const countData: any = await countRes.json();
+            if (countData.ok) memberCount = countData.result;
+          } catch {
+            // ignore
+          }
+
+          await Group.create({
+            id: chatIdStr,
+            name: shouldSyncGroup.title || "Unknown",
+            memberCount,
+            description: shouldSyncGroup.description || "Auto Discovered Hub",
+            category: "Telegram",
+            image: `https://picsum.photos/seed/${chatIdStr}/200`,
+            lastInteraction: Date.now(),
+            interactionCount: 1,
+            createdAt: Date.now(),
+          });
+        } else {
+          await Group.findOneAndUpdate(
+            { id: chatIdStr },
+            {
+              $set: { lastInteraction: Date.now() },
+              $inc: { interactionCount: 1 },
+            }
+          );
+        }
+      }
+
+      // Deduplicate & store joins
+      for (const ev of rawJoinsToAdd) {
+        const cutoffLower = ev.timestamp - 120000;
+        const cutoffUpper = ev.timestamp + 120000;
+        const existing = await JoinEvent.findOne({
+          userId: ev.userId,
+          chatId: ev.chatId,
+          timestamp: { $gt: cutoffLower, $lt: cutoffUpper },
+        });
+
+        if (!existing) {
+          await JoinEvent.create({
+            userId: ev.userId,
+            userName: ev.userName,
+            chatId: ev.chatId,
+            chatTitle: ev.chatTitle,
+            timestamp: ev.timestamp,
+          });
+
+          const cidStr = String(ev.chatId);
+          memberChanges[cidStr] = (memberChanges[cidStr] || 0) + 1;
+
+          if (autoWelcome && !ev.is_bot) {
+            setTimeout(async () => {
+              try {
+                const escapedName = String(ev.userName || "Awesome Member")
+                  .replace(/&/g, "&amp;")
+                  .replace(/</g, "&lt;")
+                  .replace(/>/g, "&gt;")
+                  .replace(/"/g, "&quot;");
+                const text = `🎉 <b>Welcome to the Hub!</b> 🎉\n\nHey <a href="tg://user?id=${ev.userId}"><b>${escapedName}</b></a>, we're thrilled to have you here! ✨\n\n<i>Enjoy your stay, and keep it friendly!</i> 🚀`;
+                const r = await fetch(
+                  `https://api.telegram.org/bot${token}/sendMessage`,
+                  {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      chat_id: ev.chatId,
+                      text,
+                      parse_mode: "HTML",
+                    }),
+                  }
+                );
+                const d: any = await r.json();
+                if (d.ok && d.result) {
+                  setTimeout(() => {
+                    fetch(
+                      `https://api.telegram.org/bot${token}/deleteMessage?chat_id=${ev.chatId}&message_id=${d.result.message_id}`,
+                      { method: "POST" }
+                    ).catch(() => {});
+                  }, 59000);
+                }
+              } catch {
+                // ignore
+              }
+            }, 5000);
+          }
+        }
+      }
+
+      for (const [cid, diff] of Object.entries(memberChanges)) {
+        if (diff !== 0) {
+          await Group.findOneAndUpdate({ id: cid }, { $inc: { memberCount: diff } });
+        }
+      }
+    } catch (e) {
+      console.error("Webhook processing error:", e);
+    }
+  })();
+});
+
+async function startServer() {
+  // Start MongoDB connection in the background so server binds port immediately
+  connectDB().catch((err) => {
+    console.warn("Initial background MongoDB connection attempt failed:", err?.message || err);
   });
 
-  // Fallback for missing API routes - must be registered BEFORE Vite/static fallbacks!
-  app.all("/api/*all", (req, res) => {
-    res.status(404).json({ error: "API Route Not Found" });
-  });
+  const distPath = path.resolve(process.cwd(), "dist");
+  const distIndexPath = path.join(distPath, "index.html");
+  const hasDistIndex = fs.existsSync(distIndexPath);
 
-  // Vite middleware for development
-  let server: any;
-  if (process.env.NODE_ENV !== "production") {
-    const { createServer: createViteServer } = await import("vite");
-    const { createServer } = await import("http");
-    
-    server = createServer(app);
-    
-    // Wire Vite's HMR websocket into our HTTP server explicitly
-    const vite = await createViteServer({
-      server: { middlewareMode: true, hmr: { server } },
-      appType: "spa",
-    });
-    
-    app.use(vite.middlewares);
+  const isProd =
+    process.env.NODE_ENV === "production" ||
+    process.env.npm_lifecycle_event === "start" ||
+    (process.env.NODE_ENV !== "development" && hasDistIndex);
+
+  if (!isProd || !hasDistIndex) {
+    try {
+      const { createServer: createViteServer } = await import("vite");
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: "spa",
+      });
+      app.use(vite.middlewares);
+    } catch (err) {
+      console.warn("Vite dev middleware unavailable, falling back to static dist:", err);
+      if (hasDistIndex) {
+        app.use(express.static(distPath));
+        app.use((_req: Request, res: Response) => {
+          res.sendFile(distIndexPath);
+        });
+      }
+    }
   } else {
-    server = app;
-    const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
-    app.get('*all', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
+    app.use((_req: Request, res: Response) => {
+      res.sendFile(distIndexPath);
     });
   }
 
-  server.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Server running on http://0.0.0.0:${PORT} (mode: ${isProd ? "production" : "development"})`);
   });
-  return app;
 }
 
-const appPromise = startServer();
-
-export default async function handler(req: any, res: any) {
-  const app = await appPromise;
-  return app(req, res);
-}
+startServer();

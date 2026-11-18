@@ -132,7 +132,7 @@ const normalizeText = (text: string): string => {
     result.push(mapped);
   }
 
-  return result.join('').toLowerCase();
+  return result.join('').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/[^\w\s]/g, '');
 };
 
 const DEFAULT_TOKEN = '8357993008:AAGCcWUfCrRboCCnUS3N3kHS53PvAPIMwxs';
@@ -287,6 +287,17 @@ const App: React.FC = () => {
     showNotification(`Moved unacceptable group "${group.name}" to Deleted Bin (${reason})`, 'alert');
   };
 
+  const handleEmptyTrash = () => {
+    handleOpenConfirmModal({
+      title: 'Empty Deleted Bin',
+      message: 'Are you sure you want to permanently purge all items in the deleted bin?',
+      onConfirm: () => {
+        setDeletedGroups([]);
+        showNotification('Deleted bin emptied successfully', 'info');
+      }
+    });
+  };
+
   const [folders, setFolders] = useState<BatchFolder[]>(() => {
     try {
       const saved = localStorage.getItem('telebridge_batch_folders');
@@ -306,6 +317,13 @@ const App: React.FC = () => {
   const [isCreateFolderModalOpen, setIsCreateFolderModalOpen] = useState(false);
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
   const [folderSearchQuery, setFolderSearchQuery] = useState('');
+
+  const matchFolderSearch = (name: string) => {
+    if (!folderSearchQuery.trim()) return true;
+    const q = folderSearchQuery.trim().toLowerCase();
+    const n = (name || '').toLowerCase();
+    return n.includes(q) || n.normalize('NFD').replace(/[\u0300-\u036f]/g, "").includes(q.normalize('NFD').replace(/[\u0300-\u036f]/g, ""));
+  };
 
   useEffect(() => {
     localStorage.setItem('telebridge_batch_folders', JSON.stringify(folders));
@@ -1072,11 +1090,7 @@ const App: React.FC = () => {
   };
 
   const handleCloseFolder = () => {
-    if (window.history.state?.folderId) {
-      window.history.back();
-    } else {
-      setActiveFolderId(null);
-    }
+    setActiveFolderId(null);
   };
 
   const handleOpenCreateFolderModal = () => {
@@ -1929,7 +1943,7 @@ const App: React.FC = () => {
     }
   };
 
-  const filteredJoins = useMemo(() => joinEvents.filter(e => new Date(e.timestamp).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }) === selectedDate).sort((a, b) => b.timestamp - a.timestamp), [joinEvents, selectedDate]);
+  const filteredJoins = useMemo(() => joinEvents.filter(e => new Date(e.timestamp).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }) === selectedDate).sort((a, b) => a.timestamp - b.timestamp), [joinEvents, selectedDate]);
   const joinsTodayCount = useMemo(() => {
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
     return joinEvents.filter(e => {
@@ -1977,7 +1991,12 @@ const App: React.FC = () => {
     }
     filtered.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
     return filtered;
-  }, [groups, debouncedSearchQuery, filterOption]);
+  }, [groups, debouncedSearchQuery, filterOption, joinEvents]);
+
+  // STABLE SERIAL NUMBER: We calculate index based on the master sorted list to avoid jumping
+  const getStableIndex = (groupId: string) => {
+    return groups.findIndex(g => g.id === groupId);
+  };
 
   const formatTime12h = (timestamp: number) => {
     return new Date(timestamp).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
@@ -2135,96 +2154,449 @@ const App: React.FC = () => {
           className="relative min-h-[70vh]"
         >
           {activeTab === 'dashboard' && (
-            <div className={`space-y-6 ${animationClass}`}>
-               <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-                  <motion.div 
-                    whileHover={{ scale: 1.04, translateY: -6, rotateX: 2, rotateY: -1, boxShadow: '0 30px 60px -10px rgba(221,36,118,0.45)' }}
-                    whileTap={{ scale: 0.96, translateY: 2 }}
-                    className="bg-gradient-to-br from-[#FF512F] to-[#DD2476] p-5 rounded-[2rem] border-b-[6px] border-[#900C3F] shadow-[0_15px_35px_rgba(221,36,118,0.3),inset_0_2px_4px_rgba(255,255,255,0.35)] transition-all relative overflow-hidden"
-                   >
-                    <BubbleBackground />
-                    <div className="w-10 h-10 bg-gradient-to-br from-white/35 to-white/5 border border-white/30 rounded-xl flex items-center justify-center mb-4 shadow-[inset_0_1px_3px_rgba(255,255,255,0.4),0_4px_10px_rgba(0,0,0,0.15)] backdrop-blur-md relative z-10">
-                      <Icons.Users size={20} className="text-white" strokeWidth={3} />
-                    </div>
-                    <p className="text-[10px] font-black text-rose-100 uppercase tracking-widest mb-1 relative z-10">Total Members</p>
-                    <p className="text-3xl font-black text-white relative z-10 drop-shadow-sm">{totalMembers.toLocaleString()}</p>
-                 </motion.div>
+            <div className={`space-y-4 sm:space-y-5 ${animationClass}`}>
+              {/* Top Bot Identity & Quick Controls Card */}
+              <section
+                aria-label="Active Bot Summary"
+                className="relative rounded-[1.75rem] bg-gradient-to-br from-[#F0F3FF] via-white to-[#EEF4FF] dark:from-slate-900 dark:via-slate-900/95 dark:to-indigo-950/50 border-[1.5px] border-indigo-200/80 dark:border-indigo-500/25 p-4 sm:p-5 shadow-[0_8px_28px_-8px_rgba(99,102,241,0.16)] overflow-hidden"
+              >
+                <div className="absolute -right-6 -bottom-6 opacity-[0.06] dark:opacity-[0.07] text-indigo-600 dark:text-indigo-400 pointer-events-none select-none">
+                  <Icons.Radio size={135} strokeWidth={1.2} />
+                </div>
 
-                 <motion.div 
-                    whileHover={{ scale: 1.04, translateY: -6, rotateX: 2, rotateY: 1, boxShadow: '0 30px 60px -10px rgba(142,84,233,0.45)' }}
-                    whileTap={{ scale: 0.96, translateY: 2 }}
-                    className="bg-gradient-to-br from-[#4776E6] to-[#8E54E9] p-5 rounded-[2rem] border-b-[6px] border-[#3F1B85] shadow-[0_15px_35px_rgba(142,84,233,0.3),inset_0_2px_4px_rgba(255,255,255,0.35)] transition-all relative overflow-hidden"
+                <div className="relative z-10 flex items-center justify-between gap-3 flex-wrap sm:flex-nowrap">
+                  <div className="flex items-center gap-3.5 min-w-0">
+                    <div className="relative w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 p-0.5 shadow-md shadow-blue-500/20 shrink-0">
+                      <img
+                        src="/logo.jpg"
+                        alt={botInfo?.first_name || 'TeleBridge Pro'}
+                        referrerPolicy="no-referrer"
+                        className="w-full h-full rounded-[14px] object-cover bg-white"
+                      />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h2 className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-white tracking-tight truncate">
+                          {botInfo?.first_name || 'TeleBridge Pro'}
+                        </h2>
+                        <span className="px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[9px] font-black uppercase tracking-wider flex items-center gap-1 shrink-0">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                          ACTIVE & LIVE
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => syncAllGroupsMemberCount(token)}
+                          disabled={isScanning}
+                          className="px-2.5 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-500/15 border border-indigo-200 dark:border-indigo-500/30 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 active:scale-95 transition-all flex items-center gap-1 text-[9px] font-black uppercase tracking-wider shrink-0 disabled:opacity-60 shadow-xs"
+                        >
+                          <Icons.Refresh size={10} className={isScanning ? 'animate-spin' : ''} strokeWidth={2.5} />
+                          <span>{isScanning ? 'SYNCING...' : 'SYNC HUBS'}</span>
+                        </button>
+                      </div>
+                      <p className="text-xs font-medium text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                        @{botInfo?.username || 'telebridge_bot'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Interactive Quick Controls Single Line */}
+                <div className="relative z-10 flex items-center gap-2 mt-4 pt-3.5 border-t border-indigo-100/90 dark:border-slate-800 overflow-x-auto custom-scrollbar whitespace-nowrap pb-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = !autoWelcome;
+                      setAutoWelcome(next);
+                      showNotification(`Auto-Welcome turned ${next ? 'ON' : 'OFF'}`, 'info');
+                    }}
+                    className={`min-h-[34px] px-3.5 py-1.5 rounded-xl border text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wide flex items-center gap-1.5 transition-all duration-200 hover:scale-[1.02] active:scale-95 shrink-0 shadow-xs ${
+                      autoWelcome
+                        ? 'bg-emerald-50 border-emerald-300 text-emerald-700 dark:bg-emerald-500/15 dark:border-emerald-500/35 dark:text-emerald-300'
+                        : 'bg-white/90 border-slate-200/90 text-slate-600 dark:bg-slate-800/80 dark:border-slate-700 dark:text-slate-300'
+                    }`}
                   >
-                    <BubbleBackground />
-                    <div className="w-10 h-10 bg-gradient-to-br from-white/35 to-white/5 border border-white/30 rounded-xl flex items-center justify-center mb-4 shadow-[inset_0_1px_3px_rgba(255,255,255,0.4),0_4px_10px_rgba(0,0,0,0.15)] backdrop-blur-md relative z-10">
-                      <Icons.Activity size={20} className="text-white" strokeWidth={3} />
-                    </div>
-                    <p className="text-[10px] font-black text-indigo-100 uppercase tracking-widest mb-1 relative z-10">Joins Today</p>
-                    <p className="text-3xl font-black text-white relative z-10 drop-shadow-sm">{joinsTodayCount}</p>
-                 </motion.div>
+                    <Icons.Zap size={12} strokeWidth={2.5} />
+                    <span>Welcome: {autoWelcome ? 'ON' : 'OFF'}</span>
+                  </button>
 
-                  <motion.div 
-                    whileHover={{ scale: 1.04, translateY: -6, rotateX: -2, rotateY: -1, boxShadow: '0 30px 60px -10px rgba(17,153,142,0.45)' }}
-                    whileTap={{ scale: 0.96, translateY: 2 }}
-                    className="bg-gradient-to-br from-[#11998e] to-[#38ef7d] p-5 rounded-[2rem] border-b-[6px] border-[#0a5c54] shadow-[0_15px_35px_rgba(56,239,125,0.3),inset_0_2px_4px_rgba(255,255,255,0.35)] transition-all relative overflow-hidden"
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = !autoCleanServiceMessages;
+                      setAutoCleanServiceMessages(next);
+                      showNotification(`Auto-Clean turned ${next ? 'ON' : 'OFF'}`, 'info');
+                    }}
+                    className={`min-h-[34px] px-3.5 py-1.5 rounded-xl border text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wide flex items-center gap-1.5 transition-all duration-200 hover:scale-[1.02] active:scale-95 shrink-0 shadow-xs ${
+                      autoCleanServiceMessages
+                        ? 'bg-amber-50 border-amber-300 text-amber-700 dark:bg-amber-500/15 dark:border-amber-500/35 dark:text-amber-300'
+                        : 'bg-white/90 border-slate-200/90 text-slate-600 dark:bg-slate-800/80 dark:border-slate-700 dark:text-slate-300'
+                    }`}
                   >
-                    <BubbleBackground />
-                    <div className="w-10 h-10 bg-gradient-to-br from-white/35 to-white/5 border border-white/30 rounded-xl flex items-center justify-center mb-4 shadow-[inset_0_1px_3px_rgba(255,255,255,0.4),0_4px_10px_rgba(0,0,0,0.15)] backdrop-blur-md relative z-10">
-                      <Icons.Home size={20} className="text-white" strokeWidth={3} />
-                    </div>
-                    <p className="text-[10px] font-black text-emerald-50 uppercase tracking-widest mb-1 relative z-10">Batches</p>
-                    <p className="text-3xl font-black text-white relative z-10 drop-shadow-sm">{groups.length}</p>
-                 </motion.div>
+                    <Icons.Trash2 size={12} strokeWidth={2.5} />
+                    <span>Auto-Clean: {autoCleanServiceMessages ? 'ON' : 'OFF'}</span>
+                  </button>
 
-                 <motion.div 
-                    whileHover={{ scale: 1.04, translateY: -6, rotateX: -2, rotateY: 1, boxShadow: '0 30px 60px -10px rgba(233,64,87,0.45)' }}
-                    whileTap={{ scale: 0.96, translateY: 2 }}
-                    className="bg-gradient-to-br from-[#8A2387] via-[#E94057] to-[#F27121] p-5 rounded-[2rem] border-b-[6px] border-[#701a2c] shadow-[0_15px_35px_rgba(233,64,87,0.3),inset_0_2px_4px_rgba(255,255,255,0.35)] transition-all relative overflow-hidden"
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = !autoApproveJoinRequest;
+                      setAutoApproveJoinRequest(next);
+                      showNotification(`Auto-Approve turned ${next ? 'ON' : 'OFF'}`, 'info');
+                    }}
+                    className={`min-h-[34px] px-3.5 py-1.5 rounded-xl border text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wide flex items-center gap-1.5 transition-all duration-200 hover:scale-[1.02] active:scale-95 shrink-0 shadow-xs ${
+                      autoApproveJoinRequest
+                        ? 'bg-fuchsia-50 border-fuchsia-300 text-fuchsia-700 dark:bg-fuchsia-500/15 dark:border-fuchsia-500/35 dark:text-fuchsia-300'
+                        : 'bg-white/90 border-slate-200/90 text-slate-600 dark:bg-slate-800/80 dark:border-slate-700 dark:text-slate-300'
+                    }`}
                   >
-                    <BubbleBackground />
-                    <div className="w-10 h-10 bg-gradient-to-br from-white/35 to-white/5 border border-white/30 rounded-xl flex items-center justify-center mb-4 shadow-[inset_0_1px_3px_rgba(255,255,255,0.4),0_4px_10px_rgba(0,0,0,0.15)] backdrop-blur-md relative z-10">
-                      <Icons.Zap size={20} className="text-white" strokeWidth={3} />
-                    </div>
-                    <div className="flex flex-col gap-3 relative z-10">
-                       <div>
-                         <p className="text-[10px] font-black text-rose-100 uppercase tracking-widest mb-1">Bot Status</p>
-                         <p className="text-xl font-black text-white uppercase drop-shadow-sm">{botInfo ? 'ACTIVE' : 'OFFLINE'}</p>
-                       </div>
-                    </div>
-                 </motion.div>
+                    <Icons.UserCheck size={12} strokeWidth={2.5} />
+                    <span>Auto-Approve: {autoApproveJoinRequest ? 'ON' : 'OFF'}</span>
+                  </button>
 
-                 <motion.button 
-                    whileHover={{ scale: 1.04, translateY: -6, rotateX: 2, rotateY: 2, boxShadow: '0 30px 60px -10px rgba(99,102,241,0.4)' }}
-                    whileTap={{ scale: 0.96, translateY: 2 }}
+                  <button
+                    type="button"
                     onClick={() => handleTabChange('settings')}
-                    className="bg-gradient-to-br from-indigo-900 via-slate-900 to-black p-5 rounded-[2rem] border-b-[6px] border-[#0c1020] shadow-[0_15px_35px_rgba(0,0,0,0.4),inset_0_1.5px_3px_rgba(255,255,255,0.15)] border border-white/5 transition-all relative overflow-hidden text-left group"
+                    className={`min-h-[34px] px-3.5 py-1.5 rounded-xl border text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wide flex items-center gap-1.5 transition-all duration-200 hover:scale-[1.02] active:scale-95 shrink-0 shadow-xs ${
+                      webhookActive
+                        ? 'bg-cyan-50 border-cyan-300 text-cyan-700 dark:bg-cyan-500/15 dark:border-cyan-500/35 dark:text-cyan-300'
+                        : 'bg-white/90 border-cyan-200/80 text-cyan-700 dark:bg-slate-800/80 dark:border-cyan-500/30 dark:text-cyan-300'
+                    }`}
                   >
-                    <BubbleBackground />
-                    <div className="w-10 h-10 bg-gradient-to-br from-white/15 to-white/5 border border-white/10 rounded-xl flex items-center justify-center mb-4 shadow-[inset_0_1px_3px_rgba(255,255,255,0.2),0_4px_10px_rgba(0,0,0,0.3)] backdrop-blur-md relative z-10">
-                      <Icons.BarChart3 size={20} className="text-indigo-400" strokeWidth={3} />
+                    <Icons.Clock size={12} strokeWidth={2.5} />
+                    <span>Webhook: {webhookActive ? 'LIVE' : 'SETUP'}</span>
+                  </button>
+                </div>
+              </section>
+
+
+
+              {/* 2-Column Pastel Bento Cards with Icon Watermarks */}
+              <div className="grid grid-cols-2 gap-3.5 sm:gap-4">
+                {/* Card 1: Total Network (Violet) */}
+                <button
+                  type="button"
+                  onClick={() => handleTabChange('groups')}
+                  className="text-left bg-[#F5F2FF] dark:bg-violet-950/25 border-[1.5px] border-violet-200/85 dark:border-violet-500/25 rounded-[1.5rem] p-4 sm:p-5 shadow-[0_6px_22px_-8px_rgba(124,58,237,0.14)] relative overflow-hidden group hover:-translate-y-0.5 active:scale-[0.985] transition-all"
+                >
+                  <div className="absolute -right-3 -bottom-4 opacity-[0.11] dark:opacity-[0.10] text-violet-600 dark:text-violet-400 pointer-events-none select-none group-hover:scale-105 transition-transform duration-300">
+                    <Icons.Users size={92} strokeWidth={1.5} />
+                  </div>
+                  <div className="relative z-10 flex flex-col h-full justify-between">
+                    <div>
+                      <div className="flex items-center justify-between gap-2 mb-3.5">
+                        <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-violet-600 text-white flex items-center justify-center shadow-md shadow-violet-500/25 shrink-0">
+                          <Icons.Users size={20} strokeWidth={2.2} />
+                        </div>
+                        <span className="px-2 py-0.5 rounded-lg bg-violet-200/60 dark:bg-violet-500/20 text-[10px] font-extrabold text-violet-700 dark:text-violet-300 uppercase tracking-wider">
+                          Network
+                        </span>
+                      </div>
+                      <p className="text-[10px] sm:text-[11px] font-extrabold text-violet-700 dark:text-violet-300 uppercase tracking-wider mb-1">
+                        Total Members
+                      </p>
+                      <p className="text-2xl sm:text-[26px] font-black text-slate-900 dark:text-white tabular-nums tracking-tight leading-none">
+                        {totalMembers.toLocaleString()}
+                      </p>
                     </div>
-                    <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1 relative z-10">Analytics</p>
-                    <p className="text-xl font-black text-white relative z-10 flex items-center gap-2">
-                      VIEW GROWTH <Icons.ArrowRight size={20} className="group-hover:translate-x-1.5 transition-transform text-indigo-400" />
-                    </p>
-                 </motion.button>
+                    <div className="flex items-center justify-between mt-4 pt-1 text-violet-700 dark:text-violet-300">
+                      <span className="text-xs font-bold truncate">Manage Hubs</span>
+                      <Icons.ArrowRight size={15} className="shrink-0 group-hover:translate-x-1 transition-transform" />
+                    </div>
+                  </div>
+                </button>
+
+                {/* Card 2: Active Batches (Cyan) */}
+                <button
+                  type="button"
+                  onClick={() => handleTabChange('groups')}
+                  className="text-left bg-[#ECFAFE] dark:bg-cyan-950/25 border-[1.5px] border-cyan-200/85 dark:border-cyan-500/25 rounded-[1.5rem] p-4 sm:p-5 shadow-[0_6px_22px_-8px_rgba(6,182,212,0.14)] relative overflow-hidden group hover:-translate-y-0.5 active:scale-[0.985] transition-all"
+                >
+                  <div className="absolute -right-3 -bottom-4 opacity-[0.11] dark:opacity-[0.10] text-cyan-600 dark:text-cyan-400 pointer-events-none select-none group-hover:scale-105 transition-transform duration-300">
+                    <Icons.Database size={92} strokeWidth={1.5} />
+                  </div>
+                  <div className="relative z-10 flex flex-col h-full justify-between">
+                    <div>
+                      <div className="flex items-center justify-between gap-2 mb-3.5">
+                        <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-cyan-500 text-white flex items-center justify-center shadow-md shadow-cyan-500/25 shrink-0">
+                          <Icons.Database size={20} strokeWidth={2.2} />
+                        </div>
+                        <span className="px-2 py-0.5 rounded-lg bg-cyan-200/60 dark:bg-cyan-500/20 text-[10px] font-extrabold text-cyan-700 dark:text-cyan-300 uppercase tracking-wider">
+                          Connected
+                        </span>
+                      </div>
+                      <p className="text-[10px] sm:text-[11px] font-extrabold text-cyan-700 dark:text-cyan-300 uppercase tracking-wider mb-1">
+                        Active Batches
+                      </p>
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="text-2xl sm:text-[26px] font-black text-slate-900 dark:text-white tabular-nums tracking-tight leading-none">
+                          {groups.length}
+                        </span>
+                        <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 tabular-nums">
+                          / {folders.length} folders
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between mt-4 pt-1 text-cyan-700 dark:text-cyan-300">
+                      <span className="text-xs font-bold truncate">Target Groups</span>
+                      <Icons.ArrowRight size={15} className="shrink-0 group-hover:translate-x-1 transition-transform" />
+                    </div>
+                  </div>
+                </button>
+
+                {/* Card 3: Joins Today (Magenta / Fuchsia) */}
+                <button
+                  type="button"
+                  onClick={() => handleTabChange('analysis')}
+                  className="text-left bg-[#FDF2FA] dark:bg-fuchsia-950/25 border-[1.5px] border-fuchsia-200/85 dark:border-fuchsia-500/25 rounded-[1.5rem] p-4 sm:p-5 shadow-[0_6px_22px_-8px_rgba(217,70,239,0.14)] relative overflow-hidden group hover:-translate-y-0.5 active:scale-[0.985] transition-all"
+                >
+                  <div className="absolute -right-3 -bottom-4 opacity-[0.11] dark:opacity-[0.10] text-fuchsia-600 dark:text-fuchsia-400 pointer-events-none select-none group-hover:scale-105 transition-transform duration-300">
+                    <Icons.TrendingUp size={92} strokeWidth={1.5} />
+                  </div>
+                  <div className="relative z-10 flex flex-col h-full justify-between">
+                    <div>
+                      <div className="flex items-center justify-between gap-2 mb-3.5">
+                        <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-fuchsia-500 text-white flex items-center justify-center shadow-md shadow-fuchsia-500/25 shrink-0">
+                          <Icons.TrendingUp size={20} strokeWidth={2.2} />
+                        </div>
+                        <span className="px-2 py-0.5 rounded-lg bg-fuchsia-200/60 dark:bg-fuchsia-500/20 text-[10px] font-extrabold text-fuchsia-700 dark:text-fuchsia-300 uppercase tracking-wider">
+                          Today
+                        </span>
+                      </div>
+                      <p className="text-[10px] sm:text-[11px] font-extrabold text-fuchsia-700 dark:text-fuchsia-300 uppercase tracking-wider mb-1">
+                        Joins Tracked
+                      </p>
+                      <p className="text-2xl sm:text-[26px] font-black text-slate-900 dark:text-white tabular-nums tracking-tight leading-none">
+                        {joinsTodayCount.toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="flex items-center justify-between mt-4 pt-1 text-fuchsia-700 dark:text-fuchsia-300">
+                      <span className="text-xs font-bold truncate">View Analytics</span>
+                      <Icons.ArrowRight size={15} className="shrink-0 group-hover:translate-x-1 transition-transform" />
+                    </div>
+                  </div>
+                </button>
+
+                {/* Card 4: Security Audit (Warm Amber) */}
+                <button
+                  type="button"
+                  onClick={() => handleTabChange('analysis')}
+                  className="text-left bg-[#FFF9EB] dark:bg-amber-950/25 border-[1.5px] border-amber-200/85 dark:border-amber-500/25 rounded-[1.5rem] p-4 sm:p-5 shadow-[0_6px_22px_-8px_rgba(245,158,11,0.14)] relative overflow-hidden group hover:-translate-y-0.5 active:scale-[0.985] transition-all"
+                >
+                  <div className="absolute -right-3 -bottom-4 opacity-[0.11] dark:opacity-[0.10] text-amber-600 dark:text-amber-400 pointer-events-none select-none group-hover:scale-105 transition-transform duration-300">
+                    <Icons.ShieldCheck size={92} strokeWidth={1.5} />
+                  </div>
+                  <div className="relative z-10 flex flex-col h-full justify-between">
+                    <div>
+                      <div className="flex items-center justify-between gap-2 mb-3.5">
+                        <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-amber-500 text-white flex items-center justify-center shadow-md shadow-amber-500/25 shrink-0">
+                          <Icons.ShieldCheck size={20} strokeWidth={2.2} />
+                        </div>
+                        <span
+                          className={`px-2 py-0.5 rounded-lg text-[10px] font-extrabold uppercase tracking-wider ${
+                            bannedUsers.length > 0
+                              ? 'bg-rose-500 text-white'
+                              : 'bg-amber-200/65 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300'
+                          }`}
+                        >
+                          {bannedUsers.length > 0 ? `${bannedUsers.length} Blocked` : 'Shield'}
+                        </span>
+                      </div>
+                      <p className="text-[10px] sm:text-[11px] font-extrabold text-amber-700 dark:text-amber-300 uppercase tracking-wider mb-1">
+                        Audit Log
+                      </p>
+                      <p className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tabular-nums tracking-tight leading-none truncate">
+                        {joinEvents.length.toLocaleString()} Events
+                      </p>
+                    </div>
+                    <div className="flex items-center justify-between mt-4 pt-1 text-amber-700 dark:text-amber-300">
+                      <span className="text-xs font-bold truncate">Inspect Audit</span>
+                      <Icons.ArrowRight size={15} className="shrink-0 group-hover:translate-x-1 transition-transform" />
+                    </div>
+                  </div>
+                </button>
+
+                {/* Card 5: Batch Folders (Royal Blue) */}
+                <button
+                  type="button"
+                  onClick={() => handleTabChange('folders')}
+                  className="text-left bg-[#EFF5FF] dark:bg-blue-950/25 border-[1.5px] border-blue-200/85 dark:border-blue-500/25 rounded-[1.5rem] p-4 sm:p-5 shadow-[0_6px_22px_-8px_rgba(37,99,235,0.14)] relative overflow-hidden group hover:-translate-y-0.5 active:scale-[0.985] transition-all"
+                >
+                  <div className="absolute -right-3 -bottom-4 opacity-[0.11] dark:opacity-[0.10] text-blue-600 dark:text-blue-400 pointer-events-none select-none group-hover:scale-105 transition-transform duration-300">
+                    <Icons.Folder size={92} strokeWidth={1.5} />
+                  </div>
+                  <div className="relative z-10 flex flex-col h-full justify-between">
+                    <div>
+                      <div className="flex items-center justify-between gap-2 mb-3.5">
+                        <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-500/25 shrink-0">
+                          <Icons.Folder size={20} strokeWidth={2.2} />
+                        </div>
+                        <span className="px-2 py-0.5 rounded-lg bg-blue-200/60 dark:bg-blue-500/20 text-[10px] font-extrabold text-blue-700 dark:text-blue-300 uppercase tracking-wider">
+                          Folders
+                        </span>
+                      </div>
+                      <p className="text-[10px] sm:text-[11px] font-extrabold text-blue-700 dark:text-blue-300 uppercase tracking-wider mb-1">
+                        Batch Folders
+                      </p>
+                      <p className="text-2xl sm:text-[26px] font-black text-slate-900 dark:text-white tabular-nums tracking-tight leading-none">
+                        {folders.length}
+                      </p>
+                    </div>
+                    <div className="flex items-center justify-between mt-4 pt-1 text-blue-700 dark:text-blue-300">
+                      <span className="text-xs font-bold truncate">Open Folders</span>
+                      <Icons.ArrowRight size={15} className="shrink-0 group-hover:translate-x-1 transition-transform" />
+                    </div>
+                  </div>
+                </button>
+
+                {/* Card 6: Bot Sync Engine (Emerald Mint) */}
+                <button
+                  type="button"
+                  onClick={() => syncAllGroupsMemberCount(token)}
+                  disabled={isScanning}
+                  className="text-left bg-[#ECFDF5] dark:bg-emerald-950/25 border-[1.5px] border-emerald-200/85 dark:border-emerald-500/25 rounded-[1.5rem] p-4 sm:p-5 shadow-[0_6px_22px_-8px_rgba(16,185,129,0.14)] relative overflow-hidden group hover:-translate-y-0.5 active:scale-[0.985] transition-all disabled:opacity-75"
+                >
+                  <div className="absolute -right-3 -bottom-4 opacity-[0.11] dark:opacity-[0.10] text-emerald-600 dark:text-emerald-400 pointer-events-none select-none group-hover:scale-105 transition-transform duration-300">
+                    <Icons.Activity size={92} strokeWidth={1.5} />
+                  </div>
+                  <div className="relative z-10 flex flex-col h-full justify-between">
+                    <div>
+                      <div className="flex items-center justify-between gap-2 mb-3.5">
+                        <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-emerald-500 text-white flex items-center justify-center shadow-md shadow-emerald-500/25 shrink-0">
+                          <Icons.Refresh size={20} strokeWidth={2.2} className={isScanning ? 'animate-spin' : ''} />
+                        </div>
+                        <span className="px-2 py-0.5 rounded-lg bg-emerald-500 text-white text-[10px] font-extrabold uppercase tracking-wider">
+                          {isScanning ? 'Syncing' : 'Running'}
+                        </span>
+                      </div>
+                      <p className="text-[10px] sm:text-[11px] font-extrabold text-emerald-700 dark:text-emerald-300 uppercase tracking-wider mb-1">
+                        Sync Engine
+                      </p>
+                      <p className="text-lg sm:text-xl font-black text-emerald-600 dark:text-emerald-400 tracking-tight leading-tight truncate">
+                        {isScanning ? 'Syncing...' : botInfo ? 'Active & Live' : 'Ready'}
+                      </p>
+                    </div>
+                    <div className="flex items-center justify-between mt-4 pt-1 text-emerald-700 dark:text-emerald-300">
+                      <span className="text-xs font-bold truncate">Run Full Sync</span>
+                      <Icons.ArrowRight size={15} className="shrink-0 group-hover:translate-x-1 transition-transform" />
+                    </div>
+                  </div>
+                </button>
               </div>
-              <div className="relative rounded-3xl border border-white/10 p-5 shadow-xl overflow-hidden bg-gradient-to-br from-violet-600 via-fuchsia-600 to-orange-500 text-white transform transition-all duration-300 hover:scale-[1.01] hover:shadow-fuchsia-500/10">
-                 <div className="absolute top-0 right-0 w-48 h-48 bg-white/20 rounded-full blur-2xl -mr-12 -mt-12 mix-blend-overlay pointer-events-none"></div>
-                 <div className="absolute bottom-0 left-0 w-48 h-48 bg-yellow-300/20 rounded-full blur-2xl -ml-12 -mb-12 mix-blend-overlay pointer-events-none"></div>
-                 <h2 className="text-sm font-black uppercase tracking-tight mb-3 flex items-center gap-2 relative z-10">
-                   <div className="p-2 bg-white/20 rounded-xl backdrop-blur-sm shadow-inner border border-white/20 text-yellow-300">
-                     <Icons.Zap size={16} />
-                   </div>
-                   <span className="bg-gradient-to-r from-white to-orange-200 bg-clip-text text-transparent drop-shadow-sm">Fast Batch Injection</span>
-                 </h2>
-                 <div className="flex flex-col sm:flex-row gap-2 relative z-10">
-                   <input type="text" placeholder="Enter Telegram Chat ID (-100...)" className="flex-1 bg-black/20 border border-white/20 px-3.5 py-2.5 rounded-xl text-[9px] font-mono outline-none focus:ring-4 focus:ring-white/30 shadow-inner placeholder:text-white/50 text-white backdrop-blur-sm" value={newChatId} onChange={e => setNewChatId(e.target.value)} />
-                   <button onClick={handleAddGroupManual} disabled={isAddingGroup || !newChatId} className="px-4 py-2.5 bg-white text-fuchsia-900 hover:bg-fuchsia-50 rounded-xl text-[9px] font-black uppercase tracking-widest shadow-md active:scale-95 disabled:opacity-50 transition-all border border-white">
-                     {isAddingGroup ? 'Connecting...' : 'Inject Batch(es)'}
-                   </button>
-                 </div>
-              </div>
+
+              {/* Fast Batch Injection Card - Matching Light Pastel Aesthetic */}
+              <section
+                aria-label="Fast Batch Injection"
+                className="relative rounded-[1.75rem] bg-[#F8FAFC] dark:bg-slate-900/90 border-[1.5px] border-indigo-200/80 dark:border-indigo-500/25 p-5 sm:p-6 shadow-[0_8px_28px_-8px_rgba(99,102,241,0.12)] overflow-hidden group"
+              >
+                <div className="absolute -right-5 -bottom-6 opacity-[0.08] dark:opacity-[0.07] text-indigo-600 dark:text-indigo-400 pointer-events-none select-none group-hover:scale-105 transition-transform duration-500">
+                  <Icons.Zap size={140} strokeWidth={1.3} />
+                </div>
+
+                <div className="relative z-10 flex items-center justify-between gap-3 mb-4">
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white flex items-center justify-center shadow-md shadow-indigo-500/25 shrink-0">
+                      <Icons.Zap size={21} strokeWidth={2.4} />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+                        Quick Hub Uplink
+                      </p>
+                      <h3 className="text-base sm:text-lg font-extrabold tracking-tight text-slate-900 dark:text-white">
+                        Fast Batch Injection
+                      </h3>
+                    </div>
+                  </div>
+                  <span className="hidden sm:inline-block px-2.5 py-1 rounded-lg bg-indigo-100/80 dark:bg-indigo-500/15 text-[10px] font-extrabold uppercase tracking-wider text-indigo-700 dark:text-indigo-300">
+                    Chat ID
+                  </span>
+                </div>
+
+                <div className="relative z-10 flex flex-col sm:flex-row gap-3">
+                  <div className="flex-1 relative">
+                    <div className="absolute inset-y-0 left-4 flex items-center text-indigo-500/70 pointer-events-none">
+                      <Icons.Hash size={16} strokeWidth={2.5} />
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="Enter Chat ID (e.g. -1001234567890)"
+                      className="w-full min-h-[46px] bg-white dark:bg-slate-950/70 border border-slate-200 dark:border-slate-700/80 pl-10 pr-4 py-3 rounded-xl text-sm font-mono outline-none focus:ring-2 focus:ring-indigo-500/25 focus:border-indigo-500 transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500 text-slate-900 dark:text-white"
+                      value={newChatId}
+                      onChange={e => setNewChatId(e.target.value)}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleAddGroupManual}
+                    disabled={isAddingGroup || !newChatId}
+                    className="min-h-[46px] px-7 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs uppercase tracking-wider shadow-md shadow-indigo-500/25 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none transition-all flex items-center justify-center gap-2 whitespace-nowrap shrink-0"
+                  >
+                    {isAddingGroup ? (
+                      <>
+                        <Icons.Refresh size={16} className="animate-spin" />
+                        <span>Injecting...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Inject Hub</span>
+                        <Icons.ArrowRight size={16} />
+                      </>
+                    )}
+                  </button>
+                </div>
+              </section>
+
+              {/* Revoke Invite Link Card (At the very bottom) */}
+              <section
+                aria-label="Revoke Invite Link"
+                className="relative rounded-[1.75rem] bg-[#F8FAFC] dark:bg-slate-900/90 border-[1.5px] border-rose-200/80 dark:border-rose-500/25 p-5 sm:p-6 shadow-[0_8px_28px_-8px_rgba(244,63,94,0.12)] overflow-hidden group"
+              >
+                <div className="absolute -right-5 -bottom-6 opacity-[0.08] dark:opacity-[0.07] text-rose-600 dark:text-rose-400 pointer-events-none select-none group-hover:scale-105 transition-transform duration-500">
+                  <Icons.Link size={140} strokeWidth={1.3} />
+                </div>
+
+                <div className="relative z-10 flex items-center justify-between gap-3 mb-4">
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-rose-600 to-pink-600 text-white flex items-center justify-center shadow-md shadow-rose-500/25 shrink-0">
+                      <Icons.Link size={21} strokeWidth={2.4} />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-extrabold uppercase tracking-wider text-rose-600 dark:text-rose-400">
+                        Link Security
+                      </p>
+                      <h3 className="text-base sm:text-lg font-extrabold tracking-tight text-slate-900 dark:text-white">
+                        Revoke Invite Link
+                      </h3>
+                    </div>
+                  </div>
+                  <span className="hidden sm:inline-block px-2.5 py-1 rounded-lg bg-rose-100/80 dark:bg-rose-500/15 text-[10px] font-extrabold uppercase tracking-wider text-rose-700 dark:text-rose-300">
+                    Revoke
+                  </span>
+                </div>
+
+                <div className="relative z-10 flex flex-col sm:flex-row gap-3">
+                  <div className="flex-1 relative">
+                    <div className="absolute inset-y-0 left-4 flex items-center text-rose-500/70 pointer-events-none">
+                      <Icons.Link size={16} strokeWidth={2.5} />
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="Paste invite link to revoke (e.g. https://t.me/+...)"
+                      className="w-full min-h-[46px] bg-white dark:bg-slate-950/70 border border-slate-200 dark:border-slate-700/80 pl-10 pr-4 py-3 rounded-xl text-sm font-mono outline-none focus:ring-2 focus:ring-rose-500/25 focus:border-rose-500 transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500 text-slate-900 dark:text-white"
+                      value={linkToRevoke}
+                      onChange={e => setLinkToRevoke(e.target.value)}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleRevokeLink}
+                    disabled={!linkToRevoke}
+                    className="min-h-[46px] px-7 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold text-xs uppercase tracking-wider shadow-md shadow-rose-500/25 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none transition-all flex items-center justify-center gap-2 whitespace-nowrap shrink-0"
+                  >
+                    <span>Revoke Link</span>
+                    <Icons.ArrowRight size={16} />
+                  </button>
+                </div>
+              </section>
             </div>
           )}
 
@@ -2332,15 +2704,28 @@ const App: React.FC = () => {
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {filteredGroups.length > 0 ? (
-                    filteredGroups.map((g, index) => (
-                      <GroupCard key={g.id} group={g} index={index} onClick={() => {
-                        handleOpenGroupModal(g);
-                        if (searchQuery.trim()) {
-                          const trimmed = searchQuery.trim();
-                          setRecentSearches(prev => [trimmed, ...prev.filter(s => s !== trimmed)].slice(0, 10));
-                        }
-                      }} onTogglePin={handleTogglePin} />
-                    ))
+                    (() => {
+                      // Stable Serial Number Calculation: Always sort by createdAt to keep IDs persistent
+                      const masterSortedGroups = [...groups].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+                      return filteredGroups.map((g) => {
+                        const stableIdx = masterSortedGroups.findIndex(item => item.id === g.id);
+                        return (
+                          <GroupCard 
+                            key={g.id} 
+                            group={g} 
+                            index={stableIdx >= 0 ? stableIdx : 0} 
+                            onClick={() => {
+                              handleOpenGroupModal(g);
+                              if (searchQuery.trim()) {
+                                const trimmed = searchQuery.trim();
+                                setRecentSearches(prev => [trimmed, ...prev.filter(s => s !== trimmed)].slice(0, 10));
+                              }
+                            }} 
+                            onTogglePin={handleTogglePin} 
+                          />
+                        );
+                      });
+                    })()
                   ) : (
                     <div className="flex flex-col items-center justify-center py-20 text-slate-400 bg-slate-50 dark:bg-slate-900/20 rounded-[2.5rem] border-2 border-dashed border-slate-200 dark:border-slate-800">
                       <Icons.Search size={32} className="mb-4 opacity-20" />
@@ -2381,60 +2766,47 @@ const App: React.FC = () => {
                       {folders.map(folder => {
                         const count = folder.batchIds.length;
                         return (
-                          <div
-                            key={folder.id}
-                            onClick={() => handleOpenFolder(folder.id)}
-                            className="bg-white hover:bg-slate-50 dark:bg-slate-900/80 dark:hover:bg-slate-900 border border-slate-200 dark:border-slate-800/80 rounded-xl p-3.5 shadow-sm hover:shadow-md cursor-pointer transition-all flex items-center justify-between group"
-                          >
-                            <div className="flex items-center gap-3 truncate">
-                              <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${folder.color} flex items-center justify-center text-white shadow-md flex-shrink-0 group-hover:scale-105 transition-transform text-2xl`}>
-                                📂
-                              </div>
-                              <div className="truncate">
-                                <h3 className="text-xs font-extrabold text-slate-900 dark:text-white truncate group-hover:text-amber-500 transition-colors">{folder.name}</h3>
-                                <p className="text-[10px] text-slate-400 font-bold">{count} {count === 1 ? 'batch' : 'batches'}</p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-1.5 relative z-20">
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  e.preventDefault();
-                                  handleOpenConfirmModal({
-                                    title: 'Delete Folder',
-                                    message: `Are you sure you want to delete folder "${folder.name}"?`,
-                                    onConfirm: () => {
-                                      if (folder.id === 'f-1' || folder.id === 'f-2') {
-                                        showNotification("Cannot delete default folders", "alert");
-                                        return;
-                                      }
-                                      setFolders(prev => prev.filter(f => f.id !== folder.id));
-                                      fetch(`/api/folders/${folder.id}`, { method: 'DELETE' })
-                                        .catch(e => console.error("Failed to delete folder from DB:", e));
-                                      showNotification('Folder deleted successfully', 'info');
-                                    }
-                                  });
-                                }}
-                                onTouchEnd={(e) => {
-                                  e.stopPropagation();
-                                  e.preventDefault();
-                                  handleOpenConfirmModal({
-                                    title: 'Delete Folder',
-                                    message: `Are you sure you want to delete folder "${folder.name}"?`,
-                                    onConfirm: () => {
-                                      setFolders(prev => prev.filter(f => f.id !== folder.id));
-                                      fetch(`/api/folders/${folder.id}`, { method: 'DELETE' })
-                                        .catch(e => console.error("Failed to delete folder from DB:", e));
-                                      showNotification('Folder deleted successfully', 'info');
-                                    }
-                                  });
-                                }}
-                                className="p-2.5 text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 rounded-xl transition-all cursor-pointer"
-                                title="Delete Folder"
-                              >
-                                <Icons.Trash size={16} />
-                              </button>
+                           <div
+                             key={folder.id}
+                             onClick={() => handleOpenFolder(folder.id)}
+                             className="bg-white hover:bg-slate-50 dark:bg-slate-900/80 dark:hover:bg-slate-900 border border-slate-200 dark:border-slate-800/80 rounded-xl p-3.5 shadow-sm hover:shadow-md cursor-pointer transition-all flex items-center justify-between group relative overflow-hidden"
+                           >
+                             {/* Background Watermark */}
+                             <div className="absolute right-[-10px] bottom-[-10px] opacity-[0.03] dark:opacity-[0.05] pointer-events-none select-none group-hover:scale-110 group-hover:rotate-6 transition-transform duration-700">
+                               <Icons.Folder size={80} strokeWidth={1.5} />
+                             </div>
+                             
+                             <div className="flex items-center gap-3 truncate relative z-10">
+                               <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${folder.color} flex items-center justify-center text-white shadow-md flex-shrink-0 group-hover:scale-105 transition-transform text-2xl`}>
+                                 {folder.name.split(' ').pop()}
+                               </div>
+                               <div className="truncate">
+                                 <h3 className="text-xs font-extrabold text-slate-900 dark:text-white truncate group-hover:text-amber-500 transition-colors">{folder.name.split(' ').slice(0, -1).join(' ')}</h3>
+                                 <p className="text-[10px] text-slate-400 font-bold">{count} {count === 1 ? 'batch' : 'batches'}</p>
+                               </div>
+                             </div>
+                             <div className="flex items-center gap-1.5 relative z-20">
+                               <button
+                                 type="button"
+                                 onClick={(e) => {
+                                   e.stopPropagation();
+                                   e.preventDefault();
+                                   handleOpenConfirmModal({
+                                     title: 'Delete Folder',
+                                     message: `Are you sure you want to delete folder "${folder.name}"? This action is permanent.`,
+                                     onConfirm: () => {
+                                       setFolders(prev => prev.filter(f => f.id !== folder.id));
+                                       fetch(`/api/folders/${folder.id}`, { method: 'DELETE' })
+                                         .catch(e => console.error("Failed to delete folder from DB:", e));
+                                       showNotification('Folder deleted successfully', 'info');
+                                     }
+                                   });
+                                 }}
+                                 className="p-2.5 text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 rounded-xl transition-all cursor-pointer"
+                                 title="Delete Folder"
+                               >
+                                 <Icons.Trash size={16} />
+                               </button>
                               <span className="text-slate-400 group-hover:translate-x-1 transition-transform">→</span>
                             </div>
                           </div>
@@ -2496,17 +2868,13 @@ const App: React.FC = () => {
                               handleOpenConfirmModal({
                                 title: 'Delete Folder',
                                 message: `Are you sure you want to delete folder "${currentFolder.name}"?`,
-                                onConfirm: () => {
-                                  if (currentFolder.id === 'f-1' || currentFolder.id === 'f-2') {
-                                    showNotification("Cannot delete default folders", "alert");
-                                    return;
-                                  }
-                                  setFolders(prev => prev.filter(f => f.id !== currentFolder.id));
-                                  fetch(`/api/folders/${currentFolder.id}`, { method: 'DELETE' })
-                                    .catch(e => console.error("Failed to delete folder from DB:", e));
-                                  handleCloseFolder();
-                                  showNotification('Folder deleted successfully', 'info');
-                                }
+                                 onConfirm: () => {
+                                   setFolders(prev => prev.filter(f => f.id !== currentFolder.id));
+                                   fetch(`/api/folders/${currentFolder.id}`, { method: 'DELETE' })
+                                     .catch(e => console.error("Failed to delete folder from DB:", e));
+                                   handleCloseFolder();
+                                   showNotification('Folder deleted successfully', 'info');
+                                 }
                               });
                             }}
                             className="px-3 py-1.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 hover:bg-rose-100 text-rose-600 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5 shadow-sm whitespace-nowrap"
@@ -2531,15 +2899,15 @@ const App: React.FC = () => {
                               className="w-full bg-transparent text-[10px] font-bold outline-none text-slate-900 dark:text-white"
                             />
                           </div>
-                          <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest hidden sm:inline shrink-0">
-                            {groups.filter(g => !currentFolder.batchIds.includes(g.id) && g.name.toLowerCase().includes(folderSearchQuery.toLowerCase())).length} Avail
+                           <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest hidden sm:inline shrink-0">
+                            {groups.filter(g => !currentFolder.batchIds.includes(g.id) && normalizeText(g.name).includes(normalizeText(folderSearchQuery))).length} Avail
                           </span>
                         </div>
 
                         {folderSearchQuery.trim() && (
                           <div className="max-h-40 overflow-y-auto space-y-1 pt-1.5 border-t border-slate-100 dark:border-slate-800">
                             {groups
-                              .filter(g => !currentFolder.batchIds.includes(g.id) && g.name.toLowerCase().includes(folderSearchQuery.toLowerCase()))
+                              .filter(g => !currentFolder.batchIds.includes(g.id) && normalizeText(g.name).includes(normalizeText(folderSearchQuery)))
                               .map(group => (
                                 <div key={group.id} className="flex items-center justify-between p-1.5 bg-slate-50 dark:bg-slate-950 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-950/30 transition-colors">
                                   <div className="flex items-center gap-2 truncate">
@@ -2571,7 +2939,7 @@ const App: React.FC = () => {
                                   </button>
                                 </div>
                               ))}
-                            {groups.filter(g => !currentFolder.batchIds.includes(g.id) && g.name.toLowerCase().includes(folderSearchQuery.toLowerCase())).length === 0 && (
+                            {groups.filter(g => !currentFolder.batchIds.includes(g.id) && normalizeText(g.name).toLowerCase().includes(normalizeText(folderSearchQuery).toLowerCase())).length === 0 && (
                               <p className="text-center py-3 text-[10px] text-slate-400 italic">No matching batches found.</p>
                             )}
                           </div>
@@ -2868,11 +3236,18 @@ const App: React.FC = () => {
                 <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl overflow-hidden shadow-lg">
                     <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-950/40 flex items-center justify-between">
                       <div>
-                        <h2 className="text-xs font-black uppercase tracking-tight text-slate-900 dark:text-white">Deleted & Unacceptable Bin</h2>
+                        <h2 className="text-xs font-black uppercase tracking-tight text-slate-900 dark:text-white">Deleted & Unacceptable Bin ({deletedGroups.length})</h2>
                         <p className="text-[9px] font-medium text-slate-500 uppercase tracking-wider">Auto-deletion countdown in 30 days</p>
                       </div>
-                      <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center shadow-xs">
-                         <span>🗑️</span>
+                      <div className="flex items-center gap-2">
+                         {deletedGroups.length > 0 && (
+                           <button onClick={handleEmptyTrash} className="px-3 py-1 bg-rose-500/10 hover:bg-rose-500 hover:text-white text-rose-500 border border-rose-500/20 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all">
+                             Empty Trash
+                           </button>
+                         )}
+                         <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center shadow-xs">
+                            <span>🗑️</span>
+                         </div>
                       </div>
                     </div>
                     
@@ -2914,13 +3289,16 @@ const App: React.FC = () => {
                                 >
                                   Restore
                                 </button>
-                                <button 
+                                 <button 
                                   onClick={() => {
                                     handleOpenConfirmModal({
                                       title: 'Delete Permanently',
                                       message: `Permanently delete "${dg.name}" from database immediately?`,
                                       onConfirm: () => {
                                         setDeletedGroups(prev => prev.filter(d => d.id !== dg.id));
+                                        // Also delete from server
+                                        fetch(`/api/groups/${dg.id}`, { method: 'DELETE' })
+                                          .catch(e => console.error("Failed to permanently delete group:", e));
                                         showNotification('Group permanently deleted', 'info');
                                       }
                                     });
@@ -3077,20 +3455,8 @@ const App: React.FC = () => {
                       </ResponsiveContainer>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4 mt-6 pt-6 border-t border-slate-100 dark:border-slate-800">
-                      <div>
-                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Today</p>
-                        <div className="flex items-center gap-2">
-                          <p className="text-lg font-black">{comparisonStats.today}</p>
-                          <span className={`text-[8px] font-bold ${comparisonStats.todayTrend >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                            {comparisonStats.todayTrend >= 0 ? '+' : ''}{comparisonStats.todayTrend}%
-                          </span>
-                        </div>
-                      </div>
-                      <div>
-                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Yesterday</p>
-                        <p className="text-lg font-black">{comparisonStats.yesterday}</p>
-                      </div>
+                    <div className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800">
+                      <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest text-center italic">Continuous Monitoring Active</p>
                     </div>
                   </div>
 
@@ -3150,274 +3516,219 @@ const App: React.FC = () => {
                       <p className="text-[8px] font-bold text-slate-400 mt-2">Use {"{{name}}"} to insert the user's name.</p>
                     </div>
 
-                    <div className="mb-6 p-4 bg-white dark:bg-black/20 rounded-2xl border border-slate-200 dark:border-white/5 space-y-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-0.5 flex items-center justify-between">
-                            Group Cleanup
-                          </h4>
-
-                          <p className="text-[8px] text-slate-500 font-bold">Auto-delete Join/Leave messages</p>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <span className={`text-[8px] font-black ${autoCleanServiceMessages ? 'text-emerald-500' : 'text-slate-400'}`}>
-                            {autoCleanServiceMessages ? 'ACTIVE' : 'OFF'}
-                          </span>
-                          <button 
-                            onClick={() => setAutoCleanServiceMessages(!autoCleanServiceMessages)}
-                            className={`w-8 h-4 rounded-full transition-all relative ${autoCleanServiceMessages ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'}`}
-                          >
-                            <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${autoCleanServiceMessages ? 'left-4.5' : 'left-0.5'}`} />
-                          </button>
-                        </div>
-                      </div>
-                      
-                      <div className="flex flex-col gap-1.5 mt-3 pt-3 border-t border-slate-200 dark:border-slate-800">
-                        <div className="flex items-center justify-between cursor-pointer py-0.5" onClick={() => setIsGroupListCollapsed(!isGroupListCollapsed)}>
-                          <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1">
-                            <Icons.Users size={10} className="text-slate-400" />
-                            Manage Groups ({groups.length})
-                          </h4>
-                          <span className="text-[9px] font-bold text-indigo-500 dark:text-indigo-400 hover:underline">{isGroupListCollapsed ? 'Show' : 'Hide'}</span>
-                        </div>
-                        
-                        {!isGroupListCollapsed && (
-                          <div className="mt-1 flex flex-col gap-1.5 max-h-[200px] overflow-y-auto pr-1">
-                            {groups.length === 0 ? (
-                              <div className="text-[9px] text-slate-400 text-center py-3 bg-slate-50 dark:bg-slate-900/20 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
-                                No groups synced yet.
-                              </div>
-                            ) : (
-                              groups.map((g, idx) => (
-                                <div key={g.id} className="flex items-center justify-between p-2 bg-slate-50 hover:bg-slate-100 dark:bg-slate-900/30 dark:hover:bg-slate-900/50 rounded-xl border border-slate-200/60 dark:border-slate-800/60 transition-all gap-1.5">
-                                  <div className="flex-shrink-0 flex items-center justify-center font-mono font-black text-[8px] h-4.5 min-w-[1.1rem] px-0.5 rounded bg-slate-200/60 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
-                                    {idx + 1}
-                                  </div>
-                                  <div className="flex flex-col truncate flex-1 min-w-0">
-                                    <span className="text-[9px] font-bold text-slate-800 dark:text-slate-200 truncate pr-1">{g.name}</span>
-                                    <span className="text-[8px] text-slate-400 font-medium">{g.memberCount || 0} members • ID: {g.id}</span>
-                                  </div>
-                                  <button 
-                                    onClick={(e) => handleDeleteGroup(e, g.id)}
-                                    className="text-[8px] font-bold text-rose-500 hover:text-white bg-rose-50 hover:bg-rose-500 dark:bg-rose-950/40 dark:hover:bg-rose-600 px-2 py-1 rounded-lg border border-rose-200 dark:border-rose-900/30 transition-all cursor-pointer flex-shrink-0"
-                                  >
-                                    Remove
-                                  </button>
-                                </div>
-                              ))
-                            )}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="flex items-center justify-between mt-3">
-                        <div>
-                          <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-0.5 flex items-center justify-between">
-                            Join Requests
-                          </h4>
-                          <p className="text-[8px] text-slate-500 font-bold">Auto-approve all join requests</p>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <span className={`text-[8px] font-black ${autoApproveJoinRequest ? 'text-emerald-500' : 'text-slate-400'}`}>
-                            {autoApproveJoinRequest ? 'ACTIVE' : 'OFF'}
-                          </span>
-                          <button 
-                            onClick={() => setAutoApproveJoinRequest(!autoApproveJoinRequest)}
-                            className={`w-8 h-4 rounded-full transition-all relative ${autoApproveJoinRequest ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'}`}
-                          >
-                            <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${autoApproveJoinRequest ? 'left-4.5' : 'left-0.5'}`} />
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between pt-3 border-t border-slate-200 dark:border-slate-800">
-                        <div>
-                          <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-0.5 flex items-center justify-between">
-                            Group Welcome
-                          </h4>
-                          <p className="text-[8px] text-slate-500 font-bold">5s delay, Tag user & delete after 60s</p>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <span className={`text-[8px] font-black ${autoWelcome ? 'text-emerald-500' : 'text-slate-400'}`}>
-                            {autoWelcome ? 'ACTIVE' : 'OFF'}
-                          </span>
-                          <button 
-                            onClick={() => setAutoWelcome(!autoWelcome)}
-                            className={`w-8 h-4 rounded-full transition-all relative ${autoWelcome ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'}`}
-                          >
-                            <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${autoWelcome ? 'left-4.5' : 'left-0.5'}`} />
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="p-3 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-100 dark:border-slate-800 mt-4 !mt-4">
-                        <p className="text-[8px] font-bold text-slate-600 dark:text-slate-400">
-                          <Icons.ShieldCheck size={12} className="inline mr-1 text-emerald-500" />
-                          Requires bot to have <span className="text-emerald-500 underline">Delete Messages</span> permissions. If you change settings, please <b>Restart Background Worker</b> to apply them to 24/7 mode!
-                        </p>
-                        
-                        <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-800">
-                           <div className="flex items-center justify-between">
-                             <div>
-                               <p className="text-[9px] font-black uppercase text-slate-400 mb-0.5">Background Worker (24/7)</p>
-                               <p className="text-[8px] text-slate-500">Enable this to run cleanup & welcome 24/7.</p>
-                             </div>
-                             {webhookActive ? (
-                               <button 
-                                 onClick={handleDeleteWebhook}
-                                 disabled={isProcessingWebhook}
-                                 className="px-2 py-1 bg-rose-500/10 text-rose-500 text-[8px] font-black uppercase rounded-lg border border-rose-500/20 hover:bg-rose-500 hover:text-white transition-all disabled:opacity-50 whitespace-nowrap ml-2"
-                                >
-                                 {isProcessingWebhook ? 'Working...' : 'Stop Background'}
-                               </button>
-                             ) : (
-                               <button 
-                                 onClick={handleSetWebhook}
-                                 disabled={isProcessingWebhook}
-                                 className="px-2 py-1 bg-emerald-500/10 text-emerald-500 text-[8px] font-black uppercase rounded-lg border border-emerald-500/20 hover:bg-emerald-500 hover:text-white transition-all disabled:opacity-50 whitespace-nowrap ml-2"
-                               >
-                                 {isProcessingWebhook ? 'Working...' : 'Start Background'}
-                               </button>
-                             )}
-                           </div>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="mb-6 p-4 bg-white dark:bg-black/20 rounded-2xl border border-slate-200 dark:border-white/5">
-                      <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2">
-                        <Icons.Radio size={14} className="text-rose-500" /> Broadcast to All Hubs
-                      </h4>
-                      <textarea 
-                        placeholder="Enter broadcast message..." 
-                        className="w-full bg-slate-50 dark:bg-black/30 border border-slate-200 dark:border-white/10 px-6 py-4 rounded-2xl text-slate-900 dark:text-white text-xs outline-none focus:ring-4 focus:ring-indigo-500/20 mb-4 transition-all"
-                        rows={3}
-                        value={broadcastMessage}
-                        onChange={e => setBroadcastMessage(e.target.value)}
-                      />
-                      <button 
-                        onClick={handleBroadcast}
-                        disabled={!broadcastMessage || !token}
-                        className="w-full py-4 bg-rose-600 text-white font-black uppercase text-xs rounded-2xl shadow-xl hover:bg-rose-500 active:scale-95 transition-all disabled:opacity-50"
-                      >
-                        Broadcast Message
-                      </button>
-
-                      {broadcasts.length > 0 && (
-                        <div className="mt-6 pt-6 border-t border-slate-200 dark:border-slate-800">
-                          <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Recent Broadcasts</h4>
-                          <div className="space-y-3 max-h-40 overflow-y-auto custom-scrollbar pr-2">
-                            {broadcasts.slice(0, 5).map(b => (
-                              <div key={b._id} className="bg-slate-50 dark:bg-black/20 p-3 rounded-xl border border-slate-200 dark:border-white/5 flex items-center justify-between">
-                                <div className="flex-1 min-w-0 mr-4">
-                                  <p className="text-[10px] text-slate-900 dark:text-white truncate font-bold">{b.message}</p>
-                                  <p className="text-[8px] text-slate-500">{new Date(b.timestamp).toLocaleTimeString()}</p>
-                                </div>
-                                <button onClick={() => handleDeleteBroadcast(b._id)} className="p-1.5 text-rose-500 hover:bg-rose-500 hover:text-white rounded-lg transition-all">
-                                  <Icons.Trash size={12} />
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-
-                    <div className="mb-4">
-                      <input type="password" value={token} onChange={e => setToken(e.target.value)} disabled={isLocked} className="w-full bg-white dark:bg-black/30 border border-slate-200 dark:border-white/10 px-6 py-4 rounded-2xl text-slate-900 dark:text-white font-mono text-xs outline-none focus:ring-4 focus:ring-indigo-500/20 transition-all" placeholder="Bot Token" />
-                    </div>
-
-                    <div className="flex gap-2 mb-6">
-                      <button onClick={() => handleVerify(token)} className="flex-1 py-4 bg-indigo-600 text-white font-black uppercase text-xs rounded-2xl shadow-xl hover:bg-indigo-500 active:scale-95 transition-all">Sync Connection</button>
-                      <button onClick={() => setIsLocked(!isLocked)} className="px-6 py-4 bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-2xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all">{isLocked ? 'Unlock' : 'Lock'}</button>
-                    </div>
-
-                    <div className="mb-6 p-4 bg-blue-500/10 border border-blue-500/20 rounded-2xl">
-                      <div className="flex items-center justify-between mb-3">
-                        <div>
-                          <p className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest">Pending Sync</p>
-                          <p className="text-xs font-bold text-slate-500">{pendingGroups.length} Batches, {pendingJoins.length} Joins</p>
-                        </div>
-                        {isSyncingToDb ? <Icons.Refresh className="animate-spin text-blue-500" size={20} /> : <Icons.Database className="text-blue-500" size={20} />}
-                      </div>
-                      <button 
-                        onClick={syncDataToDatabase}
-                        disabled={isSyncingToDb || (pendingGroups.length === 0 && pendingJoins.length === 0)}
-                        className="w-full py-3 bg-blue-600 text-white font-black uppercase text-[10px] tracking-widest rounded-xl shadow-lg hover:bg-blue-500 active:scale-95 transition-all disabled:opacity-50 disabled:grayscale"
-                      >
-                        {isSyncingToDb ? 'Updating Database...' : 'Update To Database'}
-                      </button>
-                    </div>
-
-                    <div className="mb-6 bg-emerald-500/5 dark:bg-emerald-500/10 p-4 rounded-2xl border border-emerald-500/20">
-                      <h4 className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-[0.2em] mb-3 flex items-center gap-2">
-                        <Icons.Search size={14} /> Auto-Discovery Help
-                      </h4>
-                      <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed font-bold">
-                        Bot auto-detects existing groups if someone sends a message. 
-                        To force discovery: 
-                        <br/><span className="text-emerald-500">1. Go to Group</span>
-                        <br/><span className="text-emerald-500">2. Type /start or any message</span>
-                        <br/><span className="text-slate-500">3. App will auto-inject the batch!</span>
-                      </p>
-                    </div>
-
-                    <div className="mb-6 p-4 bg-white dark:bg-black/20 rounded-2xl border border-slate-200 dark:border-white/5">
-                      <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2">
-                        <Icons.Link size={14} className="text-red-500" /> Revoke Invite Link
-                      </h4>
-                      <input 
-                        placeholder="Paste link to revoke..." 
-                        className="w-full bg-slate-50 dark:bg-black/30 border border-slate-200 dark:border-white/10 px-6 py-4 rounded-2xl text-slate-900 dark:text-white text-xs outline-none focus:ring-4 focus:ring-indigo-500/20 mb-4 transition-all"
-                        value={linkToRevoke}
-                        onChange={e => setLinkToRevoke(e.target.value)}
-                      />
-                      <button 
-                        onClick={handleRevokeLink}
-                        className="w-full py-4 bg-red-600 text-white font-black uppercase text-xs rounded-2xl shadow-xl hover:bg-red-500 active:scale-95 transition-all disabled:opacity-50"
-                      >
-                        Revoke Link
-                      </button>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3 border-t border-slate-200 dark:border-slate-800 pt-6">
-                      <button onClick={handleExport} className="flex flex-col items-center justify-center gap-2 p-5 bg-indigo-600 text-white rounded-2xl shadow-lg active:scale-95 transition-all">
-                        <Icons.DownloadCloud size={20} />
-                        <span className="text-[10px] font-black uppercase tracking-widest">Export</span>
-                      </button>
-                      <button onClick={handleShareApp} className="flex flex-col items-center justify-center gap-2 p-5 bg-purple-600 text-white rounded-2xl shadow-lg active:scale-95 transition-all">
-                        <Icons.Share2 size={20} />
-                        <span className="text-[10px] font-black uppercase tracking-widest">Share</span>
-                      </button>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3 mt-3">
-                      <button onClick={() => importFileRef.current?.click()} className="flex flex-col items-center justify-center gap-2 p-5 bg-emerald-600 text-white rounded-2xl shadow-lg active:scale-95 transition-all w-full col-span-1">
-                        <Icons.UploadCloud size={20} />
-                        <span className="text-[10px] font-black uppercase tracking-widest">Import</span>
-                      </button>
-                      <button onClick={() => window.open('/api/diagnostics', '_blank')} className="flex flex-col items-center justify-center gap-2 p-5 bg-amber-600 text-white rounded-2xl shadow-lg active:scale-95 transition-all w-full col-span-1">
-                        <Icons.Activity size={20} />
-                        <span className="text-[10px] font-black uppercase tracking-widest">Log</span>
-                      </button>
-                      <input type="file" ref={importFileRef} onChange={handleImport} accept=".json" className="hidden" />
-                    </div>
-
-                    {/* Theme & Visual Experience card moved to absolute bottom */}
-                    <div className="p-4 bg-slate-100/50 dark:bg-slate-900/30 rounded-2xl border border-slate-200/60 dark:border-white/5 shadow-sm space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white shadow-sm flex-shrink-0">
-                            <Icons.Palette size={16} />
+                    {/* Core System Configuration */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                      <div className="bg-white dark:bg-slate-950/40 backdrop-blur-xl border border-slate-200 dark:border-white/10 rounded-[2.5rem] p-6 shadow-xl">
+                        <div className="flex items-center gap-3 mb-6">
+                          <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 flex items-center justify-center text-indigo-500">
+                            <Icons.Shield size={20} strokeWidth={2.5} />
                           </div>
                           <div>
-                            <h4 className="text-[8px] font-black text-slate-900 dark:text-white uppercase tracking-wider leading-none">
-                              Theme & Visual Experience
-                            </h4>
-                            <p className="text-[8px] text-slate-500 dark:text-slate-400 font-bold leading-none mt-0.5">
-                              Select a modern theme palette to update your dashboard look instantly.
-                            </p>
+                            <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Security Guard</h4>
+                            <h3 className="text-sm font-black text-slate-900 dark:text-white">Cleanup & Moderation</h3>
+                          </div>
+                        </div>
+
+                        <div className="space-y-5">
+                          <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-white/5 rounded-2xl border border-slate-100 dark:border-white/5 transition-all hover:border-indigo-500/30">
+                            <div>
+                              <p className="text-[10px] font-bold text-slate-900 dark:text-slate-200">Group Cleanup</p>
+                              <p className="text-[8px] text-slate-500">Auto-purge service messages</p>
+                            </div>
+                            <button 
+                              onClick={() => setAutoCleanServiceMessages(!autoCleanServiceMessages)}
+                              className={`w-10 h-6 rounded-full transition-all relative ${autoCleanServiceMessages ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-800'}`}
+                            >
+                              <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${autoCleanServiceMessages ? 'left-5' : 'left-1'} shadow-sm`} />
+                            </button>
+                          </div>
+
+                          <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-white/5 rounded-2xl border border-slate-100 dark:border-white/5 transition-all hover:border-indigo-500/30">
+                            <div>
+                              <p className="text-[10px] font-bold text-slate-900 dark:text-slate-200">Join Requests</p>
+                              <p className="text-[8px] text-slate-500">Auto-approve new users</p>
+                            </div>
+                            <button 
+                              onClick={() => setAutoApproveJoinRequest(!autoApproveJoinRequest)}
+                              className={`w-10 h-6 rounded-full transition-all relative ${autoApproveJoinRequest ? 'bg-emerald-600' : 'bg-slate-300 dark:bg-slate-800'}`}
+                            >
+                              <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${autoApproveJoinRequest ? 'left-5' : 'left-1'} shadow-sm`} />
+                            </button>
+                          </div>
+
+                          <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-white/5 rounded-2xl border border-slate-100 dark:border-white/5 transition-all hover:border-indigo-500/30">
+                            <div>
+                              <p className="text-[10px] font-bold text-slate-900 dark:text-slate-200">Group Welcome</p>
+                              <p className="text-[8px] text-slate-500">Auto-greet new members</p>
+                            </div>
+                            <button 
+                              onClick={() => setAutoWelcome(!autoWelcome)}
+                              className={`w-10 h-6 rounded-full transition-all relative ${autoWelcome ? 'bg-purple-600' : 'bg-slate-300 dark:bg-slate-800'}`}
+                            >
+                              <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${autoWelcome ? 'left-5' : 'left-1'} shadow-sm`} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-white dark:bg-slate-950/40 backdrop-blur-xl border border-slate-200 dark:border-white/10 rounded-[2rem] p-6 shadow-xl flex flex-col">
+                        <div className="flex items-center gap-3 mb-6">
+                          <div className="w-10 h-10 rounded-2xl bg-amber-500/10 flex items-center justify-center text-amber-500">
+                            <Icons.Zap size={20} strokeWidth={2.5} />
+                          </div>
+                          <div>
+                            <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Background Services</h4>
+                            <h3 className="text-sm font-black text-slate-900 dark:text-white">Active Worker (24/7)</h3>
+                          </div>
+                        </div>
+
+                        <div className="flex-1 bg-slate-50 dark:bg-white/5 rounded-3xl p-5 border border-slate-100 dark:border-white/5 mb-4">
+                          <p className="text-[9px] font-bold text-slate-500 mb-4 leading-relaxed italic">
+                            The background worker ensures all automation rules (cleanup, welcome, sync) remain active even when you are offline.
+                          </p>
+                          <div className="flex items-center justify-between">
+                            <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${webhookActive ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-slate-500/10 text-slate-400 border border-slate-400/20'}`}>
+                              {webhookActive ? 'SYSTEM ACTIVE' : 'WORKER STANDBY'}
+                            </span>
+                            {webhookActive ? (
+                              <button onClick={handleDeleteWebhook} disabled={isProcessingWebhook} className="px-4 py-2 bg-rose-600 text-white text-[9px] font-black uppercase rounded-xl shadow-lg hover:bg-rose-500 active:scale-95 transition-all disabled:opacity-50">Stop Worker</button>
+                            ) : (
+                              <button onClick={handleSetWebhook} disabled={isProcessingWebhook} className="px-4 py-2 bg-indigo-600 text-white text-[9px] font-black uppercase rounded-xl shadow-lg hover:bg-indigo-500 active:scale-95 transition-all disabled:opacity-50">Start Worker</button>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 p-3 bg-amber-500/5 rounded-2xl border border-amber-500/10">
+                           <Icons.AlertCircle size={14} className="text-amber-500 shrink-0" />
+                           <p className="text-[8px] font-medium text-amber-600 dark:text-amber-400">Requires bot <span className="underline font-black">Delete Messages</span> permissions for cleanup.</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Communication & Connection */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                       <div className="lg:col-span-2 bg-white dark:bg-slate-950/40 backdrop-blur-xl border border-slate-200 dark:border-white/10 rounded-[2rem] p-6 shadow-xl">
+                          <div className="flex items-center justify-between mb-6">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-2xl bg-rose-500/10 flex items-center justify-center text-rose-500">
+                                <Icons.Radio size={20} strokeWidth={2.5} />
+                              </div>
+                              <h3 className="text-sm font-black text-slate-900 dark:text-white">Global Broadcast</h3>
+                            </div>
+                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{broadcasts.length} Sent</span>
+                          </div>
+                          <textarea 
+                            placeholder="Enter broadcast message..." 
+                            className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 px-5 py-4 rounded-2xl text-slate-900 dark:text-white text-xs outline-none focus:ring-4 focus:ring-indigo-500/20 mb-4 transition-all resize-none shadow-inner"
+                            rows={3}
+                            value={broadcastMessage}
+                            onChange={e => setBroadcastMessage(e.target.value)}
+                          />
+                          <button 
+                            onClick={handleBroadcast}
+                            disabled={!broadcastMessage || !token}
+                            className="w-full py-4 bg-gradient-to-r from-rose-600 to-pink-600 text-white font-black uppercase text-xs rounded-2xl shadow-xl hover:shadow-rose-500/30 active:scale-95 transition-all disabled:opacity-50"
+                          >
+                            Execute Broadcast
+                          </button>
+                       </div>
+
+                       <div className="bg-white dark:bg-slate-950/40 backdrop-blur-xl border border-slate-200 dark:border-white/10 rounded-[2rem] p-6 shadow-xl">
+                          <h3 className="text-sm font-black text-slate-900 dark:text-white mb-6">Database Status</h3>
+                          <div className="space-y-4 mb-6">
+                            <div className="flex justify-between items-center text-[10px]">
+                              <span className="font-bold text-slate-500">Pending Batches</span>
+                              <span className="font-black text-indigo-500">{pendingGroups.length}</span>
+                            </div>
+                            <div className="flex justify-between items-center text-[10px]">
+                              <span className="font-bold text-slate-500">Pending Joins</span>
+                              <span className="font-black text-indigo-500">{pendingJoins.length}</span>
+                            </div>
+                            <div className="w-full h-1 bg-slate-100 dark:bg-white/5 rounded-full overflow-hidden">
+                               <div className="h-full bg-indigo-500 transition-all duration-500" style={{ width: `${(pendingGroups.length + pendingJoins.length) > 0 ? 100 : 0}%` }}></div>
+                            </div>
+                          </div>
+                          <button 
+                            onClick={syncDataToDatabase}
+                            disabled={isSyncingToDb || (pendingGroups.length === 0 && pendingJoins.length === 0)}
+                            className="w-full py-4 bg-indigo-600 text-white font-black uppercase text-[10px] tracking-widest rounded-2xl shadow-xl hover:bg-indigo-500 active:scale-95 transition-all disabled:opacity-50 disabled:grayscale"
+                          >
+                            {isSyncingToDb ? 'Syncing...' : 'Sync to Cloud'}
+                          </button>
+                       </div>
+                    </div>
+
+                    {/* Bot Connection & Identity */}
+                    <div className="bg-white dark:bg-slate-950/40 backdrop-blur-xl border border-slate-200 dark:border-white/10 rounded-[2rem] p-8 shadow-xl mb-8">
+                       <div className="flex items-center gap-4 mb-8">
+                          <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center text-white shadow-xl shadow-indigo-500/30">
+                            <Icons.Link size={24} strokeWidth={2.5} />
+                          </div>
+                          <div>
+                            <h3 className="text-lg font-black text-slate-900 dark:text-white leading-none mb-1">Bot Connection</h3>
+                            <p className="text-xs text-slate-500 font-medium uppercase tracking-widest">Verify & Lock system identity</p>
+                          </div>
+                       </div>
+
+                       <div className="flex flex-col md:flex-row gap-4">
+                         <div className="flex-1 relative group">
+                            <input 
+                              type="password" 
+                              value={token} 
+                              onChange={e => setToken(e.target.value)} 
+                              disabled={isLocked} 
+                              className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 px-6 py-4 rounded-2xl text-slate-900 dark:text-white font-mono text-xs outline-none focus:ring-4 focus:ring-indigo-500/20 transition-all shadow-inner" 
+                              placeholder="Enter Bot Token" 
+                            />
+                            <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Secure AES-256</span>
+                            </div>
+                         </div>
+                         <div className="flex gap-2 shrink-0">
+                           <button onClick={() => handleVerify(token)} className="px-8 py-4 bg-indigo-600 text-white font-black uppercase text-xs rounded-2xl shadow-xl hover:bg-indigo-500 active:scale-95 transition-all">Verify</button>
+                           <button onClick={() => setIsLocked(!isLocked)} className="px-6 py-4 bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-2xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all">
+                              {isLocked ? <Icons.Lock size={16} /> : <Icons.Unlock size={16} />}
+                           </button>
+                         </div>
+                       </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+                       <button onClick={handleExport} className="flex flex-col items-center justify-center gap-3 p-6 bg-slate-900 dark:bg-white/5 text-white rounded-[2rem] shadow-lg hover:-translate-y-1 transition-all group">
+                         <div className="w-10 h-10 rounded-xl bg-indigo-500/20 flex items-center justify-center text-indigo-400 group-hover:scale-110 transition-transform">
+                            <Icons.DownloadCloud size={20} />
+                         </div>
+                         <span className="text-[10px] font-black uppercase tracking-[0.2em]">Export</span>
+                       </button>
+                       <button onClick={handleShareApp} className="flex flex-col items-center justify-center gap-3 p-6 bg-slate-900 dark:bg-white/5 text-white rounded-[2rem] shadow-lg hover:-translate-y-1 transition-all group">
+                         <div className="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center text-purple-400 group-hover:scale-110 transition-transform">
+                            <Icons.Share2 size={20} />
+                         </div>
+                         <span className="text-[10px] font-black uppercase tracking-[0.2em]">Share</span>
+                       </button>
+                       <button onClick={() => importFileRef.current?.click()} className="flex flex-col items-center justify-center gap-3 p-6 bg-slate-900 dark:bg-white/5 text-white rounded-[2rem] shadow-lg hover:-translate-y-1 transition-all group">
+                         <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center text-emerald-400 group-hover:scale-110 transition-transform">
+                            <Icons.UploadCloud size={20} />
+                         </div>
+                         <span className="text-[10px] font-black uppercase tracking-[0.2em]">Import</span>
+                       </button>
+                       <button onClick={() => window.open('/api/diagnostics', '_blank')} className="flex flex-col items-center justify-center gap-3 p-6 bg-slate-900 dark:bg-white/5 text-white rounded-[2rem] shadow-lg hover:-translate-y-1 transition-all group">
+                         <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center text-amber-400 group-hover:scale-110 transition-transform">
+                            <Icons.Activity size={20} />
+                         </div>
+                         <span className="text-[10px] font-black uppercase tracking-[0.2em]">Logs</span>
+                       </button>
+                       <input type="file" ref={importFileRef} onChange={handleImport} accept=".json" className="hidden" />
+                    </div>
+
+                    {/* Visual Experience Card moved to footer area of settings */}
+                    <div className="relative rounded-[2.5rem] bg-gradient-to-br from-slate-900 via-slate-800 to-black p-8 shadow-2xl overflow-hidden border border-white/5">
+                       <BubbleBackground />
+                       <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
+                          <div className="text-center md:text-left">
+                             <h4 className="text-xs font-black text-indigo-400 uppercase tracking-[0.3em] mb-2">Interface Engine</h4>
+                             <h3 className="text-2xl font-black text-white leading-tight">Visual Experience & Themes</h3>
+                             <p className="text-slate-400 text-xs mt-2 max-w-sm">Personalize your administrative dashboard with hand-crafted high-fidelity color presets.</p>
                           </div>
                         </div>
 
@@ -3507,10 +3818,9 @@ const App: React.FC = () => {
                               </p>
                             </button>
                           ))}
-                        </div>
-                      </div>
                     </div>
                   </div>
+                </div>
               )}
 
               {settingsSubTab === 'admins' && (
