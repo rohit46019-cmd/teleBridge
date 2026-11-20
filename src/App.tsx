@@ -428,6 +428,7 @@ const App: React.FC = () => {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [linkToRevoke, setLinkToRevoke] = useState('');
+  const [showAllJoins, setShowAllJoins] = useState(false);
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
@@ -1919,23 +1920,41 @@ const App: React.FC = () => {
 
   const handleRevokeLink = async () => {
     if (!linkToRevoke) return;
-    console.log("handleRevokeLink called. Link:", linkToRevoke, "Token:", token);
     try {
-      const response = await fetch('/api/revoke-link', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ link: linkToRevoke, token }),
-      });
-      if (!response.ok) {
-        const text = await response.text();
-        console.error("Server response:", text);
-        try {
-          const data = JSON.parse(text);
-          throw new Error(data.error || 'Failed to revoke link');
-        } catch {
-          throw new Error(`Failed to revoke link (server returned non-JSON): ${text.substring(0, 50)}...`);
+      let success = false;
+      try {
+        const response = await fetch('/api/revoke-link', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ link: linkToRevoke, token }),
+        });
+        if (response.ok) {
+          success = true;
+        }
+      } catch {}
+
+      if (!success) {
+        // Fallback: direct Telegram API call across all known groups
+        for (const g of groups) {
+          try {
+            const tgRes = await fetch(`https://api.telegram.org/bot${token}/revokeChatInviteLink`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ chat_id: g.id, invite_link: linkToRevoke })
+            });
+            const tgData = await tgRes.json();
+            if (tgData.ok) {
+              success = true;
+              break;
+            }
+          } catch {}
         }
       }
+
+      if (!success) {
+        throw new Error("Could not revoke link. Check if bot is admin and link is valid.");
+      }
+
       showNotification("Link revoked successfully!", 'success');
       setLinkToRevoke('');
     } catch (err: any) {
@@ -1943,7 +1962,15 @@ const App: React.FC = () => {
     }
   };
 
-  const filteredJoins = useMemo(() => joinEvents.filter(e => new Date(e.timestamp).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }) === selectedDate).sort((a, b) => a.timestamp - b.timestamp), [joinEvents, selectedDate]);
+  const filteredJoins = useMemo(() => {
+    if (showAllJoins) {
+      return [...joinEvents].sort((a, b) => b.timestamp - a.timestamp);
+    }
+    return joinEvents.filter(e => {
+      const eventDate = new Date(e.timestamp).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+      return eventDate === selectedDate;
+    }).sort((a, b) => b.timestamp - a.timestamp);
+  }, [joinEvents, selectedDate, showAllJoins]);
   const joinsTodayCount = useMemo(() => {
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
     return joinEvents.filter(e => {
@@ -3073,15 +3100,28 @@ const App: React.FC = () => {
 
                      <div className="bg-white dark:bg-slate-900 p-3.5 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-md flex flex-col justify-between">
                         <div className="flex items-center justify-between mb-1.5">
-                           <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Filter By Date</p>
-                           <Icons.Calendar size={13} className="text-slate-400" />
+                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                              {showAllJoins ? 'All Joins Stream' : 'Filter By Date'}
+                            </p>
+                            <button 
+                              onClick={() => setShowAllJoins(!showAllJoins)}
+                              className="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
+                            >
+                              {showAllJoins ? 'Use Date Filter' : 'Show All'}
+                            </button>
                         </div>
-                        <input 
-                           type="date" 
-                           value={selectedDate} 
-                           onChange={e => setSelectedDate(e.target.value)} 
-                           className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-bold outline-none rounded-lg py-1.5 px-2.5 w-full focus:ring-2 focus:ring-indigo-500/20 transition-all cursor-pointer" 
-                        />
+                        {!showAllJoins ? (
+                          <input 
+                             type="date" 
+                             value={selectedDate} 
+                             onChange={e => setSelectedDate(e.target.value)} 
+                             className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-bold outline-none rounded-lg py-1.5 px-2.5 w-full focus:ring-2 focus:ring-indigo-500/20 transition-all cursor-pointer" 
+                          />
+                        ) : (
+                          <div className="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-xs font-bold rounded-lg py-1.5 px-2.5 text-center">
+                            Showing all {joinEvents.length} join events
+                          </div>
+                        )}
                      </div>
                   </div>
 

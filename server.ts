@@ -401,33 +401,72 @@ app.delete("/api/groups/:id/links", requireDB, async (req: Request, res: Respons
 
 app.post("/api/revoke-link", requireDB, async (req: Request, res: Response) => {
   try {
-    const { link, token } = req.body || {};
+    const { link, token, chatId } = req.body || {};
     if (!link || !token) {
       res.status(400).json({ error: "Link and token required" });
       return;
     }
-    const inviteLinkDoc = await InviteLink.findOne({ link });
-    if (!inviteLinkDoc) {
-      res.status(404).json({ error: "Link not found in database" });
+
+    let targetChatId = chatId;
+    if (!targetChatId) {
+      const inviteLinkDoc = await InviteLink.findOne({ link });
+      if (inviteLinkDoc) {
+        targetChatId = inviteLinkDoc.groupId;
+      }
+    }
+
+    let success = false;
+    let telegramError = "";
+
+    if (targetChatId) {
+      const response = await fetch(
+        `https://api.telegram.org/bot${token}/revokeChatInviteLink`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ chat_id: targetChatId, invite_link: link }),
+        }
+      );
+      const data: any = await response.json();
+      if (data.ok) {
+        success = true;
+      } else {
+        telegramError = data.description || "Failed on Telegram";
+      }
+    }
+
+    // Fallback: try all groups in database if not yet successful
+    if (!success) {
+      const allGroups = await Group.find().lean();
+      for (const grp of allGroups) {
+        try {
+          const response = await fetch(
+            `https://api.telegram.org/bot${token}/revokeChatInviteLink`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ chat_id: grp.id, invite_link: link }),
+            }
+          );
+          const data: any = await response.json();
+          if (data.ok) {
+            success = true;
+            targetChatId = grp.id;
+            break;
+          } else if (!telegramError) {
+            telegramError = data.description;
+          }
+        } catch {}
+      }
+    }
+
+    if (!success) {
+      res.status(400).json({ error: telegramError || "Could not revoke invite link. Check if bot is admin and link is valid." });
       return;
     }
 
-    const chatId = inviteLinkDoc.groupId;
-    const response = await fetch(
-      `https://api.telegram.org/bot${token}/revokeChatInviteLink`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: chatId, invite_link: link }),
-      }
-    );
-    const data: any = await response.json();
-    if (!data.ok) {
-      throw new Error(data.description || "Failed to revoke link on Telegram");
-    }
-
     await InviteLink.deleteOne({ link });
-    res.json({ success: true });
+    res.json({ success: true, chatId: targetChatId });
   } catch (error: any) {
     res.status(500).json({ error: "Failed to revoke link: " + (error?.message || error) });
   }
