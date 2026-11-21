@@ -70,9 +70,6 @@ export async function getRecentUpdates(token: string, offset: number = 0): Promi
     });
     const data = await response.json();
     if (!data.ok) {
-      if (data.description?.includes('Conflict')) {
-        return [];
-      }
       throw new Error(data.description || 'Failed to fetch updates');
     }
     return data.result || [];
@@ -82,6 +79,17 @@ export async function getRecentUpdates(token: string, offset: number = 0): Promi
       return [];
     }
     throw error;
+  }
+}
+
+export async function getWebhookInfo(token: string): Promise<{ url: string; pending_update_count?: number; last_error_message?: string } | null> {
+  try {
+    const response = await fetchWithTimeout(`${BASE_URL}${token}/getWebhookInfo`);
+    const data = await response.json();
+    if (!data.ok) return null;
+    return data.result || null;
+  } catch {
+    return null;
   }
 }
 

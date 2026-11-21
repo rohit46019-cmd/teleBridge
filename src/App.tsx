@@ -7,7 +7,7 @@ import ConfirmationModal from '../components/ConfirmationModal.tsx';
 import { AdminManager } from '../components/AdminManager.tsx';
 import { Icons } from '../constants.tsx';
 import { TelegramGroup, JoinEvent, BannedUser, BatchFolder } from '../types.ts';
-import { verifyBotToken, getChatDetails, TelegramBotInfo, getChatMemberCount, getRecentUpdates, kickChatMember, banMember, unbanMember, deleteMessage, setWebhook, deleteWebhook } from '../services/telegramService.ts';
+import { verifyBotToken, getChatDetails, TelegramBotInfo, getChatMemberCount, getRecentUpdates, getWebhookInfo, kickChatMember, banMember, unbanMember, deleteMessage, setWebhook, deleteWebhook } from '../services/telegramService.ts';
 import { 
   AreaChart, 
   Area, 
@@ -135,6 +135,21 @@ const normalizeText = (text: string): string => {
   return result.join('').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/[^\w\s]/g, '');
 };
 
+const normalizeTimestampMs = (ts: any): number => {
+  const num = Number(ts);
+  if (!num || Number.isNaN(num)) return Date.now();
+  return num < 1e12 ? num * 1000 : num;
+};
+
+const getISTDateKey = (input: number | Date = Date.now()): string => {
+  const ms = typeof input === 'number' ? normalizeTimestampMs(input) : input.getTime();
+  const istDate = new Date(ms + 5.5 * 60 * 60 * 1000);
+  const y = istDate.getUTCFullYear();
+  const m = String(istDate.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(istDate.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
 const DEFAULT_TOKEN = '8357993008:AAGCcWUfCrRboCCnUS3N3kHS53PvAPIMwxs';
 const DEFAULT_GROUPS: TelegramGroup[] = [
   { "id": "-1003698762401", "name": "GK & GS Brahmastra 4.0 Batch", "memberCount": 5, "description": "Synced Hub", "category": "Telegram", "image": "https://picsum.photos/seed/-1003698762401/100", "lastInteraction": 1774102797184 },
@@ -189,7 +204,7 @@ const App: React.FC = () => {
   const [showRecentSearches, setShowRecentSearches] = useState(false);
   const [filterOption, setFilterOption] = useState<'mostMembers' | 'leastMembers' | 'frequent' | 'recent' | 'newAdded' | 'activeToday'>('recent');
   const [showFilterMenu, setShowFilterMenu] = useState(false);
-  const [selectedDate, setSelectedDate] = useState<string>(new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }));
+  const [selectedDate, setSelectedDate] = useState<string>(() => getISTDateKey());
   const [auditSubTab, setAuditSubTab] = useState<'audit' | 'blocked' | 'deleted'>('audit');
   const [updates, setUpdates] = useState<any[]>([]);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
@@ -410,6 +425,7 @@ const App: React.FC = () => {
   const [totalMembers, setTotalMembers] = useState(0);
   const [lastUpdateId, setLastUpdateId] = useState(() => Number(localStorage.getItem('tg_last_update_id')) || 0);
   const lastUpdateIdRef = useRef(lastUpdateId);
+  const joinEventsRef = useRef(joinEvents);
   const tabId = useRef(Math.random().toString(36).substring(7));
   const [isMaster, setIsMaster] = useState(false);
   const [analyticsRange, setAnalyticsRange] = useState<'1W' | '1M' | '3M' | '6M' | '1Y' | 'CUSTOM'>('1W');
@@ -497,37 +513,32 @@ const App: React.FC = () => {
   }, [joinEvents, analyticsRange, analysisStartDate, analysisEndDate]);
 
   const comparisonStats = useMemo(() => {
-    const now = new Date();
-    // Helper to format date in IST
-    const getIstDateStr = (date: Date) => date.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
-
-    const todayStr = getIstDateStr(now);
-    const yesterday = new Date(now.getTime() - 86400000);
-    const yesterdayStr = getIstDateStr(yesterday);
+    const nowMs = Date.now();
+    const todayStr = getISTDateKey(nowMs);
+    const yesterdayStr = getISTDateKey(nowMs - 86400000);
 
     let todayCount = 0;
     let yesterdayCount = 0;
 
-    // Weekly comparison - still using event timestamps but dateStr is IST
-    const startOfThisWeek = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Kolkata"})); 
-    startOfThisWeek.setHours(0, 0, 0, 0); 
-    startOfThisWeek.setDate(startOfThisWeek.getDate() - startOfThisWeek.getDay());
-
-    const startOfLastWeek = new Date(startOfThisWeek);
-    startOfLastWeek.setDate(startOfLastWeek.getDate() - 7);
+    // Weekly comparison in IST
+    const istNow = new Date(nowMs + 5.5 * 60 * 60 * 1000);
+    const istMidnightUtcMs = Date.UTC(istNow.getUTCFullYear(), istNow.getUTCMonth(), istNow.getUTCDate()) - 5.5 * 60 * 60 * 1000;
+    const dayOfWeek = istNow.getUTCDay();
+    const startOfThisWeekMs = istMidnightUtcMs - dayOfWeek * 86400000;
+    const startOfLastWeekMs = startOfThisWeekMs - 7 * 86400000;
 
     let thisWeekCount = 0;
     let lastWeekCount = 0;
 
     joinEvents.forEach(event => {
-      const d = new Date(event.timestamp);
-      const dateStr = getIstDateStr(d);
-      
+      const ts = normalizeTimestampMs(event.timestamp);
+      const dateStr = getISTDateKey(ts);
+
       if (dateStr === todayStr) todayCount++;
       else if (dateStr === yesterdayStr) yesterdayCount++;
 
-      if (d >= startOfThisWeek) thisWeekCount++;
-      else if (d >= startOfLastWeek && d < startOfThisWeek) lastWeekCount++;
+      if (ts >= startOfThisWeekMs) thisWeekCount++;
+      else if (ts >= startOfLastWeekMs && ts < startOfThisWeekMs) lastWeekCount++;
     });
 
     const getTrend = (curr: number, prev: number) => {
@@ -535,21 +546,28 @@ const App: React.FC = () => {
       return Math.round(((curr - prev) / prev) * 100);
     };
 
+    const todayNetworkPercent = totalMembers > 0 ? Number(((todayCount / totalMembers) * 100).toFixed(1)) : 0;
+    const todayShareOfHistory = joinEvents.length > 0 ? Number(((todayCount / joinEvents.length) * 100).toFixed(1)) : 0;
+
     return {
       today: todayCount,
       yesterday: yesterdayCount,
       todayTrend: getTrend(todayCount, yesterdayCount),
+      todayNetworkPercent,
+      todayShareOfHistory,
       thisWeek: thisWeekCount,
       lastWeek: lastWeekCount,
       weekTrend: getTrend(thisWeekCount, lastWeekCount)
     };
-  }, [joinEvents]);
-
-
+  }, [joinEvents, totalMembers]);
 
   useEffect(() => {
     lastUpdateIdRef.current = lastUpdateId;
   }, [lastUpdateId]);
+
+  useEffect(() => {
+    joinEventsRef.current = joinEvents;
+  }, [joinEvents]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -948,9 +966,88 @@ const App: React.FC = () => {
     localStorage.setItem('tg_groups', JSON.stringify(groups));
   }, [isLocked, lastUpdateId, groups]);
 
+  // Lock background scroll whenever any modal (group invite link, create folder, confirmation) is open
+  useEffect(() => {
+    const isModalOpen = !!selectedGroup || isCreateFolderModalOpen || confirmationModalConfig.isOpen;
+    if (!isModalOpen) return;
+
+    const scrollY = window.scrollY;
+    const prevHtmlOverflow = document.documentElement.style.overflow;
+    const prevBodyOverflow = document.body.style.overflow;
+    const prevBodyPosition = document.body.style.position;
+    const prevBodyTop = document.body.style.top;
+    const prevBodyLeft = document.body.style.left;
+    const prevBodyRight = document.body.style.right;
+    const prevBodyWidth = document.body.style.width;
+    const prevOverscroll = document.body.style.overscrollBehavior;
+
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.left = '0';
+    document.body.style.right = '0';
+    document.body.style.width = '100%';
+    document.body.style.overscrollBehavior = 'none';
+
+    return () => {
+      document.documentElement.style.overflow = prevHtmlOverflow;
+      document.body.style.overflow = prevBodyOverflow;
+      document.body.style.position = prevBodyPosition;
+      document.body.style.top = prevBodyTop;
+      document.body.style.left = prevBodyLeft;
+      document.body.style.right = prevBodyRight;
+      document.body.style.width = prevBodyWidth;
+      document.body.style.overscrollBehavior = prevOverscroll;
+      window.scrollTo(0, scrollY);
+    };
+  }, [!!selectedGroup, isCreateFolderModalOpen, confirmationModalConfig.isOpen]);
+
+  // Helper to fetch latest join events from server DB (and poll Telegram if webhook is off)
+  const refreshAuditEvents = async (manualNotify = false) => {
+    try {
+      const eventsRes = await fetch('/api/events?limit=2000', { headers: { 'Accept': 'application/json' } });
+      if (eventsRes.ok && eventsRes.headers.get("content-type")?.includes("application/json")) {
+        const serverEvents: JoinEvent[] = await eventsRes.json();
+        const normalizedServer = (Array.isArray(serverEvents) ? serverEvents : []).map(ev => ({
+          ...ev,
+          userName: ev.userName || `User ${ev.userId}`,
+          chatTitle: ev.chatTitle || 'Group',
+          timestamp: normalizeTimestampMs(ev.timestamp),
+        }));
+        setJoinEvents(prev => {
+          const combined = [...normalizedServer, ...prev];
+          return combined.filter((v, i, a) =>
+            a.findIndex(t => Number(t.userId) === Number(v.userId) && normalizeTimestampMs(t.timestamp) === normalizeTimestampMs(v.timestamp)) === i
+          ).sort((a, b) => normalizeTimestampMs(b.timestamp) - normalizeTimestampMs(a.timestamp)).slice(0, 10000);
+        });
+        setSyncStatus('connected');
+        setLastSyncTime(new Date());
+      }
+      if (!webhookActive && token) {
+        await discoverGroupsAndJoins(token);
+      }
+      if (manualNotify) {
+        showNotification('Audit stream refreshed!', 'success');
+      }
+    } catch (err) {
+      console.error("Failed to refresh audit events:", err);
+      if (manualNotify) {
+        showNotification('Could not reach server DB for refresh.', 'alert');
+      }
+    }
+  };
+
+  // Refresh events immediately when switching to Audit tab
+  useEffect(() => {
+    if (activeTab === 'analysis') {
+      refreshAuditEvents(false);
+    }
+  }, [activeTab]);
+
   // Background sync worker for pending changes
   useEffect(() => {
-    if (syncStatus !== 'connected' || (pendingJoins.length === 0 && pendingGroups.length === 0)) return;
+    if (pendingJoins.length === 0 && pendingGroups.length === 0) return;
 
     const syncPending = async () => {
       if (pendingJoins.length > 0) {
@@ -960,13 +1057,16 @@ const App: React.FC = () => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(pendingJoins)
           });
-          if (res.ok) setPendingJoins([]);
+          if (res.ok) {
+            setPendingJoins([]);
+            setSyncStatus('connected');
+          }
         } catch (e) {
           console.warn("Retrying joins sync later...");
         }
       }
 
-      if (pendingGroups.length > 0) {
+      if (pendingGroups.length > 0 && syncStatus === 'connected') {
         try {
           const res = await fetch('/api/groups/bulk-update', {
             method: 'PUT',
@@ -1245,7 +1345,24 @@ const App: React.FC = () => {
       setBotInfo(info);
       setToken(testToken);
       localStorage.setItem('tg_bot_token', testToken);
-      discoverGroupsAndJoins(testToken);
+
+      const whInfo = await getWebhookInfo(testToken);
+      if (whInfo && whInfo.url) {
+        setWebhookActive(true);
+        // If deployed on a new HTTPS domain (e.g. Vercel) and webhook still points to an old domain, re-sync webhook automatically
+        const origin = window.location.origin;
+        if (
+          origin.startsWith('https://') &&
+          whInfo.url.includes('/api/webhook/') &&
+          !whInfo.url.startsWith(origin)
+        ) {
+          const updatedWebhookUrl = `${origin}/api/webhook/${testToken}?welcome=${autoWelcome}&clean=${autoCleanServiceMessages}&approve=${autoApproveJoinRequest}`;
+          setWebhook(testToken, updatedWebhookUrl).catch(() => {});
+        }
+      } else {
+        setWebhookActive(false);
+        discoverGroupsAndJoins(testToken);
+      }
     } catch (err: any) {
       setBotInfo(null);
     } finally { setIsVerifying(false); }
@@ -1454,7 +1571,8 @@ const App: React.FC = () => {
         }
       });
 
-      if (maxId > lastUpdateId) {
+      if (maxId > lastUpdateIdRef.current) {
+        lastUpdateIdRef.current = maxId;
         setLastUpdateId(maxId);
         localStorage.setItem('tg_last_update_id', maxId.toString());
       }
@@ -1472,10 +1590,15 @@ const App: React.FC = () => {
           // Only process strictly if we haven't seen them locally in our historical state to prevent cross-batch dual incrementing
           const cutoffLower = ev.timestamp - 120000;
           const cutoffUpper = ev.timestamp + 120000;
-          const existInHistory = joinEvents.some(past => past.userId === ev.userId && past.chatId === ev.chatId && past.timestamp > cutoffLower && past.timestamp < cutoffUpper);
+          const existInHistory = joinEventsRef.current.some(past => past.userId === ev.userId && past.chatId === ev.chatId && normalizeTimestampMs(past.timestamp) > cutoffLower && normalizeTimestampMs(past.timestamp) < cutoffUpper);
           
           if (!existInHistory) {
-             dedupedJoins.push(ev);
+             dedupedJoins.push({
+               ...ev,
+               userName: ev.userName || `User ${ev.userId}`,
+               chatTitle: ev.chatTitle || 'Group',
+               timestamp: normalizeTimestampMs(ev.timestamp)
+             });
              const cIdStr = ev.chatId.toString();
              memberChanges[cIdStr] = (memberChanges[cIdStr] || 0) + 1;
              
@@ -1545,14 +1668,24 @@ const App: React.FC = () => {
       }
 
       if (dedupedJoins.length > 0) {
-        // Queue for manual sync
-        setPendingJoins(prev => [...prev, ...dedupedJoins]);
-      }
-
-      if (dedupedJoins.length > 0) {
         setJoinEvents(prev => {
           const combined = [...dedupedJoins, ...prev];
-          return combined.filter((v, i, a) => a.findIndex(t => t.userId === v.userId && t.timestamp === v.timestamp) === i).slice(0, 10000);
+          return combined.filter((v, i, a) => a.findIndex(t => Number(t.userId) === Number(v.userId) && normalizeTimestampMs(t.timestamp) === normalizeTimestampMs(v.timestamp)) === i).sort((a, b) => normalizeTimestampMs(b.timestamp) - normalizeTimestampMs(a.timestamp)).slice(0, 10000);
+        });
+
+        // Immediately sync new joins to backend DB; fallback to pendingJoins on failure
+        fetch('/api/events', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(dedupedJoins)
+        }).then(res => {
+          if (res.ok) {
+            setSyncStatus('connected');
+          } else {
+            setPendingJoins(prev => [...prev, ...dedupedJoins]);
+          }
+        }).catch(() => {
+          setPendingJoins(prev => [...prev, ...dedupedJoins]);
         });
       }
 
@@ -1593,11 +1726,16 @@ const App: React.FC = () => {
         }
       }
 
-      setLastUpdateId(maxId);
+      if (maxId > lastUpdateIdRef.current) {
+        lastUpdateIdRef.current = maxId;
+        setLastUpdateId(maxId);
+      }
       setLastSyncTime(new Date());
     } catch (e: any) {
       if (e.message?.includes('Conflict')) {
         console.log("Polling skipped: Webhook (24/7 background mode) is currently handling updates.");
+        setWebhookActive(true);
+        refreshAuditEvents(false);
         return;
       }
 
@@ -1964,18 +2102,16 @@ const App: React.FC = () => {
 
   const filteredJoins = useMemo(() => {
     if (showAllJoins) {
-      return [...joinEvents].sort((a, b) => b.timestamp - a.timestamp);
+      return [...joinEvents].sort((a, b) => normalizeTimestampMs(b.timestamp) - normalizeTimestampMs(a.timestamp));
     }
     return joinEvents.filter(e => {
-      const eventDate = new Date(e.timestamp).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
-      return eventDate === selectedDate;
-    }).sort((a, b) => b.timestamp - a.timestamp);
+      return getISTDateKey(e.timestamp) === selectedDate;
+    }).sort((a, b) => normalizeTimestampMs(b.timestamp) - normalizeTimestampMs(a.timestamp));
   }, [joinEvents, selectedDate, showAllJoins]);
   const joinsTodayCount = useMemo(() => {
-    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+    const today = getISTDateKey();
     return joinEvents.filter(e => {
-      const eventDate = new Date(e.timestamp).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
-      return eventDate === today;
+      return getISTDateKey(e.timestamp) === today;
     }).length;
   }, [joinEvents]);
 
@@ -2370,7 +2506,7 @@ const App: React.FC = () => {
                   </div>
                 </button>
 
-                {/* Card 3: Joins Today (Magenta / Fuchsia) */}
+                {/* Card 3: Today Joins & Percentage (Magenta / Fuchsia) */}
                 <button
                   type="button"
                   onClick={() => handleTabChange('analysis')}
@@ -2381,23 +2517,37 @@ const App: React.FC = () => {
                   </div>
                   <div className="relative z-10 flex flex-col h-full justify-between">
                     <div>
-                      <div className="flex items-center justify-between gap-2 mb-3.5">
+                      <div className="flex items-center justify-between gap-1.5 mb-3.5">
                         <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-fuchsia-500 text-white flex items-center justify-center shadow-md shadow-fuchsia-500/25 shrink-0">
                           <Icons.TrendingUp size={20} strokeWidth={2.2} />
                         </div>
-                        <span className="px-2 py-0.5 rounded-lg bg-fuchsia-200/60 dark:bg-fuchsia-500/20 text-[10px] font-extrabold text-fuchsia-700 dark:text-fuchsia-300 uppercase tracking-wider">
-                          Today
-                        </span>
+                        <div className="flex items-center gap-1 flex-wrap justify-end">
+                          <span className={`px-2 py-0.5 rounded-lg text-[10px] font-extrabold uppercase tracking-wider ${
+                            comparisonStats.todayTrend >= 0
+                              ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                              : 'bg-rose-500/15 text-rose-700 dark:text-rose-300'
+                          }`}>
+                            {comparisonStats.todayTrend >= 0 ? '+' : ''}{comparisonStats.todayTrend}%
+                          </span>
+                          <span className="px-2 py-0.5 rounded-lg bg-fuchsia-200/60 dark:bg-fuchsia-500/20 text-[10px] font-extrabold text-fuchsia-700 dark:text-fuchsia-300 uppercase tracking-wider">
+                            Today
+                          </span>
+                        </div>
                       </div>
                       <p className="text-[10px] sm:text-[11px] font-extrabold text-fuchsia-700 dark:text-fuchsia-300 uppercase tracking-wider mb-1">
-                        Joins Tracked
+                        Today Joins
                       </p>
-                      <p className="text-2xl sm:text-[26px] font-black text-slate-900 dark:text-white tabular-nums tracking-tight leading-none">
-                        {joinsTodayCount.toLocaleString()}
-                      </p>
+                      <div className="flex items-baseline gap-2 flex-wrap">
+                        <p className="text-2xl sm:text-[26px] font-black text-slate-900 dark:text-white tabular-nums tracking-tight leading-none">
+                          {joinsTodayCount.toLocaleString()}
+                        </p>
+                        <span className="text-[10px] font-bold text-fuchsia-600/80 dark:text-fuchsia-300/80">
+                          ({comparisonStats.todayNetworkPercent}% of hub)
+                        </span>
+                      </div>
                     </div>
                     <div className="flex items-center justify-between mt-4 pt-1 text-fuchsia-700 dark:text-fuchsia-300">
-                      <span className="text-xs font-bold truncate">View Analytics</span>
+                      <span className="text-xs font-bold truncate">Yesterday: {comparisonStats.yesterday}</span>
                       <Icons.ArrowRight size={15} className="shrink-0 group-hover:translate-x-1 transition-transform" />
                     </div>
                   </div>
@@ -3070,8 +3220,23 @@ const App: React.FC = () => {
 
               {auditSubTab === 'audit' ? (
                 <>
-                  {/* Compact Stats Row */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {/* Compact Stats Row: Today Joins + %, Selected Date Total, Engine Status, Date Filter */}
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                     <div className="bg-gradient-to-br from-fuchsia-600 to-purple-700 p-3.5 rounded-2xl shadow-md shadow-fuchsia-500/15 text-white relative overflow-hidden transition-all group">
+                        <div className="flex items-center justify-between mb-1">
+                           <p className="text-[9px] font-black uppercase tracking-widest opacity-85">Today Joins</p>
+                           <span className={`px-1.5 py-0.5 rounded-md text-[9px] font-black ${comparisonStats.todayTrend >= 0 ? 'bg-emerald-400/25 text-emerald-100' : 'bg-rose-400/25 text-rose-100'}`}>
+                             {comparisonStats.todayTrend >= 0 ? '+' : ''}{comparisonStats.todayTrend}%
+                           </span>
+                        </div>
+                        <div className="flex items-baseline gap-2">
+                           <p className="text-2xl font-black tracking-tight">{comparisonStats.today.toLocaleString()}</p>
+                           <span className="text-[9px] font-semibold opacity-80">{comparisonStats.todayNetworkPercent}% of hub</span>
+                        </div>
+                        <p className="text-[8px] font-medium opacity-75 mt-0.5 truncate">Yesterday: {comparisonStats.yesterday} • {comparisonStats.todayShareOfHistory}% of log</p>
+                        <div className="absolute -right-4 -bottom-4 w-16 h-16 bg-white/10 rounded-full blur-xl pointer-events-none" />
+                     </div>
+
                      <div className="bg-gradient-to-br from-indigo-600 to-indigo-700 p-3.5 rounded-2xl shadow-md shadow-indigo-500/15 text-white relative overflow-hidden transition-all group">
                         <div className="flex items-center justify-between mb-1">
                            <p className="text-[9px] font-black uppercase tracking-widest opacity-80">Total Joins</p>
@@ -3081,45 +3246,64 @@ const App: React.FC = () => {
                            <p className="text-2xl font-black tracking-tight">{filteredJoins.length}</p>
                            <span className="text-[9px] font-semibold opacity-75">captured</span>
                         </div>
-                        <p className="text-[8px] font-medium opacity-65 mt-0.5 truncate">{selectedDate}</p>
+                        <p className="text-[8px] font-medium opacity-65 mt-0.5 truncate">{showAllJoins ? 'All Dates' : selectedDate} • {joinEvents.length} total</p>
                         <div className="absolute -right-4 -bottom-4 w-16 h-16 bg-white/10 rounded-full blur-xl pointer-events-none" />
                      </div>
 
                      <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 p-3.5 rounded-2xl shadow-md shadow-emerald-500/15 text-white relative overflow-hidden transition-all group">
                         <div className="flex items-center justify-between mb-1">
                            <p className="text-[9px] font-black uppercase tracking-widest opacity-80">Engine Status</p>
-                           <Icons.Zap size={14} className="opacity-60" />
+                           <button
+                             type="button"
+                             onClick={() => refreshAuditEvents(true)}
+                             className="p-1 rounded-md bg-white/15 hover:bg-white/25 active:scale-95 transition-all"
+                             title="Refresh Join History"
+                           >
+                             <Icons.Refresh size={11} className={isScanning ? 'animate-spin' : ''} />
+                           </button>
                         </div>
                         <div className="flex items-baseline gap-2">
-                           <p className="text-2xl font-black tracking-tight">{isScanning ? 'SYNCING' : 'SECURE'}</p>
+                           <p className="text-xl sm:text-2xl font-black tracking-tight">{isScanning ? 'SYNCING' : webhookActive ? 'WEBHOOK' : 'POLLING'}</p>
                            <span className="inline-block w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
                         </div>
-                        <p className="text-[8px] font-medium opacity-65 mt-0.5 truncate">{isScanning ? 'Processing Updates' : 'Monitoring Real-time'}</p>
+                        <p className="text-[8px] font-medium opacity-75 mt-0.5 truncate">{webhookActive ? '24/7 Vercel DB Flow' : 'Live Bot Updates'}</p>
                         <div className="absolute -right-4 -bottom-4 w-16 h-16 bg-white/10 rounded-full blur-xl pointer-events-none" />
                      </div>
 
                      <div className="bg-white dark:bg-slate-900 p-3.5 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-md flex flex-col justify-between">
-                        <div className="flex items-center justify-between mb-1.5">
-                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                              {showAllJoins ? 'All Joins Stream' : 'Filter By Date'}
+                        <div className="flex items-center justify-between mb-1.5 gap-1">
+                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest truncate">
+                              {showAllJoins ? 'All Joins' : 'Filter Date'}
                             </p>
-                            <button 
-                              onClick={() => setShowAllJoins(!showAllJoins)}
-                              className="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
-                            >
-                              {showAllJoins ? 'Use Date Filter' : 'Show All'}
-                            </button>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {!showAllJoins && selectedDate !== getISTDateKey() && (
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedDate(getISTDateKey())}
+                                  className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline"
+                                >
+                                  Today
+                                </button>
+                              )}
+                              <button 
+                                type="button"
+                                onClick={() => setShowAllJoins(!showAllJoins)}
+                                className="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
+                              >
+                                {showAllJoins ? 'By Date' : 'Show All'}
+                              </button>
+                            </div>
                         </div>
                         {!showAllJoins ? (
                           <input 
                              type="date" 
                              value={selectedDate} 
                              onChange={e => setSelectedDate(e.target.value)} 
-                             className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-bold outline-none rounded-lg py-1.5 px-2.5 w-full focus:ring-2 focus:ring-indigo-500/20 transition-all cursor-pointer" 
+                             className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-bold outline-none rounded-lg py-1.5 px-2 w-full focus:ring-2 focus:ring-indigo-500/20 transition-all cursor-pointer" 
                           />
                         ) : (
-                          <div className="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-xs font-bold rounded-lg py-1.5 px-2.5 text-center">
-                            Showing all {joinEvents.length} join events
+                          <div className="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold rounded-lg py-1.5 px-2 text-center truncate">
+                            All {joinEvents.length} events
                           </div>
                         )}
                      </div>
@@ -3134,12 +3318,22 @@ const App: React.FC = () => {
                              {filteredJoins.length} events
                            </span>
                         </div>
-                        <div className="flex items-center gap-1.5">
-                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                           <span className="text-[9px] font-bold text-emerald-500 uppercase tracking-wider">Live Flow</span>
+                        <div className="flex items-center gap-2.5">
+                           <button
+                             type="button"
+                             onClick={() => refreshAuditEvents(true)}
+                             className="px-2 py-1 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 text-[9px] font-black uppercase tracking-wider flex items-center gap-1 active:scale-95 transition-all"
+                           >
+                             <Icons.Refresh size={10} className={isScanning ? 'animate-spin' : ''} />
+                             <span>Refresh</span>
+                           </button>
+                           <div className="flex items-center gap-1.5">
+                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                             <span className="text-[9px] font-bold text-emerald-500 uppercase tracking-wider">Live Flow</span>
+                           </div>
                         </div>
                      </div>
-                     <div className="overflow-y-auto max-h-[200px] custom-scrollbar">
+                     <div className="overflow-y-auto max-h-[380px] custom-scrollbar">
                        <table className="w-full text-left">
                           <thead className="sticky top-0 bg-slate-50/95 dark:bg-slate-950/95 backdrop-blur-xl z-20 border-b border-slate-100 dark:border-slate-800">
                             <tr>
@@ -3152,27 +3346,27 @@ const App: React.FC = () => {
                           </thead>
                           <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
                             {filteredJoins.length > 0 ? filteredJoins.map((e, idx) => (
-                              <tr key={idx} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors group">
+                              <tr key={`${e.userId}-${e.timestamp}-${idx}`} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors group">
                                 <td className="px-3 py-1.5 text-[9px] font-mono font-bold text-slate-400">{idx + 1}</td>
                                 <td className="px-3 py-1.5">
                                    <div className="flex items-center gap-2">
                                       <div className={`w-6 h-6 rounded-md flex items-center justify-center text-[9px] font-black uppercase shadow-xs ${ROW_COLORS[idx % ROW_COLORS.length]} border border-white/20 flex-shrink-0`}>
-                                         {e.userName.charAt(0)}
+                                         {(e.userName || 'U').charAt(0)}
                                       </div>
                                       <div className="min-w-0">
-                                         <p className="text-[10px] font-bold text-slate-900 dark:text-white truncate max-w-[140px] leading-tight">{e.userName}</p>
+                                         <p className="text-[10px] font-bold text-slate-900 dark:text-white truncate max-w-[140px] leading-tight">{e.userName || `User ${e.userId}`}</p>
                                          <p className="text-[8px] font-mono text-slate-400 tracking-tighter">ID: {e.userId}</p>
                                       </div>
                                    </div>
                                 </td>
                                 <td className="px-3 py-1.5">
                                    <div className="flex flex-col">
-                                      <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 truncate max-w-[140px] leading-tight">{e.chatTitle}</span>
-                                      <span className="text-[7px] font-mono text-slate-400 opacity-60">HUB_{e.chatId.toString().slice(-6)}</span>
+                                      <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 truncate max-w-[140px] leading-tight">{e.chatTitle || 'Group'}</span>
+                                      <span className="text-[7px] font-mono text-slate-400 opacity-60">HUB_{(e.chatId ?? '').toString().slice(-6)}</span>
                                    </div>
                                 </td>
                                 <td className="px-3 py-1.5 text-[9px] font-medium text-slate-500 whitespace-nowrap">
-                                   {formatTime12h(e.timestamp)}
+                                   {showAllJoins ? `${getISTDateKey(e.timestamp)} • ` : ''}{formatTime12h(normalizeTimestampMs(e.timestamp))}
                                 </td>
                                 <td className="px-3 py-1.5 text-right">
                                   <div className="flex justify-end gap-1">

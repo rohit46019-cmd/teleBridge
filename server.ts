@@ -300,9 +300,11 @@ app.post("/api/events", requireDB, async (req: Request, res: Response) => {
     const events = Array.isArray(req.body) ? req.body : [];
     for (const ev of events) {
       if (ev && ev.userId !== undefined && ev.timestamp !== undefined) {
+        const rawTs = Number(ev.timestamp);
+        const tsMs = rawTs < 1e12 ? rawTs * 1000 : rawTs;
         await JoinEvent.findOneAndUpdate(
-          { userId: ev.userId, timestamp: ev.timestamp },
-          ev,
+          { userId: Number(ev.userId), timestamp: tsMs },
+          { ...ev, userId: Number(ev.userId), timestamp: tsMs },
           { upsert: true }
         );
       }

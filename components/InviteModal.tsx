@@ -121,10 +121,14 @@ const InviteModal: React.FC<InviteModalProps> = ({ group, onClose, botToken, onI
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-6 animate-in fade-in duration-300">
-      <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-md" onClick={onClose} />
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-6 animate-in fade-in duration-300 touch-none overscroll-none">
+      <div
+        className="absolute inset-0 bg-slate-950/70 backdrop-blur-md touch-none overscroll-none"
+        onClick={onClose}
+        onTouchMove={(e) => e.preventDefault()}
+      />
       
-      <div className="relative bg-white/95 dark:bg-slate-950/90 w-full max-w-md rounded-[2.2rem] overflow-hidden shadow-[0_25px_50px_-12px_rgba(99,102,241,0.25)] flex flex-col p-6 md:p-8 animate-in zoom-in-95 duration-300 border-2 border-indigo-200/50 dark:border-indigo-900/50 border-b-[6px] border-b-indigo-500/80 dark:border-b-indigo-500/50">
+      <div className="relative bg-white/95 dark:bg-slate-950/90 w-full max-w-md max-h-[90dvh] overflow-y-auto overscroll-contain touch-auto rounded-[2.2rem] shadow-[0_25px_50px_-12px_rgba(99,102,241,0.25)] flex flex-col p-6 md:p-8 animate-in zoom-in-95 duration-300 border-2 border-indigo-200/50 dark:border-indigo-900/50 border-b-[6px] border-b-indigo-500/80 dark:border-b-indigo-500/50">
         
         {/* Dynamic Refraction Overlay */}
         <div className="absolute inset-0 bg-gradient-to-tr from-indigo-500/5 via-transparent to-purple-500/5 opacity-50 pointer-events-none" />
