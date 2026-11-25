@@ -1,4 +1,12 @@
 
+export interface WelcomeConfig {
+  enabled?: boolean;
+  text?: string;
+  photoUrl?: string;
+  buttonText?: string;
+  buttonUrl?: string;
+}
+
 export interface TelegramGroup {
   id: string;
   name: string;
@@ -10,6 +18,7 @@ export interface TelegramGroup {
   interactionCount?: number;
   pinned?: boolean;
   createdAt?: number;
+  welcomeConfig?: WelcomeConfig;
 }
 
 export interface JoinEvent {
@@ -37,6 +46,26 @@ export interface InviteLink {
   isUsed: boolean;
   memberLimit: number;
   expiresIn?: number; // Minutes
+}
+
+export interface InviteLinkRecord {
+  _id?: string;
+  groupId: string;
+  groupName?: string;
+  link: string;
+  memberLimit?: number;
+  expireMinutes?: number;
+  expiresAt?: number;
+  status?: 'active' | 'revoked' | 'expired';
+  createdAt: number;
+}
+
+export interface BotAlertSettings {
+  adminAlertChatId: string;
+  alertOnJoin: boolean;
+  alertOnSuspicious: boolean;
+  welcomeEnabled?: boolean;
+  welcomeMessage?: string;
 }
 
 export interface ApiKey {

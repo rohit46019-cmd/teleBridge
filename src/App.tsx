@@ -3,11 +3,13 @@ import { motion, AnimatePresence } from 'motion/react';
 import Sidebar, { ThemePreset } from '../components/Sidebar.tsx';
 import GroupCard from '../components/GroupCard.tsx';
 import InviteModal from '../components/InviteModal.tsx';
+import ActiveLinksPanel from '../components/ActiveLinksPanel.tsx';
+import JoinAnalyticsPanel from '../components/JoinAnalyticsPanel.tsx';
 import ConfirmationModal from '../components/ConfirmationModal.tsx';
 import { AdminManager } from '../components/AdminManager.tsx';
 import { Icons } from '../constants.tsx';
-import { TelegramGroup, JoinEvent, BannedUser, BatchFolder } from '../types.ts';
-import { verifyBotToken, getChatDetails, TelegramBotInfo, getChatMemberCount, getRecentUpdates, getWebhookInfo, kickChatMember, banMember, unbanMember, deleteMessage, setWebhook, deleteWebhook } from '../services/telegramService.ts';
+import { TelegramGroup, JoinEvent, BannedUser, BatchFolder, InviteLinkRecord, BotAlertSettings } from '../types.ts';
+import { verifyBotToken, getChatDetails, TelegramBotInfo, getChatMemberCount, getRecentUpdates, getWebhookInfo, kickChatMember, banMember, unbanMember, deleteMessage, setWebhook, deleteWebhook, sendCustomWelcome, isValidHttpUrl } from '../services/telegramService.ts';
 import { 
   AreaChart, 
   Area, 
@@ -289,16 +291,22 @@ const App: React.FC = () => {
   }, [deletedGroups]);
 
   const moveToDeletedBin = (group: TelegramGroup, reason: string) => {
+    const binItem = { ...group, deletedAt: Date.now(), errorReason: reason };
     setGroups(prev => prev.filter(g => g.id !== group.id));
     setDeletedGroups(prev => {
       if (prev.some(d => d.id === group.id)) return prev;
-      return [...prev, { ...group, deletedAt: Date.now(), errorReason: reason }];
+      return [...prev, binItem];
     });
     fetch('/api/groups/remove', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: group.id })
     }).catch(e => console.error("Failed to remove unacceptable group from DB:", e));
+    fetch('/api/deleted-groups', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(binItem)
+    }).catch(e => console.error("Failed to save deleted bin item to DB:", e));
     showNotification(`Moved unacceptable group "${group.name}" to Deleted Bin (${reason})`, 'alert');
   };
 
@@ -308,6 +316,8 @@ const App: React.FC = () => {
       message: 'Are you sure you want to permanently purge all items in the deleted bin?',
       onConfirm: () => {
         setDeletedGroups([]);
+        fetch('/api/deleted-groups', { method: 'DELETE' })
+          .catch(e => console.error("Failed to empty deleted bin in DB:", e));
         showNotification('Deleted bin emptied successfully', 'info');
       }
     });
@@ -445,6 +455,24 @@ const App: React.FC = () => {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [linkToRevoke, setLinkToRevoke] = useState('');
   const [showAllJoins, setShowAllJoins] = useState(false);
+  const [activeLinks, setActiveLinks] = useState<InviteLinkRecord[]>([]);
+  const [isLoadingLinks, setIsLoadingLinks] = useState(false);
+  const [botSettings, setBotSettings] = useState<BotAlertSettings>(() => {
+    try {
+      const saved = localStorage.getItem('tg_bot_alert_settings');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return {
+      adminAlertChatId: '',
+      alertOnJoin: false,
+      alertOnSuspicious: true,
+      welcomeEnabled: false,
+      welcomeMessage: '',
+    };
+  });
+  const [isSavingBotSettings, setIsSavingBotSettings] = useState(false);
+  const [isTestingAlert, setIsTestingAlert] = useState(false);
+  const [isSendingSummary, setIsSendingSummary] = useState(false);
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
@@ -705,10 +733,15 @@ const App: React.FC = () => {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 15000); 
 
-        const [groupsRes, eventsRes, foldersRes] = await Promise.all([
+        const [groupsRes, eventsRes, foldersRes, linksRes, botSettingsRes, bansRes, deletedRes, broadcastsRes] = await Promise.all([
           fetch('/api/groups', { signal: controller.signal, headers: { 'Accept': 'application/json' } }),
           fetch('/api/events', { signal: controller.signal, headers: { 'Accept': 'application/json' } }),
-          fetch('/api/folders', { signal: controller.signal, headers: { 'Accept': 'application/json' } })
+          fetch('/api/folders', { signal: controller.signal, headers: { 'Accept': 'application/json' } }),
+          fetch('/api/links', { signal: controller.signal, headers: { 'Accept': 'application/json' } }).catch(() => null),
+          fetch('/api/bot-settings', { signal: controller.signal, headers: { 'Accept': 'application/json' } }).catch(() => null),
+          fetch('/api/bans', { signal: controller.signal, headers: { 'Accept': 'application/json' } }).catch(() => null),
+          fetch('/api/deleted-groups', { signal: controller.signal, headers: { 'Accept': 'application/json' } }).catch(() => null),
+          fetch('/api/broadcast', { signal: controller.signal, headers: { 'Accept': 'application/json' } }).catch(() => null),
         ]);
         
         clearTimeout(timeoutId);
@@ -760,23 +793,127 @@ const App: React.FC = () => {
           return merged;
         });
 
-        // Sync Folders
-        if (foldersRes.ok) {
+        // Sync Batch Folders bidirectionally with MongoDB
+        if (foldersRes.ok && foldersRes.headers.get("content-type")?.includes("application/json")) {
           const serverFolders: BatchFolder[] = await foldersRes.json();
-          if (Array.isArray(serverFolders) && serverFolders.length > 0) {
+          if (Array.isArray(serverFolders)) {
+            const wasSyncedBefore = localStorage.getItem('telebridge_folders_synced') === 'true';
+            const foldersToPush: BatchFolder[] = [];
+
             setFolders(prev => {
-              // Merge folders: server data wins, but keep local folders if not on server
-              const merged = [...serverFolders];
-              prev.forEach(localF => {
-                if (!merged.find(sf => sf.id === localF.id)) {
-                  merged.push(localF);
-                }
-              });
-              return merged;
+              const serverIds = new Set(serverFolders.map(sf => sf.id));
+              if (serverFolders.length > 0) {
+                const unsyncedLocal = prev.filter(localF =>
+                  !serverIds.has(localF.id) &&
+                  (localF.id.startsWith('folder-') || localF.batchIds.length > 0)
+                );
+                foldersToPush.push(...unsyncedLocal);
+                return [...serverFolders, ...unsyncedLocal];
+              } else if (!wasSyncedBefore && prev.length > 0) {
+                foldersToPush.push(...prev);
+                return prev;
+              } else {
+                const customLocal = prev.filter(localF => localF.id.startsWith('folder-') || localF.batchIds.length > 0);
+                foldersToPush.push(...customLocal);
+                return customLocal;
+              }
             });
+
+            localStorage.setItem('telebridge_folders_synced', 'true');
+            if (foldersToPush.length > 0) {
+              fetch('/api/folders/bulk', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(foldersToPush),
+              }).catch(e => console.error("Failed to push local folders to DB:", e));
+            }
           }
         }
         
+        // Sync Active Links & Bot Alert Settings
+        if (linksRes && linksRes.ok && linksRes.headers.get("content-type")?.includes("application/json")) {
+          const serverLinks = await linksRes.json().catch(() => []);
+          if (Array.isArray(serverLinks)) setActiveLinks(serverLinks);
+        }
+        if (botSettingsRes && botSettingsRes.ok && botSettingsRes.headers.get("content-type")?.includes("application/json")) {
+          const serverSettings = await botSettingsRes.json().catch(() => null);
+          if (serverSettings) {
+            setBotSettings(prev => ({
+              ...prev,
+              adminAlertChatId: serverSettings.adminAlertChatId || '',
+              alertOnJoin: Boolean(serverSettings.alertOnJoin),
+              alertOnSuspicious: serverSettings.alertOnSuspicious !== undefined ? Boolean(serverSettings.alertOnSuspicious) : true,
+              welcomeEnabled: Boolean(serverSettings.welcomeEnabled),
+              welcomeMessage: serverSettings.welcomeMessage || prev.welcomeMessage,
+            }));
+            if (typeof serverSettings.welcomeMessage === 'string' && serverSettings.welcomeMessage) {
+              setWelcomeMessage(serverSettings.welcomeMessage);
+            }
+            if (typeof serverSettings.welcomeEnabled === 'boolean') {
+              setIsWelcomeEnabled(serverSettings.welcomeEnabled);
+            }
+            if (typeof serverSettings.autoWelcome === 'boolean') {
+              setAutoWelcome(serverSettings.autoWelcome);
+            }
+            if (typeof serverSettings.autoCleanServiceMessages === 'boolean') {
+              setAutoCleanServiceMessages(serverSettings.autoCleanServiceMessages);
+            }
+            if (typeof serverSettings.autoApproveJoinRequest === 'boolean') {
+              setAutoApproveJoinRequest(serverSettings.autoApproveJoinRequest);
+            }
+          }
+        }
+
+        // Sync Banned Users with MongoDB
+        if (bansRes && bansRes.ok && bansRes.headers.get("content-type")?.includes("application/json")) {
+          const serverBans: BannedUser[] = await bansRes.json().catch(() => []);
+          if (Array.isArray(serverBans)) {
+            const bansToPush: BannedUser[] = [];
+            setBannedUsers(prev => {
+              const serverKeys = new Set(serverBans.map(b => `${b.userId}-${b.chatId}`));
+              const localOnly = prev.filter(lb => !serverKeys.has(`${lb.userId}-${lb.chatId}`));
+              bansToPush.push(...localOnly);
+              return [...serverBans, ...localOnly];
+            });
+            if (bansToPush.length > 0) {
+              fetch('/api/bans', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(bansToPush),
+              }).catch(() => {});
+            }
+          }
+        }
+
+        // Sync Deleted Groups Bin with MongoDB
+        if (deletedRes && deletedRes.ok && deletedRes.headers.get("content-type")?.includes("application/json")) {
+          const serverDeleted: any[] = await deletedRes.json().catch(() => []);
+          if (Array.isArray(serverDeleted)) {
+            const deletedToPush: any[] = [];
+            setDeletedGroups(prev => {
+              const serverIds = new Set(serverDeleted.map(d => String(d.id)));
+              const localOnly = prev.filter(ld => ld?.id && !serverIds.has(String(ld.id)));
+              deletedToPush.push(...localOnly);
+              return [...serverDeleted, ...localOnly];
+            });
+            if (deletedToPush.length > 0) {
+              fetch('/api/deleted-groups', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(deletedToPush),
+              }).catch(() => {});
+            }
+          }
+        }
+
+        // Sync Broadcast History with MongoDB
+        if (broadcastsRes && broadcastsRes.ok && broadcastsRes.headers.get("content-type")?.includes("application/json")) {
+          const serverBroadcasts = await broadcastsRes.json().catch(() => []);
+          if (Array.isArray(serverBroadcasts)) {
+            setBroadcasts(serverBroadcasts);
+          }
+        }
+
         setSyncStatus('connected');
         setDbError(null);
         setLastSyncTime(new Date());
@@ -1042,8 +1179,203 @@ const App: React.FC = () => {
   useEffect(() => {
     if (activeTab === 'analysis') {
       refreshAuditEvents(false);
+    } else if (activeTab === 'dashboard') {
+      refreshActiveLinks();
     }
   }, [activeTab]);
+
+  useEffect(() => {
+    localStorage.setItem('tg_bot_alert_settings', JSON.stringify(botSettings));
+  }, [botSettings]);
+
+  const refreshActiveLinks = async () => {
+    setIsLoadingLinks(true);
+    try {
+      const res = await fetch('/api/links', { headers: { Accept: 'application/json' } });
+      if (res.ok && res.headers.get('content-type')?.includes('application/json')) {
+        const data = await res.json();
+        if (Array.isArray(data)) setActiveLinks(data);
+      }
+    } catch (err) {
+      console.error('Failed to load active links:', err);
+    } finally {
+      setIsLoadingLinks(false);
+    }
+  };
+
+  const handleRevokeTrackedLink = async (link: string, chatId?: string) => {
+    if (!token) {
+      showNotification('Bot token required to revoke link', 'alert');
+      return;
+    }
+    const response = await fetch('/api/revoke-link', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ link, token, chatId }),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({ error: 'Failed to revoke link' }));
+      showNotification(data.error || 'Failed to revoke link', 'alert');
+      return;
+    }
+    await refreshActiveLinks();
+    showNotification('Invite link revoked!', 'success');
+  };
+
+  const handleDeleteLinkRecord = async (id: string) => {
+    try {
+      const res = await fetch(`/api/links/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      if (res.ok) {
+        setActiveLinks(prev => prev.filter(l => l._id !== id));
+        showNotification('Link record removed', 'info');
+      }
+    } catch {
+      showNotification('Failed to remove link record', 'alert');
+    }
+  };
+
+  const handleCopyText = (text: string) => {
+    if (!text) return;
+    navigator.clipboard?.writeText(text).then(() => {
+      showNotification('Link copied to clipboard!', 'success');
+    }).catch(() => {});
+  };
+
+  const syncAutomationToggles = (patch: {
+    autoWelcome?: boolean;
+    autoCleanServiceMessages?: boolean;
+    autoApproveJoinRequest?: boolean;
+    welcomeEnabled?: boolean;
+  }) => {
+    const nextWelcome = patch.autoWelcome ?? autoWelcome;
+    const nextClean = patch.autoCleanServiceMessages ?? autoCleanServiceMessages;
+    const nextApprove = patch.autoApproveJoinRequest ?? autoApproveJoinRequest;
+
+    fetch('/api/bot-settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    }).catch(() => {});
+
+    if (webhookActive && token) {
+      const baseUrl = window.location.origin;
+      const webhookUrl = `${baseUrl}/api/webhook/${token}?welcome=${nextWelcome}&clean=${nextClean}&approve=${nextApprove}`;
+      setWebhook(token, webhookUrl).catch(() => {});
+    }
+  };
+
+  const handleSaveBotSettings = async (override?: Partial<BotAlertSettings>) => {
+    setIsSavingBotSettings(true);
+    try {
+      const payload = {
+        ...botSettings,
+        welcomeEnabled: isWelcomeEnabled,
+        welcomeMessage,
+        autoWelcome,
+        autoCleanServiceMessages,
+        autoApproveJoinRequest,
+        ...override,
+      };
+      const res = await fetch('/api/bot-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({ error: 'Failed to save settings' }));
+        throw new Error(data.error || 'Failed to save settings');
+      }
+      setBotSettings(payload);
+      showNotification('Bot alerts & welcome settings saved!', 'success');
+    } catch (err: any) {
+      showNotification(err.message || 'Could not save settings', 'alert');
+    } finally {
+      setIsSavingBotSettings(false);
+    }
+  };
+
+  const handleSendTestAlert = async () => {
+    if (!token) {
+      showNotification('Connect your bot token first!', 'alert');
+      return;
+    }
+    if (!botSettings.adminAlertChatId.trim()) {
+      showNotification('Enter your Telegram Chat ID first!', 'alert');
+      return;
+    }
+    setIsTestingAlert(true);
+    try {
+      await handleSaveBotSettings();
+      const res = await fetch('/api/alerts/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, chatId: botSettings.adminAlertChatId.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Test alert failed');
+      showNotification('Test DM sent to your Telegram!', 'success');
+    } catch (err: any) {
+      showNotification(err.message || 'Failed to send test DM', 'alert');
+    } finally {
+      setIsTestingAlert(false);
+    }
+  };
+
+  const handleSendDailySummary = async () => {
+    if (!token) {
+      showNotification('Connect your bot token first!', 'alert');
+      return;
+    }
+    if (!botSettings.adminAlertChatId.trim()) {
+      showNotification('Enter your Telegram Chat ID first!', 'alert');
+      return;
+    }
+    setIsSendingSummary(true);
+    try {
+      const res = await fetch('/api/alerts/daily-summary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, chatId: botSettings.adminAlertChatId.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Summary failed');
+      showNotification(`Daily Summary DM sent (${data.todayCount ?? 0} joins today)!`, 'success');
+    } catch (err: any) {
+      showNotification(err.message || 'Failed to send daily summary', 'alert');
+    } finally {
+      setIsSendingSummary(false);
+    }
+  };
+
+  const handleExportAuditCsv = () => {
+    const safeCell = (val: any) => {
+      let s = String(val ?? '');
+      if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+      return `"${s.replace(/"/g, '""')}"`;
+    };
+    const header = ['#', 'User ID', 'User Name', 'Group ID', 'Group Title', 'Date (IST)', 'Time (IST)'].join(',');
+    const rows = filteredJoins.map((e, idx) => {
+      const ts = normalizeTimestampMs(e.timestamp);
+      return [
+        idx + 1,
+        e.userId,
+        e.userName || `User ${e.userId}`,
+        e.chatId,
+        e.chatTitle || 'Group',
+        getISTDateKey(ts),
+        formatTime12h(ts),
+      ].map(safeCell).join(',');
+    });
+    const csvContent = [header, ...rows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `telebridge-audit-${showAllJoins ? 'all' : selectedDate}.csv`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    showNotification(`Exported ${filteredJoins.length} audit rows to CSV!`, 'success');
+  };
 
   // Background sync worker for pending changes
   useEffect(() => {
@@ -1602,25 +1934,54 @@ const App: React.FC = () => {
              const cIdStr = ev.chatId.toString();
              memberChanges[cIdStr] = (memberChanges[cIdStr] || 0) + 1;
              
-             // Frontend fallback for Auto-welcome if webhook is disabled
-             if (autoWelcome && !webhookActive && !ev.is_bot) {
+             // Frontend fallback for Custom Per-Batch / Global Auto-welcome & Admin Alerts if webhook is disabled
+             const targetGrp = groups.find(g => g.id === cIdStr);
+             const batchWelcome = targetGrp?.welcomeConfig;
+             const shouldWelcome = !webhookActive && !ev.is_bot && (batchWelcome?.enabled === true || (autoWelcome && batchWelcome?.enabled !== false));
+             if (shouldWelcome) {
                setTimeout(() => {
-                 const escapedName = (ev.userName || 'Awesome Member').toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-                 const text = `🎉 <b>Welcome to the Hub!</b> 🎉\n\nHey <a href="tg://user?id=${ev.userId}"><b>${escapedName}</b></a>, we're thrilled to have you here! ✨\n\n<i>Enjoy your stay, and keep it friendly!</i> 🚀`;
-                 fetch(`https://api.telegram.org/bot${currentToken}/sendMessage`, {
-                   method: 'POST',
-                   headers: { 'Content-Type': 'application/json' },
-                   body: JSON.stringify({ chat_id: ev.chatId, text, parse_mode: 'HTML' })
-                 })
-                 .then(res => res.json())
-                 .then(data => {
-                   if (data.ok) {
+                 const escapeHtmlLocal = (str: string) =>
+                   String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                 const escapedName = escapeHtmlLocal(ev.userName || 'Awesome Member');
+                 const escapedGroup = escapeHtmlLocal(ev.chatTitle || targetGrp?.name || 'Hub');
+                 const mentionHtml = `<a href="tg://user?id=${ev.userId}"><b>${escapedName}</b></a>`;
+
+                 let text = '';
+                 if (batchWelcome?.text?.trim()) {
+                   text = escapeHtmlLocal(batchWelcome.text.trim())
+                     .replace(/\{\{name\}\}/gi, mentionHtml)
+                     .replace(/\{\{group\}\}/gi, `<b>${escapedGroup}</b>`);
+                 } else if (isWelcomeEnabled && welcomeMessage.trim()) {
+                   text = escapeHtmlLocal(welcomeMessage.trim())
+                     .replace(/\{\{name\}\}/gi, mentionHtml)
+                     .replace(/\{\{group\}\}/gi, `<b>${escapedGroup}</b>`);
+                 } else {
+                   text = `🎉 <b>Welcome to ${escapedGroup}!</b> 🎉\n\nHey ${mentionHtml}, we're thrilled to have you here! ✨\n\n<i>Enjoy your stay, and keep it friendly!</i> 🚀`;
+                 }
+
+                 sendCustomWelcome(currentToken, ev.chatId, {
+                   htmlText: text,
+                   photoUrl: isValidHttpUrl(batchWelcome?.photoUrl) ? batchWelcome?.photoUrl : undefined,
+                   buttonText: batchWelcome?.buttonText,
+                   buttonUrl: batchWelcome?.buttonUrl,
+                 }).then((msgId) => {
+                   if (msgId) {
                      setTimeout(() => {
-                        deleteMessage(currentToken, ev.chatId, data.result.message_id).catch(() => {});
-                      }, 59000); // 59 SECONDS
+                       deleteMessage(currentToken, ev.chatId, msgId).catch(() => {});
+                     }, 59000);
                    }
                  }).catch(() => {});
-               }, 5000); // 5 SECONDS delay
+               }, 3000);
+             }
+
+             if (!webhookActive && !ev.is_bot && botSettings.adminAlertChatId.trim() && botSettings.alertOnJoin) {
+               const esc = (s: string) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+               const dmText = `🟢 <b>New Member Joined</b>\n\n👤 <b>User:</b> ${esc(ev.userName || `User ${ev.userId}`)} (<code>${ev.userId}</code>)\n📌 <b>Hub:</b> ${esc(ev.chatTitle || targetGrp?.name || cIdStr)}`;
+               fetch(`https://api.telegram.org/bot${currentToken}/sendMessage`, {
+                 method: 'POST',
+                 headers: { 'Content-Type': 'application/json' },
+                 body: JSON.stringify({ chat_id: botSettings.adminAlertChatId.trim(), text: dmText, parse_mode: 'HTML' })
+               }).catch(() => {});
              }
           }
         }
@@ -1808,16 +2169,22 @@ const App: React.FC = () => {
       await banMember(token, chatId, userId);
       const timestamp = parseInt(eventId.split('-')[1]);
       
-      // Add to banned users list
+      // Add to banned users list & persist to MongoDB
       const event = joinEvents.find(e => `${e.userId}-${e.timestamp}` === eventId);
       if (event) {
-        setBannedUsers(prev => [...prev, {
+        const newBan: BannedUser = {
           userId: event.userId,
           userName: event.userName,
           chatId: event.chatId,
           chatTitle: event.chatTitle,
           timestamp: Date.now()
-        }]);
+        };
+        setBannedUsers(prev => [...prev.filter(u => u.userId !== newBan.userId || u.chatId !== newBan.chatId), newBan]);
+        fetch('/api/bans', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newBan)
+        }).catch(e => console.warn("Failed to save banned user to DB", e));
       }
 
       // Background sync for DB
@@ -1834,6 +2201,8 @@ const App: React.FC = () => {
     try {
       await unbanMember(token, banned.chatId, banned.userId);
       setBannedUsers(prev => prev.filter(u => u.userId !== banned.userId || u.chatId !== banned.chatId));
+      fetch(`/api/bans/${banned.userId}/${banned.chatId}`, { method: 'DELETE' })
+        .catch(e => console.warn("Failed to delete ban from DB", e));
       showNotification(`User ${banned.userName} unbanned successfully.`, 'success');
     } catch (err: any) {
       showNotification(`Failed to unban: ${err.message}`, 'alert');
@@ -1940,13 +2309,27 @@ const App: React.FC = () => {
     reader.onload = (event) => {
       try {
         const data = JSON.parse(event.target?.result as string);
-        if (data.joinEvents) setJoinEvents(data.joinEvents);
-        if (data.groups) setGroups(data.groups);
+        if (Array.isArray(data.joinEvents)) {
+          setJoinEvents(data.joinEvents);
+          fetch('/api/events', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data.joinEvents),
+          }).catch(() => {});
+        }
+        if (Array.isArray(data.groups)) {
+          setGroups(data.groups);
+          fetch('/api/groups/bulk-update', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data.groups),
+          }).catch(() => {});
+        }
         if (data.token) {
           setToken(data.token);
           handleVerify(data.token);
         }
-        showNotification('Data imported!', 'success');
+        showNotification('Data imported & synced to MongoDB!', 'success');
       } catch (err) { showNotification('Import failed.', 'alert'); }
     };
     reader.readAsText(file);
@@ -2095,6 +2478,7 @@ const App: React.FC = () => {
 
       showNotification("Link revoked successfully!", 'success');
       setLinkToRevoke('');
+      refreshActiveLinks();
     } catch (err: any) {
       showNotification("Failed to revoke link: " + err.message, 'alert');
     }
@@ -2370,6 +2754,7 @@ const App: React.FC = () => {
                     onClick={() => {
                       const next = !autoWelcome;
                       setAutoWelcome(next);
+                      syncAutomationToggles({ autoWelcome: next });
                       showNotification(`Auto-Welcome turned ${next ? 'ON' : 'OFF'}`, 'info');
                     }}
                     className={`min-h-[34px] px-3.5 py-1.5 rounded-xl border text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wide flex items-center gap-1.5 transition-all duration-200 hover:scale-[1.02] active:scale-95 shrink-0 shadow-xs ${
@@ -2387,6 +2772,7 @@ const App: React.FC = () => {
                     onClick={() => {
                       const next = !autoCleanServiceMessages;
                       setAutoCleanServiceMessages(next);
+                      syncAutomationToggles({ autoCleanServiceMessages: next });
                       showNotification(`Auto-Clean turned ${next ? 'ON' : 'OFF'}`, 'info');
                     }}
                     className={`min-h-[34px] px-3.5 py-1.5 rounded-xl border text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wide flex items-center gap-1.5 transition-all duration-200 hover:scale-[1.02] active:scale-95 shrink-0 shadow-xs ${
@@ -2404,6 +2790,7 @@ const App: React.FC = () => {
                     onClick={() => {
                       const next = !autoApproveJoinRequest;
                       setAutoApproveJoinRequest(next);
+                      syncAutomationToggles({ autoApproveJoinRequest: next });
                       showNotification(`Auto-Approve turned ${next ? 'ON' : 'OFF'}`, 'info');
                     }}
                     className={`min-h-[34px] px-3.5 py-1.5 rounded-xl border text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wide flex items-center gap-1.5 transition-all duration-200 hover:scale-[1.02] active:scale-95 shrink-0 shadow-xs ${
@@ -2721,6 +3108,16 @@ const App: React.FC = () => {
                   </button>
                 </div>
               </section>
+
+              {/* Multi-Group Active Links Manager */}
+              <ActiveLinksPanel
+                links={activeLinks}
+                isLoading={isLoadingLinks}
+                onRefresh={refreshActiveLinks}
+                onRevokeLink={handleRevokeTrackedLink}
+                onDeleteRecord={handleDeleteLinkRecord}
+                onCopyLink={handleCopyText}
+              />
 
               {/* Revoke Invite Link Card (At the very bottom) */}
               <section
@@ -3311,14 +3708,23 @@ const App: React.FC = () => {
 
                   {/* Sleek Stream Table */}
                   <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl overflow-hidden shadow-lg">
-                     <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-950/40">
+                     <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-950/40 flex-wrap gap-2">
                         <div className="flex items-center gap-2">
                            <h3 className="text-[11px] font-black uppercase tracking-wider text-slate-700 dark:text-slate-300">Join Audit Stream</h3>
                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
                              {filteredJoins.length} events
                            </span>
                         </div>
-                        <div className="flex items-center gap-2.5">
+                        <div className="flex items-center gap-2">
+                           <button
+                             type="button"
+                             onClick={handleExportAuditCsv}
+                             disabled={filteredJoins.length === 0}
+                             className="px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[9px] font-black uppercase tracking-wider flex items-center gap-1 active:scale-95 transition-all disabled:opacity-40"
+                           >
+                             <Icons.DownloadCloud size={11} />
+                             <span>Download CSV</span>
+                           </button>
                            <button
                              type="button"
                              onClick={() => refreshAuditEvents(true)}
@@ -3327,7 +3733,7 @@ const App: React.FC = () => {
                              <Icons.Refresh size={10} className={isScanning ? 'animate-spin' : ''} />
                              <span>Refresh</span>
                            </button>
-                           <div className="flex items-center gap-1.5">
+                           <div className="hidden sm:flex items-center gap-1.5">
                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                              <span className="text-[9px] font-bold text-emerald-500 uppercase tracking-wider">Live Flow</span>
                            </div>
@@ -3401,6 +3807,15 @@ const App: React.FC = () => {
                        </table>
                      </div>
                   </div>
+
+                  {/* 7-Day / 30-Day Join Analytics Chart & Top Growing Batches */}
+                  <JoinAnalyticsPanel
+                    joinEvents={joinEvents}
+                    groups={groups}
+                    getISTDateKey={getISTDateKey}
+                    normalizeTimestampMs={normalizeTimestampMs}
+                    onSelectGroup={handleOpenGroupModal}
+                  />
                 </>
               ) : auditSubTab === 'blocked' ? (
                 <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl overflow-hidden shadow-lg">
@@ -3517,6 +3932,8 @@ const App: React.FC = () => {
                                       headers: { 'Content-Type': 'application/json' },
                                       body: JSON.stringify(dg)
                                     }).catch(e => console.error("Failed to restore group:", e));
+                                    fetch(`/api/deleted-groups/${encodeURIComponent(dg.id)}`, { method: 'DELETE' })
+                                      .catch(e => console.error("Failed to clear restored group from bin DB:", e));
                                     showNotification(`Restored "${dg.name}" successfully!`, 'success');
                                   }}
                                   className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[9px] font-black uppercase tracking-wider shadow-sm active:scale-95 transition-all"
@@ -3530,9 +3947,10 @@ const App: React.FC = () => {
                                       message: `Permanently delete "${dg.name}" from database immediately?`,
                                       onConfirm: () => {
                                         setDeletedGroups(prev => prev.filter(d => d.id !== dg.id));
-                                        // Also delete from server
-                                        fetch(`/api/groups/${dg.id}`, { method: 'DELETE' })
+                                        fetch(`/api/groups/${encodeURIComponent(dg.id)}`, { method: 'DELETE' })
                                           .catch(e => console.error("Failed to permanently delete group:", e));
+                                        fetch(`/api/deleted-groups/${encodeURIComponent(dg.id)}`, { method: 'DELETE' })
+                                          .catch(e => console.error("Failed to delete bin item from DB:", e));
                                         showNotification('Group permanently deleted', 'info');
                                       }
                                     });
@@ -3729,7 +4147,7 @@ const App: React.FC = () => {
                       </button>
                     </div>
 
-                    {/* New Welcome Message Configuration */}
+                    {/* Global Automated Welcome Message Configuration */}
                     <div className="p-6 bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-200 dark:border-slate-800 shadow-sm mb-6">
                       <div className="flex items-center justify-between mb-4">
                         <h4 className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider">Automated Welcome Message</h4>
@@ -3747,7 +4165,102 @@ const App: React.FC = () => {
                         className="w-full h-24 p-3 bg-slate-50 dark:bg-slate-800 rounded-xl text-xs text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20"
                         placeholder="Enter the welcome message..."
                       />
-                      <p className="text-[8px] font-bold text-slate-400 mt-2">Use {"{{name}}"} to insert the user's name.</p>
+                      <div className="flex items-center justify-between gap-2 mt-2.5 flex-wrap">
+                        <p className="text-[8px] font-bold text-slate-400">Use {"{{name}}"} & {"{{group}}"} (or customize per batch in Group Modal).</p>
+                        <button
+                          type="button"
+                          onClick={() => handleSaveBotSettings()}
+                          disabled={isSavingBotSettings}
+                          className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[9px] font-black uppercase tracking-wider transition-all active:scale-95 disabled:opacity-50"
+                        >
+                          {isSavingBotSettings ? 'Saving...' : 'Save Global Welcome'}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Instant Telegram Admin Alerts (Bot DM Notifications) */}
+                    <div className="p-6 bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-200 dark:border-slate-800 shadow-sm mb-6 space-y-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                            <Icons.Send size={18} strokeWidth={2.3} />
+                          </div>
+                          <div>
+                            <h4 className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider">Telegram Admin Alerts (Bot DM)</h4>
+                            <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">Receive instant join notifications & daily summaries in your DM.</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
+                          Admin Telegram User / Chat ID
+                        </label>
+                        <input
+                          type="text"
+                          value={botSettings.adminAlertChatId}
+                          onChange={e => setBotSettings(prev => ({ ...prev, adminAlertChatId: e.target.value }))}
+                          placeholder="e.g. 123456789 (Send /start to your bot first)"
+                          className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-mono text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/20"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-white/5 rounded-2xl border border-slate-100 dark:border-white/5">
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-900 dark:text-slate-200">Instant Join DM</p>
+                            <p className="text-[8px] text-slate-500">Alert on every new member</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setBotSettings(prev => ({ ...prev, alertOnJoin: !prev.alertOnJoin }))}
+                            className={`w-10 h-6 rounded-full transition-all relative ${botSettings.alertOnJoin ? 'bg-emerald-600' : 'bg-slate-300 dark:bg-slate-800'}`}
+                          >
+                            <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${botSettings.alertOnJoin ? 'left-5' : 'left-1'} shadow-sm`} />
+                          </button>
+                        </div>
+
+                        <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-white/5 rounded-2xl border border-slate-100 dark:border-white/5">
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-900 dark:text-slate-200">Multi-Hub Alert</p>
+                            <p className="text-[8px] text-slate-500">Warn if user joins 2+ hubs</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setBotSettings(prev => ({ ...prev, alertOnSuspicious: !prev.alertOnSuspicious }))}
+                            className={`w-10 h-6 rounded-full transition-all relative ${botSettings.alertOnSuspicious ? 'bg-amber-500' : 'bg-slate-300 dark:bg-slate-800'}`}
+                          >
+                            <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${botSettings.alertOnSuspicious ? 'left-5' : 'left-1'} shadow-sm`} />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => handleSaveBotSettings()}
+                          disabled={isSavingBotSettings}
+                          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[10px] font-black uppercase tracking-wider active:scale-95 transition-all disabled:opacity-50"
+                        >
+                          {isSavingBotSettings ? 'Saving...' : 'Save Alert Settings'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleSendTestAlert}
+                          disabled={isTestingAlert || !botSettings.adminAlertChatId.trim()}
+                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10px] font-black uppercase tracking-wider active:scale-95 transition-all disabled:opacity-50"
+                        >
+                          {isTestingAlert ? 'Sending...' : 'Send Test DM'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleSendDailySummary}
+                          disabled={isSendingSummary || !botSettings.adminAlertChatId.trim()}
+                          className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-[10px] font-black uppercase tracking-wider active:scale-95 transition-all disabled:opacity-50"
+                        >
+                          {isSendingSummary ? 'Sending...' : 'Send Today Summary DM'}
+                        </button>
+                      </div>
                     </div>
 
                     {/* Core System Configuration */}
@@ -3770,7 +4283,11 @@ const App: React.FC = () => {
                               <p className="text-[8px] text-slate-500">Auto-purge service messages</p>
                             </div>
                             <button 
-                              onClick={() => setAutoCleanServiceMessages(!autoCleanServiceMessages)}
+                              onClick={() => {
+                                const next = !autoCleanServiceMessages;
+                                setAutoCleanServiceMessages(next);
+                                syncAutomationToggles({ autoCleanServiceMessages: next });
+                              }}
                               className={`w-10 h-6 rounded-full transition-all relative ${autoCleanServiceMessages ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-800'}`}
                             >
                               <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${autoCleanServiceMessages ? 'left-5' : 'left-1'} shadow-sm`} />
@@ -3783,7 +4300,11 @@ const App: React.FC = () => {
                               <p className="text-[8px] text-slate-500">Auto-approve new users</p>
                             </div>
                             <button 
-                              onClick={() => setAutoApproveJoinRequest(!autoApproveJoinRequest)}
+                              onClick={() => {
+                                const next = !autoApproveJoinRequest;
+                                setAutoApproveJoinRequest(next);
+                                syncAutomationToggles({ autoApproveJoinRequest: next });
+                              }}
                               className={`w-10 h-6 rounded-full transition-all relative ${autoApproveJoinRequest ? 'bg-emerald-600' : 'bg-slate-300 dark:bg-slate-800'}`}
                             >
                               <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${autoApproveJoinRequest ? 'left-5' : 'left-1'} shadow-sm`} />
@@ -3796,7 +4317,11 @@ const App: React.FC = () => {
                               <p className="text-[8px] text-slate-500">Auto-greet new members</p>
                             </div>
                             <button 
-                              onClick={() => setAutoWelcome(!autoWelcome)}
+                              onClick={() => {
+                                const next = !autoWelcome;
+                                setAutoWelcome(next);
+                                syncAutomationToggles({ autoWelcome: next });
+                              }}
                               className={`w-10 h-6 rounded-full transition-all relative ${autoWelcome ? 'bg-purple-600' : 'bg-slate-300 dark:bg-slate-800'}`}
                             >
                               <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${autoWelcome ? 'left-5' : 'left-1'} shadow-sm`} />
@@ -4071,7 +4596,18 @@ const App: React.FC = () => {
 
 
       {selectedGroup && (
-        <InviteModal group={selectedGroup} onClose={handleCloseGroupModal} botToken={token} onInteraction={() => handleGroupInteraction(selectedGroup.id)} />
+        <InviteModal
+          group={selectedGroup}
+          onClose={handleCloseGroupModal}
+          botToken={token}
+          onInteraction={() => handleGroupInteraction(selectedGroup.id)}
+          onUpdateGroup={(updatedGroup) => {
+            setGroups(prev => prev.map(g => g.id === updatedGroup.id ? updatedGroup : g));
+            setSelectedGroup(updatedGroup);
+          }}
+          onLinkActivity={refreshActiveLinks}
+          onShowNotification={showNotification}
+        />
       )}
 
       {/* Root-Level Full Screen Create Folder Page */}
@@ -4119,6 +4655,11 @@ const App: React.FC = () => {
                     createdAt: Date.now()
                   };
                   setFolders(prev => [newFolder, ...prev]);
+                  fetch('/api/folders', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(newFolder)
+                  }).catch(e => console.error("Failed to sync new folder to DB:", e));
                   setNewFolderName('');
                   handleCloseCreateFolderModal();
                   showNotification(`Folder created with icon ${newFolderIcon}`, 'success');
@@ -4185,6 +4726,11 @@ const App: React.FC = () => {
                           createdAt: Date.now()
                         };
                         setFolders(prev => [newFolder, ...prev]);
+                        fetch('/api/folders', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify(newFolder)
+                        }).catch(e => console.error("Failed to sync new folder to DB:", e));
                         setNewFolderName('');
                         handleCloseCreateFolderModal();
                         showNotification(`Folder created with icon ${newFolderIcon}`, 'success');

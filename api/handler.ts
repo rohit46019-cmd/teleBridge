@@ -32,6 +32,13 @@ const groupSchema = new mongoose.Schema(
     interactionCount: { type: Number, default: 0 },
     pinned: { type: Boolean, default: false },
     createdAt: { type: Number, default: () => Date.now() },
+    welcomeConfig: {
+      enabled: { type: Boolean },
+      text: { type: String, default: "" },
+      photoUrl: { type: String, default: "" },
+      buttonText: { type: String, default: "" },
+      buttonUrl: { type: String, default: "" },
+    },
   },
   { timestamps: true }
 );
@@ -64,8 +71,55 @@ const broadcastSchema = new mongoose.Schema(
 const inviteLinkSchema = new mongoose.Schema(
   {
     groupId: String,
+    groupName: { type: String, default: "" },
     link: String,
+    memberLimit: { type: Number, default: 1 },
+    expireMinutes: { type: Number, default: 0 },
+    expiresAt: { type: Number, default: 0 },
+    status: { type: String, default: "active" },
     createdAt: { type: Number, default: () => Date.now() },
+  },
+  { timestamps: true }
+);
+
+const botSettingsSchema = new mongoose.Schema(
+  {
+    key: { type: String, unique: true, default: "default" },
+    adminAlertChatId: { type: String, default: "" },
+    alertOnJoin: { type: Boolean, default: false },
+    alertOnSuspicious: { type: Boolean, default: true },
+    welcomeEnabled: { type: Boolean, default: false },
+    welcomeMessage: { type: String, default: "" },
+    autoWelcome: { type: Boolean },
+    autoCleanServiceMessages: { type: Boolean },
+    autoApproveJoinRequest: { type: Boolean },
+  },
+  { timestamps: true }
+);
+
+const bannedUserSchema = new mongoose.Schema(
+  {
+    userId: { type: Number, required: true },
+    userName: { type: String, default: "" },
+    chatId: { type: Number, required: true },
+    chatTitle: { type: String, default: "" },
+    timestamp: { type: Number, default: () => Date.now() },
+  },
+  { timestamps: true }
+);
+bannedUserSchema.index({ userId: 1, chatId: 1 }, { unique: true });
+
+const deletedGroupSchema = new mongoose.Schema(
+  {
+    id: { type: String, unique: true, required: true },
+    name: { type: String, default: "" },
+    memberCount: { type: Number, default: 0 },
+    description: { type: String, default: "" },
+    category: { type: String, default: "Telegram" },
+    image: { type: String, default: "" },
+    pinned: { type: Boolean, default: false },
+    deletedAt: { type: Number, default: () => Date.now() },
+    errorReason: { type: String, default: "" },
   },
   { timestamps: true }
 );
@@ -114,6 +168,9 @@ const Broadcast = getModel("Broadcast", broadcastSchema);
 const InviteLink = getModel("InviteLink", inviteLinkSchema);
 const Admin = getModel("Admin", adminSchema);
 const PendingJoin = getModel("PendingJoin", pendingJoinSchema);
+const BotSettings = getModel("BotSettings", botSettingsSchema);
+const BannedUserModel = getModel("BannedUser", bannedUserSchema);
+const DeletedGroupModel = getModel("DeletedGroup", deletedGroupSchema);
 
 let connectPromise: Promise<typeof mongoose> | null = null;
 
@@ -359,6 +416,30 @@ app.post("/api/folders", requireDB, async (req: Request, res: Response) => {
   }
 });
 
+app.post("/api/folders/bulk", requireDB, async (req: Request, res: Response) => {
+  try {
+    const folders = Array.isArray(req.body) ? req.body : [];
+    for (const folder of folders) {
+      if (folder && folder.id) {
+        await Folder.findOneAndUpdate(
+          { id: String(folder.id) },
+          {
+            id: String(folder.id),
+            name: String(folder.name || "Untitled"),
+            color: String(folder.color || "from-indigo-600 to-blue-600"),
+            batchIds: Array.isArray(folder.batchIds) ? folder.batchIds.map(String) : [],
+            createdAt: Number(folder.createdAt) || Date.now(),
+          },
+          { upsert: true }
+        );
+      }
+    }
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: "Failed to bulk sync folders", details: error?.message });
+  }
+});
+
 app.delete("/api/folders/:id", requireDB, async (req: Request, res: Response) => {
   try {
     await Folder.deleteOne({ id: String(req.params.id) });
@@ -368,14 +449,156 @@ app.delete("/api/folders/:id", requireDB, async (req: Request, res: Response) =>
   }
 });
 
-// Invite Links Routes
+// Banned Users Routes
+app.get("/api/bans", requireDB, async (_req: Request, res: Response) => {
+  try {
+    const bans = await BannedUserModel.find().sort({ timestamp: -1 }).lean();
+    res.json(bans);
+  } catch (error: any) {
+    res.status(500).json({ error: "Failed to fetch banned users", details: error?.message });
+  }
+});
+
+app.post("/api/bans", requireDB, async (req: Request, res: Response) => {
+  try {
+    const items = Array.isArray(req.body) ? req.body : [req.body];
+    for (const item of items) {
+      if (!item || item.userId === undefined || item.chatId === undefined) continue;
+      const userId = Number(item.userId);
+      const chatId = Number(item.chatId);
+      if (Number.isNaN(userId) || Number.isNaN(chatId)) continue;
+      await BannedUserModel.findOneAndUpdate(
+        { userId, chatId },
+        {
+          userId,
+          chatId,
+          userName: String(item.userName || `User ${userId}`).slice(0, 120),
+          chatTitle: String(item.chatTitle || "Group").slice(0, 160),
+          timestamp: Number(item.timestamp) || Date.now(),
+        },
+        { upsert: true }
+      );
+    }
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: "Failed to save banned user", details: error?.message });
+  }
+});
+
+app.delete("/api/bans/:userId/:chatId", requireDB, async (req: Request, res: Response) => {
+  try {
+    await BannedUserModel.deleteOne({
+      userId: Number(req.params.userId),
+      chatId: Number(req.params.chatId),
+    });
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: "Failed to remove banned user", details: error?.message });
+  }
+});
+
+// Deleted Groups Bin Routes (30-day retention in MongoDB)
+app.get("/api/deleted-groups", requireDB, async (_req: Request, res: Response) => {
+  try {
+    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    await DeletedGroupModel.deleteMany({ deletedAt: { $lt: cutoff } });
+    const items = await DeletedGroupModel.find().sort({ deletedAt: -1 }).lean();
+    res.json(items);
+  } catch (error: any) {
+    res.status(500).json({ error: "Failed to fetch deleted bin", details: error?.message });
+  }
+});
+
+app.post("/api/deleted-groups", requireDB, async (req: Request, res: Response) => {
+  try {
+    const items = Array.isArray(req.body) ? req.body : [req.body];
+    for (const item of items) {
+      if (!item || !item.id) continue;
+      await DeletedGroupModel.findOneAndUpdate(
+        { id: String(item.id) },
+        {
+          id: String(item.id),
+          name: String(item.name || "Unknown Hub"),
+          memberCount: Number(item.memberCount) || 0,
+          description: String(item.description || ""),
+          category: String(item.category || "Telegram"),
+          image: String(item.image || ""),
+          pinned: Boolean(item.pinned),
+          deletedAt: Number(item.deletedAt) || Date.now(),
+          errorReason: String(item.errorReason || "Bad request / Unaccessible"),
+        },
+        { upsert: true }
+      );
+    }
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: "Failed to save deleted bin item", details: error?.message });
+  }
+});
+
+app.delete("/api/deleted-groups/:id", requireDB, async (req: Request, res: Response) => {
+  try {
+    await DeletedGroupModel.deleteOne({ id: String(req.params.id) });
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: "Failed to delete bin item", details: error?.message });
+  }
+});
+
+app.delete("/api/deleted-groups", requireDB, async (_req: Request, res: Response) => {
+  try {
+    await DeletedGroupModel.deleteMany({});
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: "Failed to empty deleted bin", details: error?.message });
+  }
+});
+
+// Invite Links Routes (Per-Group & Global Active Links Manager)
+const computeLinkStatus = (doc: any) => {
+  const now = Date.now();
+  let status = doc.status || "active";
+  if (status === "active" && doc.expiresAt && doc.expiresAt > 0 && now > doc.expiresAt) {
+    status = "expired";
+  }
+  return { ...doc, status };
+};
+
+app.get("/api/links", requireDB, async (req: Request, res: Response) => {
+  try {
+    const limit = Math.min(Number(req.query.limit) || 200, 500);
+    const links = await InviteLink.find().sort({ createdAt: -1 }).limit(limit).lean();
+    const groups = await Group.find({}, { id: 1, name: 1 }).lean();
+    const groupMap = new Map(groups.map((g: any) => [String(g.id), g.name]));
+    const enriched = links.map((l: any) => {
+      const withStatus = computeLinkStatus(l);
+      return {
+        ...withStatus,
+        groupName: withStatus.groupName || groupMap.get(String(withStatus.groupId)) || `Hub ${withStatus.groupId}`,
+      };
+    });
+    res.json(enriched);
+  } catch (error: any) {
+    res.status(500).json({ error: "Failed to fetch active links", details: error?.message });
+  }
+});
+
+app.delete("/api/links/:id", requireDB, async (req: Request, res: Response) => {
+  try {
+    await InviteLink.findByIdAndDelete(String(req.params.id));
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: "Failed to delete link record", details: error?.message });
+  }
+});
+
 app.get("/api/groups/:id/links", requireDB, async (req: Request, res: Response) => {
   try {
     const links = await InviteLink.find({ groupId: String(req.params.id) })
       .sort({ createdAt: -1 })
-      .limit(10)
+      .limit(20)
       .lean();
-    res.json(links);
+    res.json(links.map(computeLinkStatus));
   } catch (error: any) {
     res.status(500).json({ error: "Failed to fetch links", details: error?.message });
   }
@@ -383,17 +606,29 @@ app.get("/api/groups/:id/links", requireDB, async (req: Request, res: Response) 
 
 app.post("/api/groups/:id/links", requireDB, async (req: Request, res: Response) => {
   try {
-    const { link } = req.body || {};
-    if (!link) {
+    const { link, groupName, memberLimit, expireMinutes, expiresAt } = req.body || {};
+    if (!link || typeof link !== "string") {
       res.status(400).json({ error: "Link is required" });
       return;
     }
+    const expMins = Number(expireMinutes) || 0;
+    const computedExpiresAt =
+      Number(expiresAt) > 0
+        ? Number(expiresAt)
+        : expMins > 0
+        ? Date.now() + expMins * 60 * 1000
+        : 0;
     const newLink = await InviteLink.create({
       groupId: String(req.params.id),
-      link,
+      groupName: typeof groupName === "string" ? groupName.slice(0, 120) : "",
+      link: link.trim(),
+      memberLimit: Number(memberLimit) >= 0 ? Number(memberLimit) : 1,
+      expireMinutes: expMins,
+      expiresAt: computedExpiresAt,
+      status: "active",
       createdAt: Date.now(),
     });
-    res.json({ success: true, id: newLink._id });
+    res.json({ success: true, id: newLink._id, record: newLink });
   } catch (error: any) {
     res.status(500).json({ error: "Failed to save link", details: error?.message });
   }
@@ -402,6 +637,10 @@ app.post("/api/groups/:id/links", requireDB, async (req: Request, res: Response)
 app.delete("/api/groups/:id/links", requireDB, async (req: Request, res: Response) => {
   try {
     const { link } = req.body || {};
+    if (typeof link !== "string") {
+      res.status(400).json({ error: "Valid link string required" });
+      return;
+    }
     await InviteLink.deleteOne({ groupId: String(req.params.id), link });
     res.json({ success: true });
   } catch (error: any) {
@@ -412,12 +651,12 @@ app.delete("/api/groups/:id/links", requireDB, async (req: Request, res: Respons
 app.post("/api/revoke-link", requireDB, async (req: Request, res: Response) => {
   try {
     const { link, token, chatId } = req.body || {};
-    if (!link || !token) {
+    if (!link || !token || typeof link !== "string" || typeof token !== "string") {
       res.status(400).json({ error: "Link and token required" });
       return;
     }
 
-    let targetChatId = chatId;
+    let targetChatId = chatId ? String(chatId) : undefined;
     if (!targetChatId) {
       const inviteLinkDoc = await InviteLink.findOne({ link });
       if (inviteLinkDoc) {
@@ -482,10 +721,191 @@ app.post("/api/revoke-link", requireDB, async (req: Request, res: Response) => {
       return;
     }
 
-    await InviteLink.deleteOne({ link });
+    await InviteLink.updateMany({ link }, { $set: { status: "revoked" } });
     res.json({ success: true, chatId: targetChatId });
   } catch (error: any) {
     res.status(500).json({ error: "Failed to revoke link: " + (error?.message || error) });
+  }
+});
+
+// Bot Settings & Instant Telegram Admin Alerts Routes
+const escapeHtml = (str: string) =>
+  String(str || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+
+const isValidHttpUrl = (val?: string): boolean => {
+  if (!val || typeof val !== "string") return false;
+  try {
+    const parsed = new URL(val.trim());
+    return parsed.protocol === "https:" || parsed.protocol === "http:";
+  } catch {
+    return false;
+  }
+};
+
+const getISTDateKeyServer = (ts: number = Date.now()) => {
+  const ist = new Date(ts + 5.5 * 60 * 60 * 1000);
+  const y = ist.getUTCFullYear();
+  const m = String(ist.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(ist.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+};
+
+app.get("/api/bot-settings", requireDB, async (_req: Request, res: Response) => {
+  try {
+    const doc = await BotSettings.findOne({ key: "default" }).lean();
+    res.json(
+      doc || {
+        key: "default",
+        adminAlertChatId: "",
+        alertOnJoin: false,
+        alertOnSuspicious: true,
+        welcomeEnabled: false,
+        welcomeMessage: "",
+      }
+    );
+  } catch (error: any) {
+    res.status(500).json({ error: "Failed to fetch bot settings", details: error?.message });
+  }
+});
+
+app.post("/api/bot-settings", requireDB, async (req: Request, res: Response) => {
+  try {
+    const body = req.body || {};
+    const updateData: Record<string, any> = { key: "default" };
+    if (body.adminAlertChatId !== undefined) {
+      updateData.adminAlertChatId =
+        typeof body.adminAlertChatId === "string" || typeof body.adminAlertChatId === "number"
+          ? String(body.adminAlertChatId).trim().slice(0, 64)
+          : "";
+    }
+    if (body.alertOnJoin !== undefined) updateData.alertOnJoin = Boolean(body.alertOnJoin);
+    if (body.alertOnSuspicious !== undefined) updateData.alertOnSuspicious = Boolean(body.alertOnSuspicious);
+    if (body.welcomeEnabled !== undefined) updateData.welcomeEnabled = Boolean(body.welcomeEnabled);
+    if (typeof body.welcomeMessage === "string") updateData.welcomeMessage = body.welcomeMessage.slice(0, 2000);
+    if (body.autoWelcome !== undefined) updateData.autoWelcome = Boolean(body.autoWelcome);
+    if (body.autoCleanServiceMessages !== undefined) updateData.autoCleanServiceMessages = Boolean(body.autoCleanServiceMessages);
+    if (body.autoApproveJoinRequest !== undefined) updateData.autoApproveJoinRequest = Boolean(body.autoApproveJoinRequest);
+
+    const saved = await BotSettings.findOneAndUpdate(
+      { key: "default" },
+      { $set: updateData },
+      { upsert: true, new: true }
+    );
+    res.json({ success: true, settings: saved });
+  } catch (error: any) {
+    res.status(500).json({ error: "Failed to save bot settings", details: error?.message });
+  }
+});
+
+app.post("/api/alerts/test", requireDB, async (req: Request, res: Response) => {
+  try {
+    const { token, chatId } = req.body || {};
+    if (!token || typeof token !== "string") {
+      res.status(400).json({ error: "Bot token is required" });
+      return;
+    }
+    const targetChatId = String(chatId || "").trim();
+    if (!targetChatId) {
+      res.status(400).json({ error: "Admin Telegram Chat ID is required" });
+      return;
+    }
+    const text = `🔔 <b>TeleBridge Admin Alert Connected!</b>\n\n✅ Instant Bot DM alerts are active for this Telegram ID.\n🕒 <i>Time: ${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} IST</i>`;
+    const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: targetChatId, text, parse_mode: "HTML" }),
+      signal: AbortSignal.timeout(8000),
+    });
+    const data: any = await response.json();
+    if (!data.ok) {
+      res.status(400).json({ error: data.description || "Telegram rejected alert. Start the bot first with /start." });
+      return;
+    }
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: "Failed to send test alert", details: error?.message });
+  }
+});
+
+app.post("/api/alerts/daily-summary", requireDB, async (req: Request, res: Response) => {
+  try {
+    const { token, chatId } = req.body || {};
+    if (!token || typeof token !== "string") {
+      res.status(400).json({ error: "Bot token is required" });
+      return;
+    }
+    const settingsDoc = await BotSettings.findOne({ key: "default" }).lean();
+    const targetChatId = String(chatId || settingsDoc?.adminAlertChatId || "").trim();
+    if (!targetChatId) {
+      res.status(400).json({ error: "Admin Telegram Chat ID is required" });
+      return;
+    }
+
+    const todayKey = getISTDateKeyServer(Date.now());
+    const yesterdayKey = getISTDateKeyServer(Date.now() - 86400000);
+    const events = await JoinEvent.find().sort({ timestamp: -1 }).limit(3000).lean();
+    const groups = await Group.find().lean();
+
+    let todayCount = 0;
+    let yesterdayCount = 0;
+    const hubCounts: Record<string, { title: string; count: number }> = {};
+
+    for (const ev of events) {
+      const ts = normalizeTimestampMs(ev.timestamp);
+      const key = getISTDateKeyServer(ts);
+      if (key === todayKey) {
+        todayCount++;
+        const cid = String(ev.chatId || "");
+        if (!hubCounts[cid]) {
+          hubCounts[cid] = { title: ev.chatTitle || `Hub ${cid}`, count: 0 };
+        }
+        hubCounts[cid].count++;
+      } else if (key === yesterdayKey) {
+        yesterdayCount++;
+      }
+    }
+
+    const trend =
+      yesterdayCount === 0
+        ? todayCount > 0
+          ? 100
+          : 0
+        : Math.round(((todayCount - yesterdayCount) / yesterdayCount) * 100);
+    const totalMembers = groups.reduce((acc: number, g: any) => acc + (Number(g.memberCount) || 0), 0);
+    const topHubs = Object.values(hubCounts)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+
+    const topHubLines =
+      topHubs.length > 0
+        ? topHubs.map((h, i) => `${i + 1}. <b>${escapeHtml(h.title)}</b> — ${h.count} joins`).join("\n")
+        : "<i>No joins recorded today yet.</i>";
+
+    const text =
+      `📊 <b>Daily Hub Summary (${todayKey} IST)</b>\n\n` +
+      `👥 <b>Today Joins:</b> ${todayCount} (${trend >= 0 ? "+" : ""}${trend}% vs yesterday)\n` +
+      `📅 <b>Yesterday Joins:</b> ${yesterdayCount}\n` +
+      `🌐 <b>Active Hubs:</b> ${groups.length} (${totalMembers.toLocaleString()} total members)\n\n` +
+      `🏆 <b>Top Active Hubs Today:</b>\n${topHubLines}`;
+
+    const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: targetChatId, text, parse_mode: "HTML" }),
+      signal: AbortSignal.timeout(8000),
+    });
+    const data: any = await response.json();
+    if (!data.ok) {
+      res.status(400).json({ error: data.description || "Failed to send summary DM" });
+      return;
+    }
+    res.json({ success: true, todayCount, yesterdayCount, trend });
+  } catch (error: any) {
+    res.status(500).json({ error: "Failed to send daily summary", details: error?.message });
   }
 });
 
@@ -1067,6 +1487,8 @@ app.post("/api/webhook/:token", async (req: Request, res: Response) => {
     }
 
     // Deduplicate & store joins immediately (always complete DB write before responding)
+    const botSettingsDoc = await BotSettings.findOne({ key: "default" }).lean();
+
     for (const ev of rawJoinsToAdd) {
       const cutoffLower = ev.timestamp - 120000;
       const cutoffUpper = ev.timestamp + 120000;
@@ -1087,24 +1509,102 @@ app.post("/api/webhook/:token", async (req: Request, res: Response) => {
 
         const cidStr = String(ev.chatId);
         memberChanges[cidStr] = (memberChanges[cidStr] || 0) + 1;
+        const grpDoc = await Group.findOne({ id: cidStr }).lean();
 
-        if (autoWelcome && !ev.is_bot) {
-          const escapedName = String(ev.userName || "Awesome Member")
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/"/g, "&quot;");
-          const text = `🎉 <b>Welcome to the Hub!</b> 🎉\n\nHey <a href="tg://user?id=${ev.userId}"><b>${escapedName}</b></a>, we're thrilled to have you here! ✨\n\n<i>Enjoy your stay, and keep it friendly!</i> 🚀`;
-          await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        // Custom Per-Batch or Global Welcome Message
+        const batchWelcome = grpDoc?.welcomeConfig;
+        const shouldSendWelcome =
+          !ev.is_bot &&
+          (batchWelcome?.enabled === true || (autoWelcome && batchWelcome?.enabled !== false));
+
+        if (shouldSendWelcome) {
+          const escapedName = escapeHtml(ev.userName || "Awesome Member");
+          const escapedGroup = escapeHtml(ev.chatTitle || grpDoc?.name || "Hub");
+          const mentionHtml = `<a href="tg://user?id=${ev.userId}"><b>${escapedName}</b></a>`;
+
+          let text = "";
+          if (batchWelcome?.text && batchWelcome.text.trim()) {
+            text = escapeHtml(batchWelcome.text.trim())
+              .replace(/\{\{name\}\}/gi, mentionHtml)
+              .replace(/\{\{group\}\}/gi, `<b>${escapedGroup}</b>`);
+          } else if (botSettingsDoc?.welcomeEnabled && botSettingsDoc?.welcomeMessage?.trim()) {
+            text = escapeHtml(botSettingsDoc.welcomeMessage.trim())
+              .replace(/\{\{name\}\}/gi, mentionHtml)
+              .replace(/\{\{group\}\}/gi, `<b>${escapedGroup}</b>`);
+          } else {
+            text = `🎉 <b>Welcome to ${escapedGroup}!</b> 🎉\n\nHey ${mentionHtml}, we're thrilled to have you here! ✨\n\n<i>Enjoy your stay, and keep it friendly!</i> 🚀`;
+          }
+
+          const replyMarkup =
+            batchWelcome?.buttonText?.trim() && isValidHttpUrl(batchWelcome?.buttonUrl)
+              ? {
+                  inline_keyboard: [
+                    [{ text: batchWelcome.buttonText.trim().slice(0, 64), url: batchWelcome.buttonUrl.trim() }],
+                  ],
+                }
+              : undefined;
+
+          const hasPhoto = isValidHttpUrl(batchWelcome?.photoUrl);
+          const endpoint = hasPhoto ? "sendPhoto" : "sendMessage";
+          const payload: Record<string, any> = hasPhoto
+            ? {
+                chat_id: ev.chatId,
+                photo: batchWelcome.photoUrl.trim(),
+                caption: text.slice(0, 1024),
+                parse_mode: "HTML",
+                ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
+              }
+            : {
+                chat_id: ev.chatId,
+                text: text.slice(0, 4096),
+                parse_mode: "HTML",
+                ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
+              };
+
+          await fetch(`https://api.telegram.org/bot${token}/${endpoint}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              chat_id: ev.chatId,
-              text,
-              parse_mode: "HTML",
-            }),
+            body: JSON.stringify(payload),
             signal: AbortSignal.timeout(3500),
           }).catch(() => {});
+        }
+
+        // Instant Telegram Admin DM Alerts (complete cleanly before serverless response returns)
+        const adminChatId = botSettingsDoc?.adminAlertChatId?.trim();
+        if (adminChatId && !ev.is_bot) {
+          if (botSettingsDoc?.alertOnJoin) {
+            const alertText =
+              `🟢 <b>New Member Joined</b>\n\n` +
+              `👤 <b>User:</b> ${escapeHtml(ev.userName || `User ${ev.userId}`)} (<code>${ev.userId}</code>)\n` +
+              `📌 <b>Hub:</b> ${escapeHtml(ev.chatTitle || grpDoc?.name || cidStr)}\n` +
+              `🕒 <b>Time:</b> ${new Date(ev.timestamp).toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit" })} IST`;
+            await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ chat_id: adminChatId, text: alertText, parse_mode: "HTML" }),
+              signal: AbortSignal.timeout(3000),
+            }).catch(() => {});
+          }
+
+          if (botSettingsDoc?.alertOnSuspicious) {
+            const recentSameUser = await JoinEvent.find({
+              userId: ev.userId,
+              timestamp: { $gte: Date.now() - 86400000 },
+            }).lean();
+            const distinctHubs = new Set(recentSameUser.map((r: any) => String(r.chatId)));
+            if (distinctHubs.size >= 2) {
+              const susText =
+                `⚠️ <b>Multi-Hub Join Alert</b>\n\n` +
+                `👤 <b>User:</b> ${escapeHtml(ev.userName || `User ${ev.userId}`)} (<code>${ev.userId}</code>)\n` +
+                `🔁 Joined <b>${distinctHubs.size} different hubs</b> in the last 24h (latest: ${escapeHtml(ev.chatTitle || cidStr)}).`;
+              await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ chat_id: adminChatId, text: susText, parse_mode: "HTML" }),
+                signal: AbortSignal.timeout(3000),
+              }).catch(() => {});
+            }
+          }
         }
       }
     }

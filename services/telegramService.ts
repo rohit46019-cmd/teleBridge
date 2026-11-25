@@ -152,6 +152,62 @@ export async function sendMessage(token: string, chatId: string | number, text: 
   return true;
 }
 
+export function isValidHttpUrl(value?: string): boolean {
+  if (!value || typeof value !== 'string') return false;
+  try {
+    const parsed = new URL(value.trim());
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:';
+  } catch {
+    return false;
+  }
+}
+
+export async function sendCustomWelcome(
+  token: string,
+  chatId: string | number,
+  options: {
+    htmlText: string;
+    photoUrl?: string;
+    buttonText?: string;
+    buttonUrl?: string;
+  }
+): Promise<number | null> {
+  const replyMarkup =
+    options.buttonText?.trim() && isValidHttpUrl(options.buttonUrl)
+      ? {
+          inline_keyboard: [
+            [{ text: options.buttonText.trim().slice(0, 64), url: options.buttonUrl!.trim() }]
+          ]
+        }
+      : undefined;
+
+  const hasValidPhoto = isValidHttpUrl(options.photoUrl);
+  const endpoint = hasValidPhoto ? 'sendPhoto' : 'sendMessage';
+  const payload: Record<string, any> = hasValidPhoto
+    ? {
+        chat_id: chatId,
+        photo: options.photoUrl!.trim(),
+        caption: options.htmlText.slice(0, 1024),
+        parse_mode: 'HTML',
+        ...(replyMarkup ? { reply_markup: replyMarkup } : {})
+      }
+    : {
+        chat_id: chatId,
+        text: options.htmlText.slice(0, 4096),
+        parse_mode: 'HTML',
+        ...(replyMarkup ? { reply_markup: replyMarkup } : {})
+      };
+
+  const response = await fetchWithTimeout(`${BASE_URL}${token}/${endpoint}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  const data = await response.json();
+  if (!data.ok) return null;
+  return data.result?.message_id ?? null;
+}
+
 export async function deleteMessage(token: string, chatId: string | number, messageId: number): Promise<boolean> {
   try {
     const response = await fetchWithTimeout(`${BASE_URL}${token}/deleteMessage?chat_id=${chatId}&message_id=${messageId}`);
